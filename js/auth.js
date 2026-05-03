@@ -59,7 +59,7 @@ export async function setPassword(newPassword) {
 
 export async function sendPasswordReset(email) {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + '/#/setup-password',
+    redirectTo: window.location.origin + '/',
   });
   if (error) throw error;
 }
@@ -78,6 +78,12 @@ export async function initAuth() {
     }
     console.log('[auth] evento:', event);
     state.user = session?.user || null;
+    
+    if (event === 'PASSWORD_RECOVERY') {
+      // Force navigation to setup password on recovery link
+      setTimeout(() => { window.location.hash = '#/setup-password'; }, 100);
+    }
+    
     if (event === 'SIGNED_IN' && state.user) {
       await Promise.all([loadProfile(), loadLists()]);
     } else if (event === 'SIGNED_OUT') {

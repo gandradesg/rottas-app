@@ -70,7 +70,8 @@ function userRow(p) {
           p.telefone || 'sem telefone',
         ),
       ),
-      el('button', {
+      // Apenas Master pode editar Master e Gestor. Gestor só edita Gerente.
+      (isMaster() || p.role === 'gerente') && el('button', {
         class: 'p-2 rounded-lg hover:bg-bg-elev transition flex-shrink-0',
         onclick: () => openEditModal(p)
       }, icon('edit', 18, 'text-fg-muted')),
@@ -120,7 +121,7 @@ async function inviteUserBackground(v) {
       email: v.email,
       password: tempPwd,
       options: {
-        emailRedirectTo: window.location.origin + '/#/setup-password',
+        emailRedirectTo: window.location.origin + '/',
         data: { nome: v.nome, role: v.role },
       }
     });
@@ -160,7 +161,7 @@ async function inviteUserBackground(v) {
 
   // 6) Dispara email de definição de senha (não bloqueia)
   supabase.auth.resetPasswordForEmail(v.email, {
-    redirectTo: window.location.origin + '/#/setup-password',
+    redirectTo: window.location.origin + '/',
   }).catch(e => console.warn('[invite] reset email falhou (rate limit?):', e));
 }
 
@@ -222,7 +223,7 @@ function openEditModal(p) {
       const ok = await confirmModal({ title: 'Reenviar convite?', message: 'Será enviado um novo email para definir a senha.', confirmLabel: 'Reenviar' });
       if (!ok) return;
       try {
-        await supabase.auth.resetPasswordForEmail(p.email, { redirectTo: window.location.origin + '/#/setup-password' });
+        await supabase.auth.resetPasswordForEmail(p.email, { redirectTo: window.location.origin + '/' });
         toast('Email reenviado', 'success');
       } catch (e) { toast(e.message, 'error'); }
     }
