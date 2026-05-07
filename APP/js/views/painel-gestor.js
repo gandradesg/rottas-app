@@ -209,7 +209,6 @@ export async function painelGestorView(_params, app) {
     const vendasCard = el('div', { class: 'card p-4' },
       el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' }, 'Vendas fechadas (VGV)'),
       el('div', { class: 'text-3xl font-extrabold' }, fmt.currencyMillions(valorVendas)),
-      el('div', { class: 'text-xs text-fg-subtle mt-0.5' }, fmt.currency(valorVendas)),
       el('div', { class: 'text-sm text-fg-muted mt-1' }, `${c.vendas} venda${c.vendas !== 1 ? 's' : ''} no período`),
     );
 

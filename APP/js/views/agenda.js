@@ -276,16 +276,20 @@ async function agendaGerenteView(app) {
       // Botão "+" overlay no canto superior direito (só em dia selecionado)
       // Usa um wrapper div em vez de button aninhado (evita HTML inválido)
       const dayCapture = new Date(d);
+      // Botão "+" flutuante FORA da célula (canto superior direito sobressaindo) -
+      // negative offsets evitam sobrepor o número do dia em telas pequenas
       const plusOverlay = isSelected ? el('div', {
-        class: 'absolute top-0.5 right-0.5 flex items-center justify-center rounded-full shadow-md cursor-pointer z-10',
+        class: 'absolute flex items-center justify-center rounded-full shadow-lg cursor-pointer z-20',
         style: {
-          width: '20px', height: '20px',
-          background: isToday ? 'white' : 'linear-gradient(135deg, #F26B22, #D5530F)',
-          color: isToday ? '#F26B22' : 'white',
+          width: '22px', height: '22px',
+          top: '-8px', right: '-8px',
+          background: 'linear-gradient(135deg, #F26B22, #D5530F)',
+          color: 'white',
+          border: '2px solid var(--bg, #fff)',
         },
         title: 'Adicionar agendamento',
         onclick: (ev) => { ev.stopPropagation(); newOnDate(dayCapture); },
-      }, icon('plus', 14)) : null;
+      }, icon('plus', 12)) : null;
 
       const cell = el('div', {
         class: [

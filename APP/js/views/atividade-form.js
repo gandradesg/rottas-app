@@ -186,7 +186,7 @@ export async function atividadeFormView(params, app) {
       }), { required: true }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
-      field('Fotos (até 3)', photoPickerEl, { required: true, help: 'Máximo 3 fotos. Tire ou anexe pelo menos uma.' }),
+      field('Fotos (até 3)', photoPickerEl, { help: 'Opcional. Máximo 3 fotos.' }),
     );
   }
 
@@ -290,10 +290,11 @@ export async function atividadeFormView(params, app) {
     e.preventDefault();
     const fd = new FormData(form);
 
+    // Timeout de seguranca aumentado para 60s (Android com rede 4G/3G demora mais)
     const safetyTimeout = setTimeout(() => {
       loadingBtn(submitBtn, false);
-      toast('⏱️ Operação demorou muito. Verifique o console (F12).', 'error', 6000);
-    }, 30000);
+      toast('Operação demorou muito - verifique sua conexão e tente novamente', 'error', 6000);
+    }, 60000);
 
     const payload = {
       gerente_id: state.user.id,
@@ -320,7 +321,6 @@ export async function atividadeFormView(params, app) {
         if (!payload.imobiliaria) throw new Error('Imobiliária é obrigatória');
         if (!payload.motivo_visita) throw new Error('Motivo da visita é obrigatório');
         const files = photoPickerEl?.getFiles?.() || [];
-        if (!id && !files.length) throw new Error('Anexe ao menos uma foto');
         loadingBtn(submitBtn, true);
 
         if (!id) {
