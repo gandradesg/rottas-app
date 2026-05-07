@@ -1,8 +1,21 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.2';
+export const APP_VERSION = '0.8.3';
 export const APP_BUILD_DATE = '2026-05-07';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.3',
+    date: '07/05/2026',
+    changes: [
+      'Foto opcional no Check-in (não precisa mais anexar foto obrigatoriamente)',
+      'Botão + da agenda agora flutua FORA da célula - não sobrepoe mais o número do dia em telas pequenas',
+      'Painel: VGV mostra apenas valor abreviado (R$ X,X mi) sem repetir o valor cheio embaixo',
+      'Cache de JS desativado (no-cache) - mudanças refletem imediatamente sem precisar limpar cache',
+      'Timeout de submit aumentado para 60s (cobertura de redes 3G/4G corporativas)',
+      'Edge Function de convite/reconvite preserva senha antiga + envio via Brevo SMTP',
+      'Master pode criar outros masters (master principal protegido contra exclusão)',
+    ],
+  },
   {
     version: '0.8.2',
     date: '07/05/2026',
