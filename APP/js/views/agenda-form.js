@@ -1,4 +1,4 @@
-// Formulário de criar/editar agendamento — só Check-in, Atendimento e Outro
+// Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
 import { el, icon, toast, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
@@ -53,7 +53,7 @@ export async function agendaFormView(params, app) {
   }
   tipoButtons.forEach(b => b.addEventListener('click', () => { chosenTipo = b.dataset.tipo; paintTipo(); }));
 
-  // Data e hora — usa prefill se disponível, senão amanhã 9h
+  // Data e hora - usa prefill se disponível, senão amanhã 9h
   const defaultDate = (() => {
     if (initial?.data_prevista) {
       const d = new Date(initial.data_prevista);

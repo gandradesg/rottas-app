@@ -105,64 +105,35 @@ function openCreateModal() {
   });
 }
 
-// Async pesado em background — não bloqueia UI
+// Async pesado em background - não bloqueia UI
+// Usa Edge Function `invite-user` que chama auth.admin.inviteUserByEmail
+// (dispara o template INVITE - "bem-vindo, cadastre senha" - e NÃO o template recovery)
 async function inviteUserBackground(v) {
-  // 1) Salva sessão do master
   const { data: { session: masterSession } } = await supabase.auth.getSession();
   if (!masterSession) throw new Error('Sessão master não encontrada');
 
-  // 2) Suprime listener de auth durante o swap
-  authGuards.suppressed = true;
-
-  try {
-    // 3) Cria user via signUp (vai trocar a sessão!)
-    const tempPwd = crypto.randomUUID().replace(/-/g, '').slice(0, 18) + 'Ax9!';
-    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+  const fnUrl = `${supabase.supabaseUrl}/functions/v1/invite-user`;
+  const resp = await fetch(fnUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${masterSession.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
       email: v.email,
-      password: tempPwd,
-      options: {
-        emailRedirectTo: window.location.origin + '/',
-        data: { nome: v.nome, role: v.role },
-      }
-    });
-    if (signUpErr) throw signUpErr;
-
-    // 4) Restaura sessão do master IMEDIATAMENTE
-    await supabase.auth.setSession({
-      access_token: masterSession.access_token,
-      refresh_token: masterSession.refresh_token,
-    });
-  } finally {
-    authGuards.suppressed = false;
-  }
-
-  // Pequeno delay para garantir que session está estável
-  await new Promise(r => setTimeout(r, 200));
-
-  // 5) Busca o user_id criado e atualiza profile com dados completos
-  const { data: existing } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('email', v.email)
-    .maybeSingle();
-
-  if (existing?.id) {
-    await supabase.from('profiles').update({
       nome: v.nome,
       telefone: v.telefone,
       cidade: v.cidade,
       estado: v.estado,
       role: v.role,
       permissoes: v.permissoes || {},
-      ativo: true,
-      primeiro_acesso: true,
-    }).eq('id', existing.id);
-  }
+    }),
+  });
 
-  // 6) Dispara email de definição de senha (não bloqueia)
-  supabase.auth.resetPasswordForEmail(v.email, {
-    redirectTo: window.location.origin + '/',
-  }).catch(e => console.warn('[invite] reset email falhou (rate limit?):', e));
+  const result = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(result.error || `Erro ${resp.status} ao convidar`);
+  }
 }
 
 function openEditModal(p) {
@@ -176,7 +147,7 @@ function openEditModal(p) {
   );
   fields.form.appendChild(ativoToggle);
 
-  // Botão de excluir perfil — apenas master editando perfis não-master
+  // Botão de excluir perfil - apenas master editando perfis não-master
   const canDelete = isMaster() && p.role !== 'master';
   if (canDelete) {
     const deleteSection = el('div', { class: 'mt-3 pt-3', style: { borderTop: '1px solid var(--border)' } },
@@ -223,7 +194,23 @@ function openEditModal(p) {
       const ok = await confirmModal({ title: 'Reenviar convite?', message: 'Será enviado um novo email para definir a senha.', confirmLabel: 'Reenviar' });
       if (!ok) return;
       try {
-        await supabase.auth.resetPasswordForEmail(p.email, { redirectTo: window.location.origin + '/' });
+        // Reenvia via Edge Function (mesmo fluxo do convite original - dispara template INVITE)
+        const { data: { session } } = await supabase.auth.getSession();
+        const fnUrl = `${supabase.supabaseUrl}/functions/v1/invite-user`;
+        const resp = await fetch(fnUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: p.email, nome: p.nome, telefone: p.telefone,
+            cidade: p.cidade, estado: p.estado, role: p.role,
+            permissoes: p.permissoes || {},
+          }),
+        });
+        const result = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(result.error || 'Erro ao reenviar');
         toast('Email reenviado', 'success');
       } catch (e) { toast(e.message, 'error'); }
     }
@@ -274,7 +261,7 @@ function userFormFields(p) {
     ...ESTADOS_BR.map(u => el('option', { value: u, selected: p.estado === u }, u)),
   );
 
-  // Seletor de role — duas pílulas grandes
+  // Seletor de role - duas pílulas grandes
   const initialRole = p.role && p.role !== 'master' ? p.role : 'gerente';
   let chosenRole = initialRole;
   const roleGerente = el('button', { type: 'button', 'data-role': 'gerente' });

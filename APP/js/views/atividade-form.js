@@ -1,4 +1,4 @@
-// Formulário unificado de atividade — discriminado por tipo
+// Formulário unificado de atividade - discriminado por tipo
 import { el, icon, toast, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
@@ -100,7 +100,7 @@ export async function atividadeFormView(params, app) {
     const { data } = await supabase.from('agendamentos').select('*').eq('id', agendamentoId).single();
     if (!data) { toast('Agendamento não encontrado', 'error'); navigate('/agenda', true); return; }
     if (data.status === 'realizado' && data.atividade_id) {
-      // Já foi realizado — vai direto pra atividade
+      // Já foi realizado - vai direto pra atividade
       navigate(`/atividade/${data.atividade_id}`, true);
       return;
     }
@@ -134,12 +134,12 @@ export async function atividadeFormView(params, app) {
     };
   }
 
-  // ===== MODO RESTRITO: Gerente editando proposta — só Reserva =====
+  // ===== MODO RESTRITO: Gerente editando proposta - só Reserva =====
   // Gerente só pode editar o campo Reserva da própria Proposta
   if (id && initial && tipo === 'proposta' && !isGestor() && initial.gerente_id === state.user.id) {
     return reservaOnlyForm(app, initial);
   }
-  // Gerente tentando editar outras atividades — bloqueia
+  // Gerente tentando editar outras atividades - bloqueia
   if (id && !isGestor() && initial?.gerente_id === state.user.id && tipo !== 'proposta') {
     toast('Apenas Gestores podem editar esta atividade', 'error', 5000);
     navigate(`/atividade/${id}`, true);
@@ -190,7 +190,7 @@ export async function atividadeFormView(params, app) {
     );
   }
 
-  // ===== ATENDIMENTO — ordem: Localização, Local visita, Imobiliária, Corretor, Empreendimento, Cliente, Termômetro, Obs =====
+  // ===== ATENDIMENTO - ordem: Localização, Local visita, Imobiliária, Corretor, Empreendimento, Cliente, Termômetro, Obs =====
   if (tipo === 'atendimento') {
     if (!id) locationFieldEl = locationField();
 
@@ -216,7 +216,7 @@ export async function atividadeFormView(params, app) {
     );
   }
 
-  // ===== PROPOSTA — ordem: Cliente, Imobiliária, Corretor, Empreendimento, Unidade, Valor, Obs, [Reserva] =====
+  // ===== PROPOSTA - ordem: Cliente, Imobiliária, Corretor, Empreendimento, Unidade, Valor, Obs, [Reserva] =====
   if (tipo === 'proposta') {
     const showReserva = !!id;
 
@@ -244,7 +244,7 @@ export async function atividadeFormView(params, app) {
         name: 'empreendimento', items: state.empreendimentos, value: initial?.empreendimento, required: true,
       }), { required: true }),
       field('Unidade', el('input', { class: 'input', name: 'unidade', required: true, value: initial?.unidade || '' }), { required: true }),
-      field('Valor', valorInput, { required: true, help: 'Digite só os números — formata automaticamente' }),
+      field('Valor', valorInput, { required: true, help: 'Digite só os números - formata automaticamente' }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
       showReserva

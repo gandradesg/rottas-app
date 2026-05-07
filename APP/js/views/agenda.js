@@ -1,4 +1,4 @@
-// Agenda — calendário dia/semana/mês com itens vinculados a atividades
+// Agenda - calendário dia/semana/mês com itens vinculados a atividades
 import { el, icon, fmt, toast, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
@@ -27,7 +27,7 @@ export async function agendaView(_params, app) {
 }
 
 // ============================================================
-// Agenda do Gerente — calendário com modos dia/semana/mês
+// Agenda do Gerente - calendário com modos dia/semana/mês
 // ============================================================
 async function agendaGerenteView(app) {
   // Estado da view
@@ -38,7 +38,7 @@ async function agendaGerenteView(app) {
 
   const content = el('div', { class: 'flex flex-col gap-3' });
 
-  // Header (sem botão "Novo" — usa o "+" dentro de cada dia/seção)
+  // Header (sem botão "Novo" - usa o "+" dentro de cada dia/seção)
   content.appendChild(el('div', {},
     el('h1', { class: 'text-2xl font-extrabold' }, 'Minha agenda'),
     el('p', { class: 'text-sm text-fg-muted' }, 'Toque em um dia para ver e adicionar atividades'),
@@ -65,7 +65,7 @@ async function agendaGerenteView(app) {
 
   app.appendChild(shell(content, { title: 'Agenda' }));
 
-  // Carrega agendamentos (janela ampla — 3 meses para tras + 6 meses para frente)
+  // Carrega agendamentos (janela ampla - 3 meses para tras + 6 meses para frente)
   const from = new Date(today.getFullYear(), today.getMonth() - 3, 1);
   const to   = new Date(today.getFullYear(), today.getMonth() + 7, 0); to.setHours(23,59,59);
 
@@ -341,7 +341,7 @@ async function agendaGerenteView(app) {
     }
   }
 
-  // (emptyState não é mais usado — substituído por dayHeaderWithAdd + mensagem inline)
+  // (emptyState não é mais usado - substituído por dayHeaderWithAdd + mensagem inline)
 
   function itemCard(item) {
     const status = STATUS_INFO[item.status] || STATUS_INFO.pendente;
@@ -412,7 +412,7 @@ async function agendaGerenteView(app) {
 }
 
 // ============================================================
-// Agenda do Gestor — calendário consolidado com filtros
+// Agenda do Gestor - calendário consolidado com filtros
 // ============================================================
 async function agendaGestorView(app) {
   const today = new Date(); today.setHours(0,0,0,0);

@@ -218,21 +218,21 @@ export function loadingBtn(btn, loading) {
 
 // Formatadores
 export const fmt = {
-  currency: (v) => v == null ? '—' : new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v),
+  currency: (v) => v == null ? '-' : new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v),
   // Compacto em milhões: 2.600.000 → "R$ 2,6 mi"
   currencyMillions: (v) => {
-    if (v == null) return '—';
+    if (v == null) return '-';
     if (Math.abs(v) < 1) return 'R$ 0';
     const m = v / 1_000_000;
     const s = m.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
     return `R$ ${s} mi`;
   },
-  date: (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—',
-  time: (d) => d ? new Date(d).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '—',
-  dateTime: (d) => d ? new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—',
+  date: (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '-',
+  time: (d) => d ? new Date(d).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '-',
+  dateTime: (d) => d ? new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '-',
   // "há X horas" relativo
   relative: (d) => {
-    if (!d) return '—';
+    if (!d) return '-';
     const diff = (new Date() - new Date(d)) / 1000;
     if (diff < 60) return 'agora';
     if (diff < 3600) return `há ${Math.floor(diff/60)} min`;
@@ -240,7 +240,7 @@ export const fmt = {
     if (diff < 604800) return `há ${Math.floor(diff/86400)} d`;
     return new Date(d).toLocaleDateString('pt-BR');
   },
-  number: (v) => v == null ? '—' : new Intl.NumberFormat('pt-BR').format(v),
+  number: (v) => v == null ? '-' : new Intl.NumberFormat('pt-BR').format(v),
 };
 
 // Inicial do nome para avatar

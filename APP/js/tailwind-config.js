@@ -1,4 +1,4 @@
-// Tailwind config — paleta Rottas (laranja + creme + dark navy)
+// Tailwind config - paleta Rottas (laranja + creme + dark navy)
 tailwind.config = {
   darkMode: 'class',
   theme: {
@@ -12,7 +12,7 @@ tailwind.config = {
         'fg-muted': 'rgb(var(--fg-muted) / <alpha-value>)',
         'fg-subtle': 'rgb(var(--fg-subtle) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',
-        // Marca Rottas — derivado da paleta do site
+        // Marca Rottas - derivado da paleta do site
         rottas: {
           50:  '#FFF4EC',
           100: '#FFE3CF',

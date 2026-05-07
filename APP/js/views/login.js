@@ -48,7 +48,7 @@ export async function loginView(_params, app) {
       const userRole = state.profile?.role;
       // Master pode entrar em qualquer perfil. Gestor só entra como gestor. Gerente só como gerente.
       if (userRole === 'master') {
-        // Master usa o perfil escolhido — fica armazenado para a sessão
+        // Master usa o perfil escolhido - fica armazenado para a sessão
         toast(`Logado como ${accent.label}`, 'success');
       } else if (userRole === 'gestor' && chosenRole === 'gerente') {
         await signOut();

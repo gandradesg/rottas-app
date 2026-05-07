@@ -36,7 +36,7 @@ export async function signIn(email, password) {
   return data;
 }
 
-// Logout AGRESSIVO — limpa TODO storage Supabase + redireciona
+// Logout AGRESSIVO - limpa TODO storage Supabase + redireciona
 export function signOut() {
   console.log('[signOut] iniciando logout agressivo');
   authGuards.suppressed = true;
@@ -102,7 +102,7 @@ export async function initAuth() {
   if (recoveryStatus === 'pending') {
     setTimeout(() => {
       if (!state.user) {
-        console.warn('[auth] Token de recovery não foi processado em 4s — provavelmente expirado');
+        console.warn('[auth] Token de recovery não foi processado em 4s - provavelmente expirado');
         recoveryState.error = recoveryState.error || {
           code: 'token_expired',
           description: 'O link de definir senha expirou ou já foi utilizado.',

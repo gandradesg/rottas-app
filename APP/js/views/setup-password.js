@@ -144,7 +144,7 @@ function renderSetPasswordMode(app, mode) {
     loadingBtn(btn, true);
     const timeout = setTimeout(() => {
       loadingBtn(btn, false);
-      toast('Tempo esgotado — abra o console (F12)', 'error', 6000);
+      toast('Tempo esgotado - abra o console (F12)', 'error', 6000);
     }, 20000);
     try {
       await setPassword(newInput.value);

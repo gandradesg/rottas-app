@@ -1,4 +1,4 @@
-# Instruções permanentes — Projeto Rottas
+# Instruções permanentes - Projeto Rottas
 
 ## Regra de ouro: Claude é o EXECUTOR
 
@@ -29,7 +29,7 @@ github.com/gandradesg/rottas-app/
 ```
 
 **Vercel está configurado pra deployar a partir da pasta `APP/`** dentro do repo.
-Se commitar arquivos na raiz do repo (fora de APP/), o deploy NÃO pega — vira lixo.
+Se commitar arquivos na raiz do repo (fora de APP/), o deploy NÃO pega - vira lixo.
 
 O working dir local é `C:/.../Área de Trabalho/APP/`, mas o `.git` dele está bagunçado
 (commita na raiz). Usar sempre o clone em `/tmp/rottas-fix/` como área de deploy:
@@ -68,5 +68,5 @@ git push origin main
 
 - Tudo em português brasileiro
 - Logo oficial Rottas (NUNCA criar SVG customizado tipo "diamante laranja")
-- Manter fluxo aditivo — não quebrar funcionalidade existente
+- Manter fluxo aditivo - não quebrar funcionalidade existente
 - Versão sempre bump + entrada no CHANGELOG visível na tela "Sobre"

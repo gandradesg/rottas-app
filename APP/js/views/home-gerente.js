@@ -1,4 +1,4 @@
-// Home do Gerente — KPIs e feed com filtro de período
+// Home do Gerente - KPIs e feed com filtro de período
 import { el, icon, fmt } from '../ui.js';
 import { state, supabase } from '../supabase.js';
 import { shell } from './shell.js';
@@ -213,18 +213,18 @@ function activityRow(a) {
   let meta = '';
   switch (a.tipo) {
     case 'checkin':
-      title = a.imobiliaria || '—';
+      title = a.imobiliaria || '-';
       chips.push({ label: 'Check-in', cls: 'chip-blue' });
       if (a.motivo_visita) meta = a.motivo_visita;
       break;
     case 'atendimento':
-      title = a.local_visita || a.produto || '—';
+      title = a.local_visita || a.produto || '-';
       chips.push({ label: 'Visita', cls: 'chip-purple' });
       if (a.cliente) meta = a.cliente;
       if (a.corretor) meta = (meta ? meta+' · ' : '') + a.corretor;
       break;
     case 'proposta':
-      title = a.empreendimento || '—';
+      title = a.empreendimento || '-';
       chips.push({ label: a.reserva ? 'Venda' : 'Proposta', cls: a.reserva ? 'chip-green' : 'chip-yellow' });
       if (a.valor) meta = fmt.currency(a.valor);
       if (a.unidade) meta = `Un. ${a.unidade}` + (meta ? ` · ${meta}`:'');

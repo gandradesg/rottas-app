@@ -1,4 +1,4 @@
-// Histórico de atividades — para o Gerente vê suas próprias, Master vê todas
+// Histórico de atividades - para o Gerente vê suas próprias, Master vê todas
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';

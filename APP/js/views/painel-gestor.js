@@ -1,4 +1,4 @@
-// Painel do Gestor (Master) — visão consolidada de todos os gerentes
+// Painel do Gestor (Master) - visão consolidada de todos os gerentes
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
@@ -133,7 +133,7 @@ export async function painelGestorView(_params, app) {
       `⏳ ${pendentes.length} solicitação${pendentes.length !== 1 ? 'ões' : ''} aguardando sua aprovação`));
     pendentes.forEach(p => {
       const t = TIPO_ATIVIDADE[p.tipo];
-      let titulo = p.imobiliaria || p.empreendimento || p.local_visita || '—';
+      let titulo = p.imobiliaria || p.empreendimento || p.local_visita || '-';
       if (p.tipo === 'proposta') titulo = `${p.empreendimento} · Un. ${p.unidade}`;
       dash.appendChild(el('div', { class: 'card p-4' },
         el('div', { class: 'flex items-start gap-3 mb-3' },
@@ -426,7 +426,7 @@ export async function painelGestorView(_params, app) {
     const items = el('div', { class: 'flex flex-col gap-2' });
     allAtividades.slice(0, 50).forEach(a => {
       const t = TIPO_ATIVIDADE[a.tipo];
-      let title = a.imobiliaria || a.local_visita || a.empreendimento || '—';
+      let title = a.imobiliaria || a.local_visita || a.empreendimento || '-';
       let detail = '';
       if (a.tipo === 'proposta') detail = `Un. ${a.unidade} · ${fmt.currency(a.valor)}`;
       else if (a.tipo === 'atendimento') detail = `${a.cliente} · ${a.corretor}`;

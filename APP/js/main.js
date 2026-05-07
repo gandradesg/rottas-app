@@ -1,4 +1,4 @@
-// Entry point — wires up auth, theme, router e rotas
+// Entry point - wires up auth, theme, router e rotas
 import { initTheme } from './theme.js';
 import { initAuth, isLoggedIn, isMaster, isGestor, activeViewRole, needsPasswordSetup, can, recoveryState } from './auth.js';
 import { startRouter, route, navigate } from './router.js';
@@ -56,7 +56,7 @@ function publicRoute(handler) {
   };
 }
 
-// Home — agora padrão é Agenda. Painel e Início ficam em rotas dedicadas.
+// Home - agora padrão é Agenda. Painel e Início ficam em rotas dedicadas.
 const homeView = authGuard(async (params, app) => {
   return agendaView(params, app);
 });
@@ -67,7 +67,7 @@ const inicioGerenteView = authGuard(async (params, app) => {
   return homeGerenteView(params, app);
 });
 
-// Setup password — permite acesso sem sessão se há erro de recovery (modo "link expirado")
+// Setup password - permite acesso sem sessão se há erro de recovery (modo "link expirado")
 const setupGuard = async (params, app) => {
   if (!isLoggedIn() && !recoveryState.error) {
     navigate('/login', true); return;
@@ -134,7 +134,7 @@ async function boot() {
     initialSearch.includes('code=');
 
   if (hasAuthTokens) {
-    console.log('[boot] DETECTADO fluxo de recovery na URL — vai limpar storage e forçar /setup-password');
+    console.log('[boot] DETECTADO fluxo de recovery na URL - vai limpar storage e forçar /setup-password');
     // 1. Limpa TODA sessão antiga ANTES de o Supabase ler o storage
     try {
       const ls = window.localStorage;
@@ -155,7 +155,7 @@ async function boot() {
   if (hasAuthTokens) {
     // 2. Aguarda o Supabase processar o token e settar a sessão (250ms é suficiente)
     await new Promise(r => setTimeout(r, 250));
-    // 3. FORÇA o destino para /setup-password — independente de qual evento auth disparou
+    // 3. FORÇA o destino para /setup-password - independente de qual evento auth disparou
     //    Não confia em PASSWORD_RECOVERY ser disparado.
     console.log('[boot] forçando hash → #/setup-password (sessão atual:', !!state.user, ')');
     if (location.hash !== '#/setup-password') {

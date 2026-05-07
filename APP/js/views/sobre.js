@@ -1,4 +1,4 @@
-// Tela "Sobre" — versão e changelog
+// Tela "Sobre" - versão e changelog
 import { el, icon } from '../ui.js';
 import { shell } from './shell.js';
 import { APP_VERSION, APP_BUILD_DATE, CHANGELOG } from '../config.js';

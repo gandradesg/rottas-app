@@ -1,14 +1,26 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.0';
-export const APP_BUILD_DATE = '2026-05-06';
+export const APP_VERSION = '0.8.1';
+export const APP_BUILD_DATE = '2026-05-07';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.1',
+    date: '07/05/2026',
+    changes: [
+      'Convites agora usam Edge Function `invite-user` com template INVITE correto (não mais recovery)',
+      'Email de convite com logo oficial Rottas no topo (PNG hospedado em Supabase Storage)',
+      'Email de redefinição de senha apenas quando solicitado via "Esqueci minha senha"',
+      'Templates de email com texto contextualizado (boas-vindas vs redefinição)',
+      'Removidos travessões longos do app inteiro (substituídos por hifens simples)',
+      'Title do navegador encurtado para "Rottas" - sem duplicar nome do PWA na aba',
+    ],
+  },
   {
     version: '0.8.0',
     date: '06/05/2026',
     changes: [
       'Ícone do PWA: 4 tamanhos (192/256/384/512) gerados a partir da logo oficial Rottas',
-      'Background da splash do PWA agora branco (não mais laranja) — combina com a logo oficial',
+      'Background da splash do PWA agora branco (não mais laranja) - combina com a logo oficial',
       'Templates de email reescritos em formato Outlook-safe (table-based, sem CSS background)',
       'Cabeçalho ROTTAS visível no Outlook corporativo + botão de definir senha sólido',
     ],
@@ -18,7 +30,7 @@ export const CHANGELOG = [
     date: '06/05/2026',
     changes: [
       'Favicon e ícone do PWA agora usam EXATAMENTE a mesma logo oficial Rottas da plataforma (logo-icon.png)',
-      'Removido o app-icon.svg customizado (diamante laranja) — não usado mais em lugar nenhum',
+      'Removido o app-icon.svg customizado (diamante laranja) - não usado mais em lugar nenhum',
       'Cache-bust ?v=078 no favicon para forçar atualização nos navegadores',
       'Email: SMTP do Resend configurado no Supabase + domínio rottasconstrutora.com.br registrado (aguardando DNS)',
     ],
@@ -27,7 +39,7 @@ export const CHANGELOG = [
     version: '0.7.8',
     date: '06/05/2026',
     changes: [
-      'Logo oficial Rottas no PWA (primeira versão — substituída por 0.7.9)',
+      'Logo oficial Rottas no PWA (primeira versão - substituída por 0.7.9)',
     ],
   },
   {
@@ -44,7 +56,7 @@ export const CHANGELOG = [
     version: '0.7.6',
     date: '05/05/2026',
     changes: [
-      'Ícone correto da Rottas ao adicionar como app na tela do celular (iOS e Android) — não mostra mais "R" como fallback',
+      'Ícone correto da Rottas ao adicionar como app na tela do celular (iOS e Android) - não mostra mais "R" como fallback',
       'Manifest PWA limpo: aponta só para arquivos reais',
     ],
   },
@@ -67,7 +79,7 @@ export const CHANGELOG = [
     version: '0.7.3',
     date: '05/05/2026',
     changes: [
-      'Painel do Gestor: VGVs em formato compacto (R$ X,X mi) — card grande mostra também valor completo abaixo',
+      'Painel do Gestor: VGVs em formato compacto (R$ X,X mi) - card grande mostra também valor completo abaixo',
       'Painel do Gestor: funil de vendas (Visitas → Propostas → Vendas) na aba Visão geral',
       'Histórico: funil agora aparece também para Gestor/Master',
     ],
@@ -79,7 +91,7 @@ export const CHANGELOG = [
       'Recovery link DEFINITIVO: boot detecta tokens de auth/recovery na URL e força redirecionamento para /setup-password (independente de evento Supabase)',
       'Agenda: botão "+" agora é redondo no canto superior direito do card de cada dia',
       'Agenda Atendimento: removido Empreendimento (só preenche no momento do registro real)',
-      'Início: filtro de período (Dia / Semana / Mês / Geral) com persistência local — KPIs e feed atualizam',
+      'Início: filtro de período (Dia / Semana / Mês / Geral) com persistência local - KPIs e feed atualizam',
     ],
   },
   {
@@ -100,11 +112,11 @@ export const CHANGELOG = [
     date: '05/05/2026',
     changes: [
       'Agenda agora é a tela inicial do app (primeira do bottom nav)',
-      'Calendário com modos Dia / Semana / Mês — hoje sempre destacado',
+      'Calendário com modos Dia / Semana / Mês - hoje sempre destacado',
       'Mês com grade interativa: clique em qualquer dia para ver os agendamentos',
       'Indicadores visuais de pendentes (laranja) e realizados (verde) por dia',
       'Listas de imobiliárias e Locais de visita SEPARADAS (novo cadastro: "Locais de visita")',
-      'Recovery link: storage do Supabase é limpo no boot quando há token na URL — não loga mais direto',
+      'Recovery link: storage do Supabase é limpo no boot quando há token na URL - não loga mais direto',
       'Fix: erro "Could not embed" na agenda (FK ambígua entre agendamentos e atividades)',
       'Painel Gestor migrado para /painel · KPIs do Gerente migrados para /inicio',
     ],
@@ -113,7 +125,7 @@ export const CHANGELOG = [
     version: '0.6.0',
     date: '03/05/2026',
     changes: [
-      'Novo: módulo de Agenda — gerentes planejam visitas e atendimentos futuros',
+      'Novo: módulo de Agenda - gerentes planejam visitas e atendimentos futuros',
       'Realizar atividade direto da agenda (Check-in/Atendimento/Proposta/Órulo) com pré-preenchimento e vínculo bidirecional',
       'Visão consolidada da agenda da equipe para Gestor/Master, com filtros por gerente, tipo, status e período',
       'Faixa de semana com indicador de pendências por dia',
@@ -210,7 +222,7 @@ export const CHANGELOG = [
 export const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
 export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtempsaXJ6ZXh5b3BuanhvaGV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2NzExMjcsImV4cCI6MjA5MzI0NzEyN30.V23FCvrJKRkGhjmZQqAnaXYLbtpMw7Wc_Ae7UB0t7a8';
 
-export const APP_NAME = 'Rottas — Plataforma de Gerentes';
+export const APP_NAME = 'Rottas - Plataforma de Gerentes';
 export const MASTER_EMAIL = 'gabriel.galvao@rottasconstrutora.com.br';
 
 // Bucket de storage para fotos

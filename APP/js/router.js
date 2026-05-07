@@ -32,7 +32,7 @@ function matchRoute(path) {
 export function navigate(path, replace = false) {
   const target = '#' + path;
   if (location.hash === target) {
-    // Same path — force re-render
+    // Same path - force re-render
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     return;
   }
@@ -59,7 +59,7 @@ async function render() {
   document.getElementById('modal-root')?.replaceChildren();
   app.classList.add('animate-fade-in');
   if (!m) {
-    // 404 — redirect home
+    // 404 - redirect home
     navigate('/', true);
     return;
   }
