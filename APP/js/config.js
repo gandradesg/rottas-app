@@ -1,8 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.7.9';
+export const APP_VERSION = '0.8.0';
 export const APP_BUILD_DATE = '2026-05-06';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.0',
+    date: '06/05/2026',
+    changes: [
+      'Ícone do PWA: 4 tamanhos (192/256/384/512) gerados a partir da logo oficial Rottas',
+      'Background da splash do PWA agora branco (não mais laranja) — combina com a logo oficial',
+      'Templates de email reescritos em formato Outlook-safe (table-based, sem CSS background)',
+      'Cabeçalho ROTTAS visível no Outlook corporativo + botão de definir senha sólido',
+    ],
+  },
   {
     version: '0.7.9',
     date: '06/05/2026',
