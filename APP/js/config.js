@@ -233,7 +233,7 @@ export const CHANGELOG = [
 export const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
 export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtempsaXJ6ZXh5b3BuanhvaGV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2NzExMjcsImV4cCI6MjA5MzI0NzEyN30.V23FCvrJKRkGhjmZQqAnaXYLbtpMw7Wc_Ae7UB0t7a8';
 
-export const APP_NAME = 'Rottas - Plataforma de Gerentes';
+export const APP_NAME = 'Imob Rottas';
 export const MASTER_EMAIL = 'gabriel.galvao@rottasconstrutora.com.br';
 
 // Bucket de storage para fotos

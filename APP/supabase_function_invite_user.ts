@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
           },
         });
         await transporter.sendMail({
-          from: `"Rottas - Plataforma de Gerentes" <${Deno.env.get('SENDER_EMAIL')}>`,
+          from: `"Imob Rottas" <${Deno.env.get('SENDER_EMAIL')}>`,
           to: email,
           subject: 'Você foi convidado - cadastre sua senha de acesso à Plataforma Rottas',
           html: inviteEmailHtml(linkData.properties.action_link),
