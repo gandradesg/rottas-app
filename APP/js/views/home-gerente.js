@@ -106,7 +106,50 @@ export async function homeGerenteView(_params, app) {
   const feedList = el('div', { class: 'flex flex-col gap-2' });
   content.appendChild(el('section', {}, feedTitle, feedList));
 
+  // Alerta de imobiliárias sem visita há mais de 7 dias (do gerente)
+  const staleAlertEl = el('div', { class: 'flex flex-col gap-1' });
+  content.insertBefore(staleAlertEl, content.children[2] || null); // entre saudação e período
+
   app.appendChild(shell(content));
+
+  // Busca última visita por imobiliária para o alerta
+  async function loadStaleAlert() {
+    staleAlertEl.innerHTML = '';
+    if (!state.imobiliarias?.length) return;
+    const { data } = await supabase
+      .from('atividades')
+      .select('imobiliaria, created_at')
+      .eq('gerente_id', state.user.id)
+      .eq('cancelada', false)
+      .in('tipo', ['checkin', 'atendimento'])
+      .not('imobiliaria', 'is', null)
+      .order('created_at', { ascending: false });
+    if (!data) return;
+    const lastByImob = {};
+    data.forEach(a => {
+      if (!lastByImob[a.imobiliaria]) lastByImob[a.imobiliaria] = new Date(a.created_at);
+    });
+    const stale = state.imobiliarias.filter(im => {
+      const last = lastByImob[im.nome];
+      if (!last) return true; // nunca visitou
+      const days = Math.floor((Date.now() - last.getTime()) / 86400000);
+      return days >= 7;
+    });
+    if (!stale.length) return;
+    staleAlertEl.appendChild(el('div', {
+      class: 'card p-3 flex items-start gap-3',
+      style: { background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' },
+    },
+      el('span', { class: 'text-2xl flex-shrink-0' }, '⚠️'),
+      el('div', { class: 'flex-1 min-w-0' },
+        el('div', { class: 'font-bold text-warning text-sm' },
+          `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais`),
+        el('div', { class: 'text-xs text-fg-muted mt-0.5 truncate' },
+          stale.slice(0, 4).map(s => s.nome).join(' · ') + (stale.length > 4 ? ` e mais ${stale.length-4}` : '')),
+      ),
+    ));
+  }
+  loadStaleAlert();
 
   // Carrega conforme o período
   async function load() {

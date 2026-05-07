@@ -1,5 +1,5 @@
 import { el, toast, loadingBtn, icon } from '../ui.js';
-import { setPassword, sendPasswordReset, recoveryState } from '../auth.js';
+import { setPassword, sendPasswordReset, signOut, recoveryState } from '../auth.js';
 import { navigate } from '../router.js';
 import { state } from '../supabase.js';
 
@@ -153,8 +153,10 @@ function renderSetPasswordMode(app, mode) {
       await setPassword(newInput.value);
       resolved = true;
       clearTimeout(timeout);
-      toast('✓ Senha definida!', 'success');
-      navigate('/', true);
+      toast('✓ Senha definida! Faça login com sua nova senha.', 'success', 4000);
+      // Desloga e manda para a tela de login pra usuario logar com a nova senha
+      try { await signOut(); } catch (e) { /* ignora - vai pro login mesmo assim */ }
+      setTimeout(() => { location.hash = '#/login'; location.reload(); }, 600);
     } catch (err) {
       resolved = true;
       clearTimeout(timeout);

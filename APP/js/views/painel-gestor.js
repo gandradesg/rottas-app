@@ -12,8 +12,9 @@ export async function painelGestorView(_params, app) {
     estado: 'todos',
     cidade: 'todas',
     empreendimento: 'todos',
+    imobiliaria: 'todas',
     gerente: 'todos',
-    aba: 'overview', // overview | gerentes | empreendimentos | feed | ranking
+    aba: 'overview', // overview | gerentes | empreendimentos | imobiliarias | feed | ranking
   };
 
   const content = el('div', { class: 'flex flex-col gap-4' });
@@ -33,6 +34,7 @@ export async function painelGestorView(_params, app) {
     { id: 'aprovacoes',     label: '⏳ Aprovações' },
     { id: 'gerentes',       label: 'Gerentes' },
     { id: 'empreendimentos',label: 'Empreendimentos' },
+    { id: 'imobiliarias',   label: 'Imobiliárias' },
     { id: 'ranking',        label: 'Ranking' },
     { id: 'feed',           label: 'Feed' },
   ];
@@ -58,11 +60,13 @@ export async function painelGestorView(_params, app) {
   );
   const empSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos empreendimentos'));
   state.empreendimentos.forEach(e => empSel.appendChild(el('option', { value: e.nome }, e.nome)));
+  const imobSel = el('select', { class: 'select' }, el('option', { value: 'todas' }, 'Todas imobiliárias'));
+  state.imobiliarias.forEach(i => imobSel.appendChild(el('option', { value: i.nome }, i.nome)));
   const gerSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos gerentes'));
   const estSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos estados'));
   ESTADOS_BR.forEach(uf => estSel.appendChild(el('option', { value: uf }, uf)));
 
-  filterBar.append(periodoSel, empSel, gerSel, estSel);
+  filterBar.append(periodoSel, empSel, imobSel, gerSel, estSel);
   content.appendChild(filterBar);
 
   // Container principal
@@ -94,6 +98,9 @@ export async function painelGestorView(_params, app) {
     if (filters.estado !== 'todos') {
       filtered = filtered.filter(a => a.profiles?.estado === filters.estado);
     }
+    if (filters.imobiliaria !== 'todas') {
+      filtered = filtered.filter(a => a.imobiliaria === filters.imobiliaria);
+    }
     allAtividades = filtered;
     renderAll();
   }
@@ -105,6 +112,7 @@ export async function painelGestorView(_params, app) {
     if (filters.aba === 'aprovacoes')      renderAprovacoes();
     if (filters.aba === 'gerentes')        renderGerentes();
     if (filters.aba === 'empreendimentos') renderEmpreendimentos();
+    if (filters.aba === 'imobiliarias')    renderImobiliarias();
     if (filters.aba === 'ranking')         renderRanking();
     if (filters.aba === 'feed')            renderFeed();
   }
@@ -367,6 +375,101 @@ export async function painelGestorView(_params, app) {
     dash.appendChild(exportBar());
   }
 
+  // ===== IMOBILIARIAS =====
+  // Agrupa atividades por imobiliária. Para cada uma:
+  //  - mostra checkins, atend, prop, vendas, vgv
+  //  - calcula "última visita" (max created_at) e dias desde então
+  //  - alerta visual (laranja) quando última visita > 7 dias
+  function renderImobiliarias() {
+    const byImob = {};
+    allAtividades.forEach(a => {
+      const nome = a.imobiliaria;
+      if (!nome) return;
+      if (!byImob[nome]) byImob[nome] = {
+        nome, checkin: 0, atend: 0, prop: 0, vendas: 0, vgv: 0, orulo: 0, lastAt: null,
+      };
+      const x = byImob[nome];
+      if (a.tipo === 'checkin') x.checkin++;
+      if (a.tipo === 'atendimento') x.atend++;
+      if (a.tipo === 'proposta') { x.prop++; x.vgv += parseFloat(a.valor) || 0; if (a.reserva) x.vendas++; }
+      if (a.tipo === 'orulo') x.orulo++;
+      const at = new Date(a.created_at);
+      if (!x.lastAt || at > x.lastAt) x.lastAt = at;
+    });
+    // Inclui imobiliárias cadastradas SEM atividades no período (pra acender alerta)
+    state.imobiliarias.forEach(im => {
+      if (!byImob[im.nome]) byImob[im.nome] = {
+        nome: im.nome, checkin: 0, atend: 0, prop: 0, vendas: 0, vgv: 0, orulo: 0, lastAt: null,
+      };
+    });
+
+    const list = Object.values(byImob).sort((a,b) => {
+      // Sem visita primeiro (alerta), depois mais antiga, depois VGV maior
+      const aDays = a.lastAt ? Math.floor((Date.now() - a.lastAt.getTime()) / 86400000) : 999;
+      const bDays = b.lastAt ? Math.floor((Date.now() - b.lastAt.getTime()) / 86400000) : 999;
+      if (aDays >= 7 && bDays < 7) return -1;
+      if (bDays >= 7 && aDays < 7) return 1;
+      return b.vgv - a.vgv;
+    });
+
+    if (!list.length) {
+      dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' },
+        'Cadastre imobiliárias na aba Listas para acompanhar visitas.'));
+      return;
+    }
+
+    // Banner de alerta consolidado
+    const stale = list.filter(x => !x.lastAt || (Date.now() - x.lastAt.getTime()) >= 7 * 86400000);
+    if (stale.length) {
+      dash.appendChild(el('div', { class: 'card p-3 flex items-start gap-2', style: { background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' } },
+        el('span', { class: 'text-2xl' }, '⚠️'),
+        el('div', { class: 'flex-1' },
+          el('div', { class: 'font-bold text-warning text-sm' }, `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais`),
+          el('div', { class: 'text-xs text-fg-muted mt-0.5' }, 'Listadas no topo abaixo. Considere agendar uma visita.'),
+        ),
+      ));
+    }
+
+    list.forEach(im => {
+      const days = im.lastAt ? Math.floor((Date.now() - im.lastAt.getTime()) / 86400000) : null;
+      const isStale = days === null || days >= 7;
+      const lastLabel = im.lastAt
+        ? (days === 0 ? 'hoje' : days === 1 ? 'ontem' : `${days} dias atrás`)
+        : 'sem registro no período';
+
+      dash.appendChild(el('div', {
+        class: 'card p-4 ' + (isStale ? 'border-2' : ''),
+        style: isStale ? { borderColor: 'rgba(245,158,11,0.6)' } : {},
+      },
+        el('div', { class: 'flex items-center justify-between gap-2 mb-2' },
+          el('div', { class: 'font-bold flex items-center gap-2' },
+            isStale ? el('span', { class: 'text-warning' }, '⚠️') : null,
+            im.nome,
+          ),
+          el('button', {
+            class: 'btn btn-ghost btn-sm',
+            onclick: () => { filters.imobiliaria = im.nome; imobSel.value = im.nome; reload(); }
+          }, 'Filtrar'),
+        ),
+        el('div', { class: 'text-xs mb-3 ' + (isStale ? 'text-warning font-semibold' : 'text-fg-muted') },
+          'Última visita: ' + lastLabel,
+        ),
+        el('div', { class: 'grid grid-cols-5 gap-2 text-center' },
+          miniStat('Check-in', im.checkin, '#3B82F6'),
+          miniStat('Atend.', im.atend, '#8B5CF6'),
+          miniStat('Prop.', im.prop, '#F59E0B'),
+          miniStat('Vendas', im.vendas, '#10B981'),
+          miniStat('Órulo', im.orulo, '#10B981'),
+        ),
+        im.vgv > 0 && el('div', { class: 'mt-3 pt-3 border-t border-border text-sm' },
+          el('span', { class: 'text-fg-muted' }, 'VGV: '),
+          el('span', { class: 'font-bold' }, fmt.currencyMillions(im.vgv)),
+        ),
+      ));
+    });
+    dash.appendChild(exportBar());
+  }
+
   function renderRanking() {
     // Ranking por número de propostas e visitas
     const byGer = {};
@@ -409,10 +512,25 @@ export async function painelGestorView(_params, app) {
       );
     }
 
+    // Ranking de imobiliárias por VGV e por número de visitas
+    const byImob = {};
+    allAtividades.forEach(a => {
+      if (!a.imobiliaria) return;
+      if (!byImob[a.imobiliaria]) byImob[a.imobiliaria] = { nome: a.imobiliaria, visitas: 0, prop: 0, vendas: 0, vgv: 0 };
+      const x = byImob[a.imobiliaria];
+      if (a.tipo === 'checkin' || a.tipo === 'atendimento') x.visitas++;
+      if (a.tipo === 'proposta') { x.prop++; x.vgv += parseFloat(a.valor) || 0; if (a.reserva) x.vendas++; }
+    });
+    const imobs = Object.values(byImob);
+    const imobVisitasRanking = [...imobs].sort((a,b) => b.visitas - a.visitas).filter(x => x.visitas > 0);
+    const imobVgvRanking = [...imobs].sort((a,b) => b.vgv - a.vgv).filter(x => x.vgv > 0);
+
     dash.append(
       rankingCard('Ranking de Propostas', propRanking, g => `${g.prop}`),
       rankingCard('Ranking de Atendimentos', atendRanking, g => `${g.atend}`),
       rankingCard('Ranking VGV (em propostas)', vgvRanking, g => fmt.currencyMillions(g.vgv)),
+      rankingCard('Imobiliárias - Mais visitadas', imobVisitasRanking, x => `${x.visitas} visitas`),
+      rankingCard('Imobiliárias - Maior VGV', imobVgvRanking, x => fmt.currencyMillions(x.vgv)),
       exportBar(),
     );
   }
@@ -479,6 +597,7 @@ export async function painelGestorView(_params, app) {
   // Listeners
   periodoSel.addEventListener('change', () => { filters.periodo = periodoSel.value; reload(); });
   empSel.addEventListener('change', () => { filters.empreendimento = empSel.value; reload(); });
+  imobSel.addEventListener('change', () => { filters.imobiliaria = imobSel.value; reload(); });
   gerSel.addEventListener('change', () => { filters.gerente = gerSel.value; reload(); });
   estSel.addEventListener('change', () => { filters.estado = estSel.value; reload(); });
 

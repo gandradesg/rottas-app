@@ -44,10 +44,14 @@ export async function masterListasView(_params, app) {
     const items = state[tab.stateKey] || [];
 
     const addBtn = el('button', {
-      class: 'btn btn-primary',
+      class: 'btn btn-primary flex-1',
       onclick: () => openCreate(tab)
     }, icon('plus', 16), 'Novo item');
-    dash.appendChild(addBtn);
+    const importBtn = el('button', {
+      class: 'btn btn-secondary flex-1',
+      onclick: () => openImport(tab)
+    }, icon('download', 16), 'Importar lista');
+    dash.appendChild(el('div', { class: 'flex gap-2' }, addBtn, importBtn));
 
     if (!items.length) {
       dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' }, 'Nenhum item ainda. Adicione o primeiro.'));
@@ -158,6 +162,87 @@ export async function masterListasView(_params, app) {
         }
         toast('✓ Atualizado', 'success', 2000);
       });
+    });
+  }
+
+  // Importa lista em massa: aceita texto colado (1 nome por linha) ou arquivo .txt/.csv
+  function openImport(tab) {
+    const textArea = el('textarea', {
+      class: 'input',
+      rows: 8,
+      placeholder: 'Cole aqui a lista, um nome por linha:\n\nImobiliária ABC\nImobiliária XYZ\nLopes Imóveis\n...',
+      style: { resize: 'vertical', minHeight: '160px', fontFamily: 'monospace' },
+    });
+    const fileInput = el('input', {
+      type: 'file',
+      accept: '.txt,.csv',
+      class: 'input',
+      onchange: async () => {
+        const f = fileInput.files?.[0];
+        if (!f) return;
+        const txt = await f.text();
+        textArea.value = txt;
+      },
+    });
+    const previewEl = el('div', { class: 'text-xs text-fg-muted' });
+    function updatePreview() {
+      const lines = textArea.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const unique = [...new Set(lines)];
+      const existing = (state[tab.stateKey] || []).map(x => x.nome.toLowerCase());
+      const novos = unique.filter(n => !existing.includes(n.toLowerCase()));
+      const dups = unique.length - novos.length;
+      previewEl.textContent = `Total: ${lines.length} · Únicos: ${unique.length} · Novos: ${novos.length}${dups ? ` · Já existem: ${dups}` : ''}`;
+      return novos;
+    }
+    textArea.addEventListener('input', updatePreview);
+
+    const submit = el('button', { class: 'btn btn-primary' }, 'Importar');
+    const cancel = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
+
+    const m = modal({
+      title: `Importar ${tab.label}`,
+      size: 'md',
+      content: el('div', { class: 'flex flex-col gap-3' },
+        el('p', { class: 'text-sm text-fg-muted' },
+          'Cole abaixo OU envie um arquivo .txt/.csv com um nome por linha. Itens duplicados (já existentes) são ignorados automaticamente.'),
+        el('div', {},
+          el('label', { class: 'label text-xs' }, 'Arquivo (opcional)'),
+          fileInput,
+        ),
+        el('div', {},
+          el('label', { class: 'label text-xs' }, 'Ou cole aqui'),
+          textArea,
+        ),
+        previewEl,
+      ),
+      footer: [cancel, submit],
+    });
+    setTimeout(() => textArea.focus(), 80);
+    updatePreview();
+
+    submit.addEventListener('click', async () => {
+      const novos = updatePreview();
+      if (!novos.length) {
+        toast('Nenhum item novo para importar', 'warning');
+        return;
+      }
+      loadingBtn(submit, true);
+      try {
+        const rows = novos.map(nome => ({ nome }));
+        const { data, error } = await supabase.from(tab.table).insert(rows).select();
+        if (error) throw error;
+        if (!data || data.length !== novos.length) {
+          toast(`Apenas ${data?.length || 0} de ${novos.length} foram importados (RLS pode ter rejeitado parte)`, 'warning', 6000);
+        } else {
+          toast(`✓ ${data.length} ${tab.label.toLowerCase()} importados!`, 'success', 4000);
+        }
+        await loadLists();
+        m.close();
+        renderActive();
+      } catch (err) {
+        loadingBtn(submit, false);
+        toast('Erro: ' + (err.message || err), 'error', 6000);
+      }
     });
   }
 
