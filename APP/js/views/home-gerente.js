@@ -146,12 +146,8 @@ export async function homeGerenteView(_params, app) {
       summary.innerHTML = '';
       fullList.innerHTML = '';
       if (!expanded) {
-        summary.appendChild(el('span', {},
-          stale.slice(0, 4).map(s => s.nome).join(' · '),
-          stale.length > 4 ? ` e mais ${stale.length-4}` : '',
-        ));
         summary.appendChild(el('span', {
-          class: 'block text-rottas-500 font-bold mt-1 cursor-pointer hover:underline',
+          class: 'block text-rottas-500 font-bold cursor-pointer hover:underline',
         }, `Ver todas as ${stale.length} →`));
       } else {
         summary.appendChild(el('span', { class: 'text-rottas-500 font-bold cursor-pointer hover:underline' },
