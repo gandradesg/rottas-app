@@ -120,8 +120,8 @@ export async function historicoView(_params, app) {
     }
     allData = filtered;
 
-    // Renderizar funil
-    if (activeViewRole() !== 'gestor') renderFunnel(funnelSection, filtered);
+    // Renderizar funil (visível para gerente e gestor)
+    renderFunnel(funnelSection, filtered);
 
     summary.innerHTML = '';
     summary.append(

@@ -75,5 +75,11 @@ async function render() {
 
 export function startRouter() {
   window.addEventListener('hashchange', render);
+  // Se for um token do Supabase na URL, não faz o render inicial!
+  // Isso previne o router de dar 404 e limpar o token antes do Supabase ler.
+  const h = location.hash;
+  if (h.includes('access_token=') || h.includes('type=recovery') || h.includes('type=invite')) {
+    return;
+  }
   render();
 }

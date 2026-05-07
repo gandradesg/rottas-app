@@ -70,8 +70,7 @@ function userRow(p) {
           p.telefone || 'sem telefone',
         ),
       ),
-      // Master edita Master/Gestor. Gestor edita Gerente ou a si mesmo.
-      (isMaster() || p.role === 'gerente' || p.id === state.profile?.id) && el('button', {
+      el('button', {
         class: 'p-2 rounded-lg hover:bg-bg-elev transition flex-shrink-0',
         onclick: () => openEditModal(p)
       }, icon('edit', 18, 'text-fg-muted')),
@@ -121,7 +120,7 @@ async function inviteUserBackground(v) {
       email: v.email,
       password: tempPwd,
       options: {
-        emailRedirectTo: window.location.origin + '/',
+        emailRedirectTo: window.location.origin + '/#/setup-password',
         data: { nome: v.nome, role: v.role },
       }
     });
@@ -161,7 +160,7 @@ async function inviteUserBackground(v) {
 
   // 6) Dispara email de definição de senha (não bloqueia)
   supabase.auth.resetPasswordForEmail(v.email, {
-    redirectTo: window.location.origin + '/',
+    redirectTo: window.location.origin + '/#/setup-password',
   }).catch(e => console.warn('[invite] reset email falhou (rate limit?):', e));
 }
 
@@ -176,46 +175,6 @@ function openEditModal(p) {
   );
   fields.form.appendChild(ativoToggle);
 
-  // Botão de excluir perfil — apenas master editando perfis não-master
-  const canDelete = isMaster() && p.role !== 'master';
-  if (canDelete) {
-    const deleteSection = el('div', { class: 'mt-3 pt-3', style: { borderTop: '1px solid var(--border)' } },
-      el('button', {
-        class: 'btn w-full',
-        style: {
-          background: 'transparent',
-          color: 'var(--danger, #ef4444)',
-          border: '1px solid var(--danger, #ef4444)',
-          fontWeight: '600',
-          fontSize: '0.85rem',
-        },
-        onclick: async () => {
-          const ok = await confirmModal({
-            title: 'Excluir perfil?',
-            message: `Tem certeza que deseja excluir o perfil de "${p.nome}"? Essa ação não pode ser desfeita. O histórico de atividades vinculado a este usuário será mantido.`,
-            confirmLabel: 'Excluir',
-            danger: true,
-          });
-          if (!ok) return;
-          m.close();
-          toast('Excluindo perfil...', 'info', 2000);
-          try {
-            const { error } = await supabase.from('profiles').delete().eq('id', p.id);
-            if (error) throw error;
-            toast(`✓ Perfil de ${p.nome} excluído`, 'success', 3500);
-            reload();
-          } catch (err) {
-            console.error('[user delete] erro:', err);
-            toast('Erro ao excluir: ' + (err.message || err), 'error', 6000);
-          }
-        }
-      }, '🗑️ Excluir este perfil'),
-      el('p', { class: 'text-xs text-fg-subtle mt-1.5 text-center' },
-        'O histórico de atividades será mantido.'),
-    );
-    fields.form.appendChild(deleteSection);
-  }
-
   const submitBtn = el('button', { class: 'btn btn-primary' }, 'Salvar');
   const resetBtn = p.role !== 'master' ? el('button', {
     class: 'btn btn-ghost text-xs',
@@ -223,7 +182,7 @@ function openEditModal(p) {
       const ok = await confirmModal({ title: 'Reenviar convite?', message: 'Será enviado um novo email para definir a senha.', confirmLabel: 'Reenviar' });
       if (!ok) return;
       try {
-        await supabase.auth.resetPasswordForEmail(p.email, { redirectTo: window.location.origin + '/' });
+        await supabase.auth.resetPasswordForEmail(p.email, { redirectTo: window.location.origin + '/#/setup-password' });
         toast('Email reenviado', 'success');
       } catch (e) { toast(e.message, 'error'); }
     }

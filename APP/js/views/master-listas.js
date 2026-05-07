@@ -4,8 +4,9 @@ import { shell } from './shell.js';
 import { supabase, loadLists, state } from '../supabase.js';
 
 const TABS = [
-  { id: 'imobiliarias',    table: 'imobiliarias',    label: 'Imobiliárias',     stateKey: 'imobiliarias' },
-  { id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',  stateKey: 'empreendimentos' },
+  { id: 'imobiliarias',    table: 'imobiliarias',    label: 'Imobiliárias',      stateKey: 'imobiliarias' },
+  { id: 'locais_visita',   table: 'locais_visita',   label: 'Locais de visita',  stateKey: 'locaisVisita' },
+  { id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos' },
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
   { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo',     stateKey: 'motivosOrulo' },
 ];
