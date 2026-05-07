@@ -172,8 +172,20 @@ function openEditModal(p) {
           m.close();
           toast('Excluindo perfil...', 'info', 2000);
           try {
-            const { error } = await supabase.from('profiles').delete().eq('id', p.id);
-            if (error) throw error;
+            // Chama Edge Function delete-user que apaga em auth.users (cascateia profile)
+            // - garante que email pode ser reconvidado depois sem "already registered"
+            const { data: { session } } = await supabase.auth.getSession();
+            const fnUrl = `${supabase.supabaseUrl}/functions/v1/delete-user`;
+            const resp = await fetch(fnUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ user_id: p.id }),
+            });
+            const result = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(result.error || `Erro ${resp.status}`);
             toast(`✓ Perfil de ${p.nome} excluído`, 'success', 3500);
             reload();
           } catch (err) {

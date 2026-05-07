@@ -1,5 +1,7 @@
 // Edge Function: invite-user
-// Recebe dados de convite e usa auth.admin.inviteUserByEmail (que dispara o template INVITE)
+// Convida ou reconvida um usuário (dispara template INVITE).
+// Se o email já existe em auth.users mas ainda não confirmou (primeiro acesso),
+// remove o registro antigo e reconvida limpo. Se já está ativo, retorna erro.
 import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
 const corsHeaders = {
@@ -36,7 +38,6 @@ Deno.serve(async (req) => {
         status: 401, headers: corsHeaders,
       });
     }
-
     const { data: { user: caller } } = await admin.auth.getUser(
       authHeader.replace('Bearer ', '')
     );
@@ -45,13 +46,11 @@ Deno.serve(async (req) => {
         status: 401, headers: corsHeaders,
       });
     }
-
     const { data: callerProfile } = await admin
       .from('profiles')
       .select('role')
       .eq('id', caller.id)
       .single();
-
     if (!callerProfile || !['master', 'gestor'].includes(callerProfile.role)) {
       return new Response(JSON.stringify({ error: 'Sem permissao' }), {
         status: 403, headers: corsHeaders,
@@ -59,20 +58,44 @@ Deno.serve(async (req) => {
     }
 
     const origin = req.headers.get('origin') || 'https://rottas-app.vercel.app';
+    const redirectTo = origin + '/';
+
+    // Verifica se o email ja existe em auth.users
+    const { data: usersList } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const existing = usersList?.users?.find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase());
+
+    if (existing) {
+      // Se ja confirmou email e tem login feito, NAO reconvida (use redefinir senha)
+      if (existing.email_confirmed_at && !existing.user_metadata?.invited_pending) {
+        // Verifica se ja tem profile com primeiro_acesso false (usuario ativo)
+        const { data: prof } = await admin.from('profiles').select('primeiro_acesso').eq('id', existing.id).maybeSingle();
+        if (prof && prof.primeiro_acesso === false) {
+          return new Response(JSON.stringify({
+            error: 'Este usuario ja esta ativo. Use "Esqueci minha senha" para redefinir.',
+          }), { status: 409, headers: corsHeaders });
+        }
+      }
+      // Caso contrario: usuario pendente ou orfao - apaga e reconvida
+      const { error: delErr } = await admin.auth.admin.deleteUser(existing.id);
+      if (delErr) {
+        return new Response(JSON.stringify({ error: 'Falha ao limpar usuario antigo: ' + delErr.message }), {
+          status: 500, headers: corsHeaders,
+        });
+      }
+    }
 
     // Dispara o convite (usa template INVITE configurado no Supabase)
     const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { nome, role },
-      redirectTo: origin + '/',
+      data: { nome, role, invited_pending: true },
+      redirectTo,
     });
-
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
         status: 400, headers: corsHeaders,
       });
     }
 
-    // Preenche profile com dados completos
+    // Atualiza profile com dados completos
     if (data.user) {
       await admin.from('profiles').update({
         nome,
