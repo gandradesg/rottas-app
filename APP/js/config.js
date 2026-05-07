@@ -12,7 +12,7 @@ export const CHANGELOG = [
       'Email de redefinição de senha apenas quando solicitado via "Esqueci minha senha"',
       'Templates de email com texto contextualizado (boas-vindas vs redefinição)',
       'Removidos travessões longos do app inteiro (substituídos por hifens simples)',
-      'Title do navegador encurtado para "Rottas" - sem duplicar nome do PWA na aba',
+      'Title do navegador volta a "Rottas - Plataforma de Gerentes" + esvazia document.title em modo PWA standalone para evitar duplicação do nome no Windows',
     ],
   },
   {

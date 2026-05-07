@@ -1,4 +1,10 @@
 // Entry point - wires up auth, theme, router e rotas
+// Quando rodando como PWA instalado, esvazia o document.title pra Windows não duplicar
+// "Rottas - Plataforma de Gerentes" + manifest.name (que é o mesmo). Em aba normal mantém o título cheio.
+if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+  document.title = '';
+}
+
 import { initTheme } from './theme.js';
 import { initAuth, isLoggedIn, isMaster, isGestor, activeViewRole, needsPasswordSetup, can, recoveryState } from './auth.js';
 import { startRouter, route, navigate } from './router.js';
