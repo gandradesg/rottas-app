@@ -1,6 +1,6 @@
 // Edge Function: invite-user
 // Recebe dados de convite e usa auth.admin.inviteUserByEmail (que dispara o template INVITE)
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.39.7';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
