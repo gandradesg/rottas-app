@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.5';
+export const APP_VERSION = '0.8.6';
 export const APP_BUILD_DATE = '2026-05-07';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.6',
+    date: '07/05/2026',
+    changes: [
+      'Estados disponíveis no app limitados a PR e SC (únicas praças com operação atualmente)',
+    ],
+  },
   {
     version: '0.8.5',
     date: '07/05/2026',
@@ -278,10 +285,8 @@ export const PHOTO_BUCKET = 'fotos';
 export const MAX_PHOTOS_PER_ACTIVITY = 3;
 
 // Estados brasileiros (UF)
-export const ESTADOS_BR = [
-  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR',
-  'PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'
-];
+// Estados ativos da Rottas (apenas praças com operação no momento)
+export const ESTADOS_BR = ['PR', 'SC'];
 
 export const TERMOMETRO_OPTIONS = [
   { value: 'quente', label: 'Quente', color: 'red',    icon: '🔥' },
