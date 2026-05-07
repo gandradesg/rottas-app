@@ -8,6 +8,32 @@ if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
   document.title = 'Imob Rottas';
 }
 
+// ===== DETECTOR DE VERSAO DESATUALIZADA =====
+// Quando o PWA Android cacheia uma versao antiga e o servidor tem versao nova,
+// este checker forca um reload "duro" (sem cache). Compara version do JS rodando
+// vs o que esta em /js/config.js no servidor.
+async function checkForUpdate() {
+  try {
+    const { APP_VERSION: localVersion } = await import('./config.js');
+    const r = await fetch('/js/config.js?nocache=' + Date.now(), { cache: 'no-store' });
+    const txt = await r.text();
+    const m = txt.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    if (m && m[1] && m[1] !== localVersion) {
+      console.warn('[update] versao desatualizada detectada:', localVersion, '->', m[1], '- forcando reload');
+      // Limpa caches do service worker se houver
+      if ('caches' in window) {
+        caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+      }
+      // Reload SEM cache
+      setTimeout(() => location.reload(), 200);
+    }
+  } catch (e) {
+    console.warn('[update] check failed:', e);
+  }
+}
+// Roda 3s apos boot (nao bloqueia inicio)
+setTimeout(checkForUpdate, 3000);
+
 import { initTheme } from './theme.js';
 import { initAuth, isLoggedIn, isMaster, isGestor, activeViewRole, needsPasswordSetup, can, recoveryState } from './auth.js';
 import { startRouter, route, navigate } from './router.js';
