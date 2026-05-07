@@ -38,6 +38,39 @@ function showUpdateBanner(local, server) {
 }
 setTimeout(checkForUpdate, 3000);
 
+// ===== SERVICE WORKER: garante que o app SEMPRE pega versao fresh =====
+// Funciona inclusive em PWA instalado Android (intercepta cache do WebAPK).
+// Estrategia: network-first com fallback offline. Auto-update transparente.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      console.log('[sw] registrado');
+      // Forca check de update assim que registra
+      reg.update().catch(() => {});
+      // Quando detecta SW novo (apos reg.update ou navigate), aplica imediatamente
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        if (!newSW) return;
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('[sw] novo SW instalado - ativando e recarregando');
+            newSW.postMessage('SKIP_WAITING');
+          }
+        });
+      });
+    }).catch(err => console.warn('[sw] erro:', err));
+
+    // Recarrega quando o SW novo assume controle
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      console.log('[sw] controllerchange - reload');
+      location.reload();
+    });
+  });
+}
+
 import { initTheme } from './theme.js';
 import { initAuth, isLoggedIn, isMaster, isGestor, activeViewRole, needsPasswordSetup, can, recoveryState } from './auth.js';
 import { startRouter, route, navigate } from './router.js';

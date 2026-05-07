@@ -1,8 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.3';
+export const APP_VERSION = '0.8.4';
 export const APP_BUILD_DATE = '2026-05-07';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.4',
+    date: '07/05/2026',
+    changes: [
+      'Service Worker implementado: app sempre carrega versao fresh do servidor (network-first)',
+      'Fim do problema de cache em PWA Android - updates automaticos sem precisar reinstalar',
+      'Funciona offline: se sem internet, app abre da ultima versao em cache',
+      'Auto-update: quando deploy nova versao, app reload automatico em background',
+      'Banner de atualizacao indicando nova versao disponivel',
+    ],
+  },
   {
     version: '0.8.3',
     date: '07/05/2026',
