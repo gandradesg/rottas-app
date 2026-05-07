@@ -8,10 +8,9 @@ if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
   document.title = 'Imob Rottas';
 }
 
-// ===== DETECTOR DE VERSAO DESATUALIZADA =====
-// Quando o PWA Android cacheia uma versao antiga e o servidor tem versao nova,
-// este checker forca um reload "duro" (sem cache). Compara version do JS rodando
-// vs o que esta em /js/config.js no servidor.
+// ===== DETECTOR DE VERSAO DESATUALIZADA (banner, sem reload automatico) =====
+// PWA Android cacheia em nivel de OS (WebAPK) - reload nao resolve, precisa reinstalar.
+// Mostra um banner discreto pedindo pro usuario reinstalar o app.
 async function checkForUpdate() {
   try {
     const { APP_VERSION: localVersion } = await import('./config.js');
@@ -19,19 +18,24 @@ async function checkForUpdate() {
     const txt = await r.text();
     const m = txt.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
     if (m && m[1] && m[1] !== localVersion) {
-      console.warn('[update] versao desatualizada detectada:', localVersion, '->', m[1], '- forcando reload');
-      // Limpa caches do service worker se houver
-      if ('caches' in window) {
-        caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
-      }
-      // Reload SEM cache
-      setTimeout(() => location.reload(), 200);
+      console.warn('[update] versao local:', localVersion, '- servidor:', m[1]);
+      showUpdateBanner(localVersion, m[1]);
     }
-  } catch (e) {
-    console.warn('[update] check failed:', e);
-  }
+  } catch (e) { /* sem internet ou off - silencia */ }
 }
-// Roda 3s apos boot (nao bloqueia inicio)
+function showUpdateBanner(local, server) {
+  if (document.getElementById('update-banner')) return; // ja existe
+  const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#F26B22;color:#fff;padding:10px 14px;font:14px/1.4 sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center;justify-content:space-between;';
+  banner.innerHTML = `<div><b>Nova versao disponivel</b> (v${server}). Voce esta na v${local}.${isStandalone ? ' Para atualizar, desinstale e reinstale o app.' : ' Recarregue a pagina (Ctrl+Shift+R).'}</div><button style="background:#fff;color:#F26B22;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">${isStandalone ? 'OK' : 'Recarregar'}</button>`;
+  banner.querySelector('button').onclick = () => {
+    if (isStandalone) banner.remove();
+    else { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); location.reload(); }
+  };
+  document.body.appendChild(banner);
+}
 setTimeout(checkForUpdate, 3000);
 
 import { initTheme } from './theme.js';
