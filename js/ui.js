@@ -219,6 +219,14 @@ export function loadingBtn(btn, loading) {
 // Formatadores
 export const fmt = {
   currency: (v) => v == null ? '—' : new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL' }).format(v),
+  // Compacto em milhões: 2.600.000 → "R$ 2,6 mi"
+  currencyMillions: (v) => {
+    if (v == null) return '—';
+    if (Math.abs(v) < 1) return 'R$ 0';
+    const m = v / 1_000_000;
+    const s = m.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+    return `R$ ${s} mi`;
+  },
   date: (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—',
   time: (d) => d ? new Date(d).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' }) : '—',
   dateTime: (d) => d ? new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—',

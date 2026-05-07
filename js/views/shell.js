@@ -65,7 +65,8 @@ export function shell(content, opts = {}) {
     let items;
     if (view === 'gestor') {
       items = [
-        { p: '/',           label: 'Painel',     ic: 'barChart'   },
+        { p: '/',           label: 'Agenda',     ic: 'calendar'   },
+        { p: '/painel',     label: 'Painel',     ic: 'barChart'   },
         { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
       ];
       if (can('gerenciar_usuarios')) items.push({ p: '/usuarios', label: 'Usuários', ic: 'users' });
@@ -73,7 +74,8 @@ export function shell(content, opts = {}) {
     } else {
       // gerente
       items = [
-        { p: '/',           label: 'Início',     ic: 'home'       },
+        { p: '/',           label: 'Agenda',     ic: 'calendar'   },
+        { p: '/inicio',     label: 'Início',     ic: 'home'       },
         { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
         { p: '/registrar',  label: 'Registrar',  ic: 'plus', primary: true },
       ];

@@ -4,6 +4,29 @@ import { supabase, state, loadProfile, loadLists, emitStateChange } from './supa
 // Flag global: quando true, listener de auth ignora eventos
 export const authGuards = { suppressed: false };
 
+// Flag de erro de link de recovery (token expirado/inválido)
+export const recoveryState = { error: null };
+
+// Detecta erro/token na hash da URL atual (chamado no boot)
+export function detectRecoveryFromUrl() {
+  const h = location.hash || '';
+  // Supabase coloca erro em links inválidos como #error=...&error_code=...&error_description=...
+  if (h.includes('error=') || h.includes('error_code=')) {
+    const params = new URLSearchParams(h.replace(/^#/, ''));
+    recoveryState.error = {
+      code: params.get('error_code') || params.get('error') || 'unknown',
+      description: params.get('error_description') || 'Link inválido ou expirado',
+    };
+    // Limpa hash para evitar loop
+    history.replaceState(null, '', location.pathname + location.search);
+    return 'expired';
+  }
+  if (h.includes('access_token=') || h.includes('type=recovery') || h.includes('type=invite')) {
+    return 'pending';
+  }
+  return null;
+}
+
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -65,31 +88,59 @@ export async function sendPasswordReset(email) {
 }
 
 export async function initAuth() {
+  // Detecta estado de recovery na URL ANTES de inicializar
+  const recoveryStatus = detectRecoveryFromUrl();
+
   const { data: { session } } = await supabase.auth.getSession();
   if (session) {
     state.user = session.user;
     // Carrega profile e listas em paralelo
     await Promise.all([loadProfile(), loadLists()]);
   }
+
+  // Se chegou com hash de recovery mas após 4s ainda não tem sessão, é link expirado
+  if (recoveryStatus === 'pending') {
+    setTimeout(() => {
+      if (!state.user) {
+        console.warn('[auth] Token de recovery não foi processado em 4s — provavelmente expirado');
+        recoveryState.error = recoveryState.error || {
+          code: 'token_expired',
+          description: 'O link de definir senha expirou ou já foi utilizado.',
+        };
+        emitStateChange();
+        if (location.hash !== '#/setup-password') {
+          location.hash = '#/setup-password';
+        }
+      }
+    }, 4000);
+  }
+  if (recoveryStatus === 'expired') {
+    // Já temos o erro setado, redireciona para setup-password em modo expirado
+    setTimeout(() => {
+      if (location.hash !== '#/setup-password') location.hash = '#/setup-password';
+    }, 50);
+  }
   supabase.auth.onAuthStateChange(async (event, session) => {
-    if (authGuards.suppressed) {
-      console.log('[auth] evento suprimido:', event);
-      return;
-    }
+    if (authGuards.suppressed) return;
+    
     console.log('[auth] evento:', event);
     state.user = session?.user || null;
     
-    if (event === 'PASSWORD_RECOVERY') {
-      // Force navigation to setup password on recovery link
-      setTimeout(() => { window.location.hash = '#/setup-password'; }, 100);
-    }
-    
-    if (event === 'SIGNED_IN' && state.user) {
-      await Promise.all([loadProfile(), loadLists()]);
+    if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
+      if (state.user) {
+        // Aguarda perfil carregar ANTES de notificar o app ou redirecionar
+        await Promise.all([loadProfile(), loadLists()]);
+      }
     } else if (event === 'SIGNED_OUT') {
       state.profile = null;
     }
+    
     emitStateChange();
+    
+    if (event === 'PASSWORD_RECOVERY') {
+      // Agora o profile está carregado, o router não vai barrar!
+      window.location.hash = '#/setup-password';
+    }
   });
 }
 

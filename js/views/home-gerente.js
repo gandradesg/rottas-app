@@ -1,13 +1,15 @@
-// Home do Gerente — visão consolidada do dia
+// Home do Gerente — KPIs e feed com filtro de período
 import { el, icon, fmt } from '../ui.js';
-import { state } from '../supabase.js';
-import { supabase } from '../supabase.js';
+import { state, supabase } from '../supabase.js';
 import { shell } from './shell.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 
+const PERIOD_KEY = 'home-gerente-periodo';
+
 export async function homeGerenteView(_params, app) {
   const content = el('div', { class: 'flex flex-col gap-5' });
+  let periodo = localStorage.getItem(PERIOD_KEY) || 'dia'; // dia | semana | mes | geral
 
   // Saudação
   const hour = new Date().getHours();
@@ -25,7 +27,42 @@ export async function homeGerenteView(_params, app) {
     ),
   ));
 
-  // KPIs do dia — mostra 0s imediatamente, atualiza quando dados chegam
+  // Filtro de período
+  const periodPills = el('div', { class: 'flex gap-1.5' });
+  const PERIODS = [
+    { id: 'dia',    label: 'Dia' },
+    { id: 'semana', label: 'Semana' },
+    { id: 'mes',    label: 'Mês' },
+    { id: 'geral',  label: 'Geral' },
+  ];
+
+  function paintPills() {
+    periodPills.innerHTML = '';
+    PERIODS.forEach(p => {
+      periodPills.appendChild(el('button', {
+        class: 'btn btn-sm flex-1 ' + (periodo === p.id ? 'btn-primary' : 'btn-ghost'),
+        onclick: () => {
+          periodo = p.id;
+          localStorage.setItem(PERIOD_KEY, p.id);
+          paintPills();
+          updateSectionTitle();
+          load();
+        }
+      }, p.label));
+    });
+  }
+  paintPills();
+  content.appendChild(periodPills);
+
+  // Título da seção (muda com período)
+  const sectionTitle = el('h2', { class: 'text-xs font-bold uppercase text-fg-subtle tracking-wider mb-2' });
+  function updateSectionTitle() {
+    const labels = { dia: 'Hoje', semana: 'Últimos 7 dias', mes: 'Últimos 30 dias', geral: 'Geral (todos)' };
+    sectionTitle.textContent = labels[periodo] || 'Período';
+  }
+  updateSectionTitle();
+
+  // KPIs
   const kpiGrid = el('div', { class: 'grid grid-cols-2 gap-3' });
   function renderKPIs(counts) {
     kpiGrid.innerHTML = '';
@@ -38,13 +75,10 @@ export async function homeGerenteView(_params, app) {
   }
   renderKPIs({ checkin: 0, atendimento: 0, proposta: 0, venda: 0 });
 
-  content.appendChild(el('section', {},
-    el('h2', { class: 'text-xs font-bold uppercase text-fg-subtle tracking-wider mb-2' }, 'Hoje'),
-    kpiGrid,
-  ));
+  content.appendChild(el('section', {}, sectionTitle, kpiGrid));
 
-  // CTA: Registrar atividade
-  const ctaSection = el('section', {},
+  // CTAs
+  content.appendChild(el('section', {},
     el('h2', { class: 'text-xs font-bold uppercase text-fg-subtle tracking-wider mb-2' }, 'Registrar atividade'),
     el('div', { class: 'grid grid-cols-2 gap-3' },
       el('button', {
@@ -65,79 +99,85 @@ export async function homeGerenteView(_params, app) {
         el('div', { class: 'text-xs text-fg-muted' }, 'Histórico completo'),
       ),
     ),
-  );
-  content.appendChild(ctaSection);
+  ));
 
-  // Atividades de hoje (placeholder)
-  const feedSection = el('section', {},
-    el('h2', { class: 'text-xs font-bold uppercase text-fg-subtle tracking-wider mb-2' }, 'Atividades de hoje'),
-  );
+  // Feed
+  const feedTitle = el('h2', { class: 'text-xs font-bold uppercase text-fg-subtle tracking-wider mb-2' }, 'Atividades');
   const feedList = el('div', { class: 'flex flex-col gap-2' });
-  feedSection.appendChild(feedList);
-  content.appendChild(feedSection);
+  content.appendChild(el('section', {}, feedTitle, feedList));
 
   app.appendChild(shell(content));
 
-  // Carrega dados em background (não bloqueia render)
-  console.log('[home] carregando atividades de hoje...');
-  const startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
-  const queryPromise = supabase
-    .from('atividades')
-    .select('*')
-    .eq('gerente_id', state.user.id)
-    .eq('cancelada', false)
-    .gte('created_at', startOfDay.toISOString())
-    .order('created_at', { ascending: false });
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Timeout (6s)')), 6000)
-  );
-  let atividades = [], error = null;
-  try {
-    const result = await Promise.race([queryPromise, timeoutPromise]);
-    atividades = result.data || [];
-    error = result.error;
-  } catch (err) {
-    error = err;
-  }
-  console.log('[home] resposta:', { count: atividades?.length, error });
+  // Carrega conforme o período
+  async function load() {
+    feedList.innerHTML = '<div class="skeleton h-16"></div>';
+    let q = supabase
+      .from('atividades')
+      .select('*')
+      .eq('gerente_id', state.user.id)
+      .eq('cancelada', false)
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error(error);
-    feedList.appendChild(el('div', { class: 'card p-4 text-sm text-danger' },
-      '⚠️ Erro ao carregar: ' + (error.message || 'falha de rede') + '. ',
-      el('button', {
-        class: 'underline text-rottas-500 ml-1',
-        onclick: () => location.reload()
-      }, 'Recarregar')
-    ));
-    return;
-  }
+    const now = new Date();
+    if (periodo === 'dia') {
+      const d = new Date(); d.setHours(0,0,0,0);
+      q = q.gte('created_at', d.toISOString());
+    } else if (periodo === 'semana') {
+      const d = new Date(now.getTime() - 7*86400000);
+      q = q.gte('created_at', d.toISOString());
+    } else if (periodo === 'mes') {
+      const d = new Date(now.getTime() - 30*86400000);
+      q = q.gte('created_at', d.toISOString());
+    }
+    // 'geral' = sem filtro de data
 
-  // KPIs
-  const counts = {
-    checkin:     atividades.filter(a => a.tipo === 'checkin').length,
-    atendimento: atividades.filter(a => a.tipo === 'atendimento').length,
-    proposta:    atividades.filter(a => a.tipo === 'proposta').length,
-    venda:       atividades.filter(a => a.tipo === 'proposta' && !!a.reserva).length,
-  };
+    const tPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), 8000));
+    let atividades = [], error = null;
+    try {
+      const result = await Promise.race([q, tPromise]);
+      atividades = result.data || [];
+      error = result.error;
+    } catch (err) { error = err; }
 
-  renderKPIs(counts);
+    if (error) {
+      feedList.innerHTML = '';
+      feedList.appendChild(el('div', { class: 'card p-4 text-sm text-danger' },
+        '⚠️ Erro: ' + (error.message || 'rede') + '. ',
+        el('button', { class: 'underline text-rottas-500 ml-1', onclick: () => location.reload() }, 'Recarregar'),
+      ));
+      return;
+    }
 
-  // Feed
-  if (!atividades.length) {
-    feedList.appendChild(el('div', { class: 'card p-6 text-center text-sm text-fg-muted' },
-      el('div', { class: 'text-3xl mb-2' }, '🌟'),
-      'Nenhuma atividade hoje. Que tal começar com um check-in?'
-    ));
-  } else {
-    atividades.slice(0, 8).forEach(a => feedList.appendChild(activityRow(a)));
-    if (atividades.length > 8) {
-      feedList.appendChild(el('button', {
-        class: 'btn btn-ghost w-full mt-2',
-        onclick: () => navigate('/historico')
-      }, `Ver todas (${atividades.length})`));
+    const counts = {
+      checkin:     atividades.filter(a => a.tipo === 'checkin').length,
+      atendimento: atividades.filter(a => a.tipo === 'atendimento').length,
+      proposta:    atividades.filter(a => a.tipo === 'proposta').length,
+      venda:       atividades.filter(a => a.tipo === 'proposta' && !!a.reserva).length,
+    };
+    renderKPIs(counts);
+
+    feedList.innerHTML = '';
+    feedTitle.textContent = (periodo === 'dia' ? 'Atividades de hoje'
+      : periodo === 'semana' ? 'Atividades dos últimos 7 dias'
+      : periodo === 'mes' ? 'Atividades dos últimos 30 dias'
+      : 'Todas as atividades').toUpperCase();
+    if (!atividades.length) {
+      feedList.appendChild(el('div', { class: 'card p-6 text-center text-sm text-fg-muted' },
+        el('div', { class: 'text-3xl mb-2' }, '🌟'),
+        periodo === 'dia' ? 'Nenhuma atividade hoje. Que tal começar com um check-in?' : 'Nenhuma atividade no período selecionado.',
+      ));
+    } else {
+      atividades.slice(0, 12).forEach(a => feedList.appendChild(activityRow(a)));
+      if (atividades.length > 12) {
+        feedList.appendChild(el('button', {
+          class: 'btn btn-ghost w-full mt-2',
+          onclick: () => navigate('/historico')
+        }, `Ver todas (${atividades.length})`));
+      }
     }
   }
+
+  load();
 }
 
 function kpiCard(label, value, suffix, color, ic) {
@@ -167,6 +207,7 @@ function kpiCard(label, value, suffix, color, ic) {
 function activityRow(a) {
   const t = TIPO_ATIVIDADE[a.tipo];
   const time = fmt.time(a.created_at);
+  const numTag = a.numero_sequencial ? `#${a.numero_sequencial} ` : '';
   let title = '';
   let chips = [];
   let meta = '';
@@ -202,8 +243,12 @@ function activityRow(a) {
     el('div', { class: `activity-icon activity-${a.tipo}` }, icon(t.icon === '📍' ? 'mapPin' : t.icon === '👥' ? 'users' : t.icon === '📄' ? 'fileText' : 'globe', 18)),
     el('div', { class: 'flex-1 min-w-0' },
       el('div', { class: 'flex items-center justify-between gap-2 mb-1' },
-        el('span', { class: 'font-semibold text-sm truncate' }, title),
-        el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' }, time),
+        el('span', { class: 'font-semibold text-sm truncate' }, numTag + title),
+        el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' },
+          (a.created_at && new Date(a.created_at).toDateString() === new Date().toDateString())
+            ? time
+            : fmt.dateTime(a.created_at)
+        ),
       ),
       el('div', { class: 'flex items-center gap-2 flex-wrap' },
         ...chips.map(c => el('span', { class: `chip ${c.cls}` }, c.label)),

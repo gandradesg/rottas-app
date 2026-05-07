@@ -1,8 +1,117 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.5.2';
-export const APP_BUILD_DATE = '2026-05-03';
+export const APP_VERSION = '0.7.9';
+export const APP_BUILD_DATE = '2026-05-06';
 
 export const CHANGELOG = [
+  {
+    version: '0.7.9',
+    date: '06/05/2026',
+    changes: [
+      'Favicon e ícone do PWA agora usam EXATAMENTE a mesma logo oficial Rottas da plataforma (logo-icon.png)',
+      'Removido o app-icon.svg customizado (diamante laranja) — não usado mais em lugar nenhum',
+      'Cache-bust ?v=078 no favicon para forçar atualização nos navegadores',
+      'Email: SMTP do Resend configurado no Supabase + domínio rottasconstrutora.com.br registrado (aguardando DNS)',
+    ],
+  },
+  {
+    version: '0.7.8',
+    date: '06/05/2026',
+    changes: [
+      'Logo oficial Rottas no PWA (primeira versão — substituída por 0.7.9)',
+    ],
+  },
+  {
+    version: '0.7.7',
+    date: '05/05/2026',
+    changes: [
+      'Ícone do app em alta resolução também no Android (app-icon.svg escala perfeitamente até 512×512+)',
+      'Manifest.webmanifest declarando ícones em 192×192 e 512×512 (requisitos do Android Chrome PWA)',
+      'Suporte a ícone "maskable" (Android adaptive icons)',
+      'Vercel: Content-Type correto para SVG e manifest',
+    ],
+  },
+  {
+    version: '0.7.6',
+    date: '05/05/2026',
+    changes: [
+      'Ícone correto da Rottas ao adicionar como app na tela do celular (iOS e Android) — não mostra mais "R" como fallback',
+      'Manifest PWA limpo: aponta só para arquivos reais',
+    ],
+  },
+  {
+    version: '0.7.5',
+    date: '05/05/2026',
+    changes: [
+      'Início: feed agora mostra o # do número sequencial da atividade (consistente com Histórico)',
+    ],
+  },
+  {
+    version: '0.7.4',
+    date: '05/05/2026',
+    changes: [
+      'Agenda Mês: botão "+" agora aparece no canto superior direito da célula do dia selecionado (na própria grade)',
+      'Removido o card de cabeçalho com "+" abaixo da grade do mês (limpa duplicidade)',
+    ],
+  },
+  {
+    version: '0.7.3',
+    date: '05/05/2026',
+    changes: [
+      'Painel do Gestor: VGVs em formato compacto (R$ X,X mi) — card grande mostra também valor completo abaixo',
+      'Painel do Gestor: funil de vendas (Visitas → Propostas → Vendas) na aba Visão geral',
+      'Histórico: funil agora aparece também para Gestor/Master',
+    ],
+  },
+  {
+    version: '0.7.2',
+    date: '05/05/2026',
+    changes: [
+      'Recovery link DEFINITIVO: boot detecta tokens de auth/recovery na URL e força redirecionamento para /setup-password (independente de evento Supabase)',
+      'Agenda: botão "+" agora é redondo no canto superior direito do card de cada dia',
+      'Agenda Atendimento: removido Empreendimento (só preenche no momento do registro real)',
+      'Início: filtro de período (Dia / Semana / Mês / Geral) com persistência local — KPIs e feed atualizam',
+    ],
+  },
+  {
+    version: '0.7.1',
+    date: '05/05/2026',
+    changes: [
+      'Agenda: tipos restritos a Check-in, Atendimento e Outro (Proposta/Órulo não fazem sentido planejar)',
+      'Agenda: botão "+ Adicionar" agora fica em cada dia (substitui o "+ Novo" do topo)',
+      'Agenda: clicar em um dia no Mês não duplica mais o calendário (fix do bug de re-render)',
+      'Agenda Check-in: ganha campo Motivo da visita (lista do master)',
+      'Agenda Atendimento: ganha campos Local da visita, Cliente, Corretor, Empreendimento',
+      'Agenda: ditado de áudio nas observações (Web Speech API)',
+      'Realizar atividade da agenda: motivo da visita e local também são pré-preenchidos',
+    ],
+  },
+  {
+    version: '0.7.0',
+    date: '05/05/2026',
+    changes: [
+      'Agenda agora é a tela inicial do app (primeira do bottom nav)',
+      'Calendário com modos Dia / Semana / Mês — hoje sempre destacado',
+      'Mês com grade interativa: clique em qualquer dia para ver os agendamentos',
+      'Indicadores visuais de pendentes (laranja) e realizados (verde) por dia',
+      'Listas de imobiliárias e Locais de visita SEPARADAS (novo cadastro: "Locais de visita")',
+      'Recovery link: storage do Supabase é limpo no boot quando há token na URL — não loga mais direto',
+      'Fix: erro "Could not embed" na agenda (FK ambígua entre agendamentos e atividades)',
+      'Painel Gestor migrado para /painel · KPIs do Gerente migrados para /inicio',
+    ],
+  },
+  {
+    version: '0.6.0',
+    date: '03/05/2026',
+    changes: [
+      'Novo: módulo de Agenda — gerentes planejam visitas e atendimentos futuros',
+      'Realizar atividade direto da agenda (Check-in/Atendimento/Proposta/Órulo) com pré-preenchimento e vínculo bidirecional',
+      'Visão consolidada da agenda da equipe para Gestor/Master, com filtros por gerente, tipo, status e período',
+      'Faixa de semana com indicador de pendências por dia',
+      'Agrupamento por seção: Atrasadas, Hoje, Amanhã, Esta semana, Próximas, Passadas',
+      'Fluxo de "link expirado" no primeiro acesso: tela amigável para solicitar novo link sem precisar voltar ao login',
+      'Detecção robusta de erros de recovery na URL (token consumido/expirado)',
+    ],
+  },
   {
     version: '0.5.2',
     date: '03/05/2026',

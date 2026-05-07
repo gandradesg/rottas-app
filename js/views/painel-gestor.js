@@ -203,12 +203,13 @@ export async function painelGestorView(_params, app) {
       kpi('Propostas', c.prop, 'fileText', '#F59E0B'),
       kpi('Vendas fechadas', c.vendas, 'trendingUp', '#10B981'),
       kpi('Órulo', c.orulo, 'globe', '#10B981'),
-      kpi('VGV propostas', fmt.currency(valorPropostas), 'dollarSign', '#F26B22'),
+      kpi('VGV propostas', fmt.currencyMillions(valorPropostas), 'dollarSign', '#F26B22'),
     );
 
     const vendasCard = el('div', { class: 'card p-4' },
       el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' }, 'Vendas fechadas (VGV)'),
-      el('div', { class: 'text-3xl font-extrabold' }, fmt.currency(valorVendas)),
+      el('div', { class: 'text-3xl font-extrabold' }, fmt.currencyMillions(valorVendas)),
+      el('div', { class: 'text-xs text-fg-subtle mt-0.5' }, fmt.currency(valorVendas)),
       el('div', { class: 'text-sm text-fg-muted mt-1' }, `${c.vendas} venda${c.vendas !== 1 ? 's' : ''} no período`),
     );
 
@@ -221,10 +222,62 @@ export async function painelGestorView(_params, app) {
       el('div', { class: 'text-sm text-fg-muted mt-1' }, 'gerentes registraram atividades'),
     );
 
+    // Funil de vendas (consolidado)
+    const funnel = renderFunnelOverview(allAtividades);
+
     dash.append(
       el('div', { class: 'grid grid-cols-2 gap-3' }, vendasCard, ativosCard),
       grid,
+      funnel,
       exportBar(),
+    );
+  }
+
+  // Funil consolidado para o gestor
+  function renderFunnelOverview(data) {
+    const visitas = data.filter(a => a.tipo === 'atendimento').length;
+    const propostas = data.filter(a => a.tipo === 'proposta').length;
+    const vendas = data.filter(a => a.tipo === 'proposta' && a.reserva).length;
+    if (!visitas && !propostas && !vendas) {
+      return el('div', { class: 'card p-5 text-center text-sm text-fg-muted' },
+        '🎯 Funil aparece quando houver atendimentos e propostas no período.'
+      );
+    }
+    const convVP = visitas ? ((propostas / visitas) * 100).toFixed(1) : '0.0';
+    const convPV = propostas ? ((vendas / propostas) * 100).toFixed(1) : '0.0';
+    const convTotal = visitas ? ((vendas / visitas) * 100).toFixed(1) : '0.0';
+    const stages = [
+      { label: 'Visitas',   count: visitas,   color: '#F26B22', width: 100 },
+      { label: 'Propostas', count: propostas, color: '#F59E0B', width: 68, conv: convVP },
+      { label: 'Vendas',    count: vendas,    color: '#10B981', width: 40, conv: convPV },
+    ];
+    const bars = [];
+    stages.forEach((s, i) => {
+      if (i > 0) {
+        bars.push(el('div', { class: 'flex items-center justify-center gap-2 py-0.5' },
+          el('span', { class: 'text-[10px] text-fg-subtle' }, '▼'),
+          el('span', { class: 'text-xs font-bold', style: { color: s.color } }, `${s.conv}%`),
+        ));
+      }
+      bars.push(el('div', { style: { width: s.width + '%', margin: '0 auto' } },
+        el('div', {
+          class: 'text-center py-3 text-white font-bold rounded-xl',
+          style: {
+            background: `linear-gradient(135deg, ${s.color}, ${s.color}dd)`,
+            clipPath: 'polygon(4% 0%, 96% 0%, 100% 100%, 0% 100%)',
+          },
+        },
+          el('div', { class: 'text-xl' }, String(s.count)),
+          el('div', { class: 'text-[11px] font-medium opacity-85' }, s.label),
+        ),
+      ));
+    });
+    return el('div', { class: 'card p-5' },
+      el('div', { class: 'flex items-center justify-between mb-4' },
+        el('h3', { class: 'text-sm font-bold uppercase tracking-wider text-fg-subtle' }, 'Funil de Vendas'),
+        el('span', { class: 'text-xs text-fg-muted' }, `Conversão total: ${convTotal}%`),
+      ),
+      el('div', { class: 'flex flex-col' }, ...bars),
     );
   }
 
@@ -274,7 +327,7 @@ export async function painelGestorView(_params, app) {
         ),
         g.vgv > 0 && el('div', { class: 'mt-3 pt-3 border-t border-border text-sm' },
           el('span', { class: 'text-fg-muted' }, 'VGV propostas: '),
-          el('span', { class: 'font-bold' }, fmt.currency(g.vgv))
+          el('span', { class: 'font-bold' }, fmt.currencyMillions(g.vgv))
         ),
       ));
     });
@@ -308,7 +361,7 @@ export async function painelGestorView(_params, app) {
         ),
         el('div', { class: 'mt-3 pt-3 border-t border-border text-sm' },
           el('span', { class: 'text-fg-muted' }, 'VGV: '),
-          el('span', { class: 'font-bold' }, fmt.currency(e.vgv)),
+          el('span', { class: 'font-bold' }, fmt.currencyMillions(e.vgv)),
         ),
       ));
     });
@@ -360,7 +413,7 @@ export async function painelGestorView(_params, app) {
     dash.append(
       rankingCard('Ranking de Propostas', propRanking, g => `${g.prop}`),
       rankingCard('Ranking de Atendimentos', atendRanking, g => `${g.atend}`),
-      rankingCard('Ranking VGV (em propostas)', vgvRanking, g => fmt.currency(g.vgv)),
+      rankingCard('Ranking VGV (em propostas)', vgvRanking, g => fmt.currencyMillions(g.vgv)),
       exportBar(),
     );
   }

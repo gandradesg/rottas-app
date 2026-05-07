@@ -70,8 +70,8 @@ function userRow(p) {
           p.telefone || 'sem telefone',
         ),
       ),
-      // Apenas Master pode editar Master e Gestor. Gestor só edita Gerente.
-      (isMaster() || p.role === 'gerente') && el('button', {
+      // Master edita Master/Gestor. Gestor edita Gerente ou a si mesmo.
+      (isMaster() || p.role === 'gerente' || p.id === state.profile?.id) && el('button', {
         class: 'p-2 rounded-lg hover:bg-bg-elev transition flex-shrink-0',
         onclick: () => openEditModal(p)
       }, icon('edit', 18, 'text-fg-muted')),

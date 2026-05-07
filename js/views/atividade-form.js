@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, photoPicker, locationField, termometroField } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -93,7 +93,21 @@ function parseCurrency(str) {
 }
 
 export async function atividadeFormView(params, app) {
-  const tipo = params.tipo;
+  // Modo "vindo da agenda": params.agendamentoId está setado
+  const agendamentoId = params.agendamentoId || null;
+  let agendamento = null;
+  if (agendamentoId) {
+    const { data } = await supabase.from('agendamentos').select('*').eq('id', agendamentoId).single();
+    if (!data) { toast('Agendamento não encontrado', 'error'); navigate('/agenda', true); return; }
+    if (data.status === 'realizado' && data.atividade_id) {
+      // Já foi realizado — vai direto pra atividade
+      navigate(`/atividade/${data.atividade_id}`, true);
+      return;
+    }
+    agendamento = data;
+  }
+
+  const tipo = params.tipo || agendamento?.tipo || null;
   const id = params.id;
   const t = TIPO_ATIVIDADE[tipo];
   if (!t) { navigate('/registrar', true); return; }
@@ -103,6 +117,21 @@ export async function atividadeFormView(params, app) {
     const { data } = await supabase.from('atividades').select('*').eq('id', id).single();
     if (!data) { toast('Atividade não encontrada', 'error'); navigate('/historico', true); return; }
     initial = data;
+  }
+  // Se vier de agendamento, pré-preenche com os dados dele
+  if (agendamento && !initial) {
+    initial = {
+      imobiliaria:    agendamento.imobiliaria,
+      empreendimento: agendamento.empreendimento,
+      produto:        agendamento.empreendimento, // atendimento usa "produto"
+      cliente:        agendamento.cliente,
+      corretor:       agendamento.corretor,
+      motivo_visita:  agendamento.motivo_visita,
+      // Atendimento: se o agendamento tinha "imobiliaria" preenchida, foi a partir do
+      // local da visita. Pré-preenche local_visita também
+      local_visita:   agendamento.tipo === 'atendimento' ? agendamento.imobiliaria : null,
+      observacoes:    agendamento.observacoes,
+    };
   }
 
   // ===== MODO RESTRITO: Gerente editando proposta — só Reserva =====
@@ -118,6 +147,25 @@ export async function atividadeFormView(params, app) {
   }
 
   const form = el('form', { class: 'flex flex-col gap-4' });
+
+  // Banner quando vindo da agenda
+  if (agendamento) {
+    form.appendChild(el('div', {
+      class: 'card p-3 border-2 flex items-start gap-2 text-sm',
+      style: { borderColor: '#F26B22', background: 'rgba(242,107,34,0.08)' }
+    },
+      el('span', { class: 'text-xl' }, '📅'),
+      el('div', { class: 'flex-1' },
+        el('div', { class: 'font-bold text-rottas-600' }, 'Realizando agendamento'),
+        el('div', { class: 'text-xs text-fg-muted mt-0.5' },
+          'Esta atividade será vinculada ao agendamento de ',
+          new Date(agendamento.data_prevista).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }),
+          '. Os campos abaixo já vieram preenchidos.',
+        ),
+      ),
+    ));
+  }
+
   let photoPickerEl, locationFieldEl, audioFieldEl;
   const obsEl = el('textarea', { class: 'textarea', name: 'observacoes', placeholder: 'Observações livres...' }, initial?.observacoes || '');
 
@@ -150,8 +198,8 @@ export async function atividadeFormView(params, app) {
       locationFieldEl ? field('Localização', locationFieldEl, { required: true }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
       field('Local da visita', creatableSelect({
-        name: 'local_visita', items: state.imobiliarias, value: initial?.local_visita,
-        required: true, allowAdd: true, onAdd: addImobiliaria,
+        name: 'local_visita', items: state.locaisVisita, value: initial?.local_visita,
+        required: true, allowAdd: true, onAdd: addLocalVisita,
       }), { required: true, help: 'Você pode adicionar um novo local se não estiver na lista' }),
       field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
@@ -253,6 +301,10 @@ export async function atividadeFormView(params, app) {
       observacoes: (fd.get('observacoes') || '').toString().trim() || null,
       updated_at: new Date().toISOString(),
     };
+    // Se veio da agenda, vincula ao agendamento
+    if (agendamento && !id) {
+      payload.agendamento_id = agendamento.id;
+    }
 
     try {
       // ===== Validações + payload por tipo =====
@@ -279,8 +331,17 @@ export async function atividadeFormView(params, app) {
           if (error) throw error;
           if (!inserted) throw new Error('Falha ao inserir (RLS ou rede)');
           clearTimeout(safetyTimeout);
-          toast('✓ Check-in registrado!', 'success', 2500);
-          navigate('/', true);
+          // Linkage com agendamento (em bg)
+          if (agendamento) {
+            supabase.from('agendamentos').update({
+              status: 'realizado', atividade_id: inserted.id, realizado_em: new Date().toISOString()
+            }).eq('id', agendamento.id).then(() => {});
+            toast('✓ Check-in registrado e agenda atualizada!', 'success', 3500);
+            navigate('/agenda', true);
+          } else {
+            toast('✓ Check-in registrado!', 'success', 2500);
+            navigate('/', true);
+          }
           if (files.length) {
             uploadPhotos(files).then(urls =>
               supabase.from('atividades').update({ fotos: urls }).eq('id', inserted.id)
@@ -355,8 +416,19 @@ export async function atividadeFormView(params, app) {
       }
 
       clearTimeout(safetyTimeout);
-      toast(id ? '✓ Atualizado' : '✓ Registrado', 'success', 2500);
-      navigate('/', true);
+      // Linkage bidirecional com agendamento (se veio de lá)
+      if (agendamento && !id && data[0]?.id) {
+        supabase.from('agendamentos').update({
+          status: 'realizado',
+          atividade_id: data[0].id,
+          realizado_em: new Date().toISOString(),
+        }).eq('id', agendamento.id).then(() => {});
+        toast('✓ Atividade registrada e agenda atualizada!', 'success', 3500);
+        navigate('/agenda', true);
+      } else {
+        toast(id ? '✓ Atualizado' : '✓ Registrado', 'success', 2500);
+        navigate('/', true);
+      }
     } catch (err) {
       clearTimeout(safetyTimeout);
       console.error('[atividade] erro:', err);

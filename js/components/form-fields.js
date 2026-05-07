@@ -122,6 +122,14 @@ export async function addImobiliaria(nome) {
   return data;
 }
 
+// Cria novo local de visita no banco
+export async function addLocalVisita(nome) {
+  const { data, error } = await supabase.from('locais_visita').insert({ nome }).select().single();
+  if (error) throw error;
+  await loadLists();
+  return data;
+}
+
 // Upload de fotos com preview
 export function photoPicker({ name = 'fotos', max = MAX_PHOTOS_PER_ACTIVITY }) {
   const wrap = el('div', { class: 'flex flex-col gap-2' });
