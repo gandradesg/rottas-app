@@ -1,8 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.1';
+export const APP_VERSION = '0.8.2';
 export const APP_BUILD_DATE = '2026-05-07';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.2',
+    date: '07/05/2026',
+    changes: [
+      'Master agora pode criar OUTROS usuarios masters (terceiro pílula no seletor de perfil)',
+      'Master principal (gabriel.galvao@rottasconstrutora.com.br) protegido contra exclusao - nem outros masters podem remove-lo',
+      'Protecao via trigger no banco (defense-in-depth): impede DELETE/UPDATE de role mesmo via API direta',
+      'Trigger tambem em auth.users impede admin.deleteUser do master principal',
+      'Botão "Excluir este perfil" oculto para o master principal em qualquer tela',
+    ],
+  },
   {
     version: '0.8.1',
     date: '07/05/2026',

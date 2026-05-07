@@ -1,5 +1,6 @@
 // Auth helpers: login, primeiro acesso, logout, permissões
 import { supabase, state, loadProfile, loadLists, emitStateChange } from './supabase.js';
+import { MASTER_EMAIL } from './config.js';
 
 // Flag global: quando true, listener de auth ignora eventos
 export const authGuards = { suppressed: false };
@@ -145,6 +146,11 @@ export async function initAuth() {
 }
 
 export function isMaster() { return state.profile?.role === 'master'; }
+// Master principal: o único que NUNCA pode ser excluído (mesmo por outros masters)
+export function isPrincipalMaster(emailOrProfile) {
+  const email = typeof emailOrProfile === 'string' ? emailOrProfile : emailOrProfile?.email;
+  return (email || '').toLowerCase() === MASTER_EMAIL.toLowerCase();
+}
 export function isGestor() { return state.profile?.role === 'gestor' || state.profile?.role === 'master'; }
 export function isAdmin() { return isGestor(); }
 export function isLoggedIn() { return !!state.user && !!state.profile; }

@@ -3,7 +3,7 @@ import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js'
 import { shell } from './shell.js';
 import { supabase, loadAllProfiles, state } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES } from '../config.js';
-import { authGuards, isMaster } from '../auth.js';
+import { authGuards, isMaster, isPrincipalMaster } from '../auth.js';
 
 let listEl = null;
 
@@ -148,7 +148,8 @@ function openEditModal(p) {
   fields.form.appendChild(ativoToggle);
 
   // Botão de excluir perfil - apenas master editando perfis não-master
-  const canDelete = isMaster() && p.role !== 'master';
+  // Master principal NUNCA pode ser excluído (nem pelo próprio). Outros masters podem por outro master.
+  const canDelete = isMaster() && !isPrincipalMaster(p);
   if (canDelete) {
     const deleteSection = el('div', { class: 'mt-3 pt-3', style: { borderTop: '1px solid var(--border)' } },
       el('button', {
@@ -261,11 +262,13 @@ function userFormFields(p) {
     ...ESTADOS_BR.map(u => el('option', { value: u, selected: p.estado === u }, u)),
   );
 
-  // Seletor de role - duas pílulas grandes
-  const initialRole = p.role && p.role !== 'master' ? p.role : 'gerente';
+  // Seletor de role - até três pílulas (Master visível somente quando o usuário logado é master)
+  const canCreateMaster = isMaster();
+  const initialRole = p.role || 'gerente';
   let chosenRole = initialRole;
   const roleGerente = el('button', { type: 'button', 'data-role': 'gerente' });
   const roleGestor = el('button', { type: 'button', 'data-role': 'gestor' });
+  const roleMaster = canCreateMaster ? el('button', { type: 'button', 'data-role': 'master' }) : null;
 
   // Permissões (apenas para gestores, apenas master pode editar)
   const initialPerms = p.permissoes || {};
@@ -302,29 +305,35 @@ function userFormFields(p) {
   }
 
   function paint() {
-    [roleGerente, roleGestor].forEach(b => {
+    const buttons = [roleGerente, roleGestor];
+    if (roleMaster) buttons.push(roleMaster);
+    buttons.forEach(b => {
       const active = b.dataset.role === chosenRole;
-      const isGestor = b.dataset.role === 'gestor';
-      const activeCls = isGestor
+      const r = b.dataset.role;
+      const activeCls = r === 'master'
         ? 'border-rottas-500 bg-rottas-50 text-rottas-600 dark:bg-rottas-500/15'
-        : 'border-info bg-info/10 text-info';
+        : r === 'gestor'
+          ? 'border-rottas-500 bg-rottas-50 text-rottas-600 dark:bg-rottas-500/15'
+          : 'border-info bg-info/10 text-info';
       b.className = 'flex-1 border-2 rounded-xl py-3 px-3 flex items-center justify-center gap-2 text-sm font-bold transition ' +
         (active ? activeCls : 'border-border text-fg-muted hover:border-fg-subtle');
-      b.innerHTML = isGestor ? '📊 Gestor' : '🗺️ Gerente de Plataforma';
+      b.innerHTML = r === 'master' ? '👑 Master' : r === 'gestor' ? '📊 Gestor' : '🗺️ Gerente de Plataforma';
     });
-    // Mostra/esconde permissões conforme role
+    // Permissões só fazem sentido para Gestor (master tem tudo, gerente não tem painel)
     permsCard.classList.toggle('hidden', chosenRole !== 'gestor');
   }
   roleGerente.addEventListener('click', () => { chosenRole = 'gerente'; paint(); });
   roleGestor.addEventListener('click', () => { chosenRole = 'gestor'; paint(); });
+  if (roleMaster) roleMaster.addEventListener('click', () => { chosenRole = 'master'; paint(); });
   paint();
 
-  const isMasterEdit = p.role === 'master';
-  const roleField = isMasterEdit
+  // Master principal (gabriel.galvao) é READ-ONLY: nem o próprio pode trocar de role
+  const isPrincipal = isPrincipalMaster(p);
+  const roleField = isPrincipal
     ? el('div', { class: 'card p-3 flex items-center gap-2 bg-rottas-50 dark:bg-rottas-500/10' },
-        '👑 ', el('span', { class: 'font-semibold' }, 'Master'),
+        '👑 ', el('span', { class: 'font-semibold' }, 'Master Principal'),
         el('span', { class: 'text-xs text-fg-muted ml-auto' }, 'Não editável'))
-    : el('div', { class: 'flex gap-2' }, roleGerente, roleGestor);
+    : el('div', { class: 'flex gap-2 flex-wrap' }, roleGerente, roleGestor, roleMaster);
 
   form.append(
     el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), nome),
@@ -347,8 +356,8 @@ function userFormFields(p) {
       telefone: tel.value.trim() || null,
       cidade: cidade.value.trim() || null,
       estado: estado.value || null,
-      role: isMasterEdit ? 'master' : chosenRole,
-      // Permissões: só master pode setar; default {}
+      role: isPrincipal ? 'master' : chosenRole,
+      // Permissões: só master pode setar; master implícito tem tudo (não usa permissoes)
       permissoes: chosenRole === 'gestor' && isMaster() ? { ...permsState } : (chosenRole === 'gestor' ? initialPerms : {}),
     }),
   };
