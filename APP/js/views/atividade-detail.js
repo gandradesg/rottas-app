@@ -148,17 +148,16 @@ export async function atividadeDetailView(params, app) {
     el('div', { class: 'card p-4' }, ...rows),
     fotosSection,
 
-    // Gestor: edição completa
-    canFullEdit && el('button', {
+    // Botão de edição: em proposta usa "Informar/Atualizar reserva" (acao principal),
+    // nos demais tipos usa "Editar atividade"
+    (canFullEdit || canEditReserva) && el('button', {
       class: 'btn btn-secondary',
       onclick: () => navigate(`/atividade/${a.id}/editar/${a.tipo}`)
-    }, icon('edit', 16), 'Editar atividade'),
-
-    // Gerente: editar apenas Reserva (proposta)
-    !canFullEdit && canEditReserva && el('button', {
-      class: 'btn btn-secondary',
-      onclick: () => navigate(`/atividade/${a.id}/editar/${a.tipo}`)
-    }, icon('edit', 16), a.reserva ? 'Atualizar reserva' : 'Informar reserva'),
+    }, icon('edit', 16),
+      a.tipo === 'proposta'
+        ? (a.reserva ? 'Atualizar reserva' : 'Informar reserva')
+        : 'Editar atividade'
+    ),
 
     // Gestor: aprovar exclusão
     canApproveDeletion && el('button', {
