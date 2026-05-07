@@ -136,18 +136,59 @@ export async function homeGerenteView(_params, app) {
       return days >= 7;
     });
     if (!stale.length) return;
-    staleAlertEl.appendChild(el('div', {
-      class: 'card p-3 flex items-start gap-3',
+
+    // Banner expansível: clica e mostra TODAS as imobiliárias (e dias desde última visita)
+    let expanded = false;
+    const summary = el('div', { class: 'text-xs text-fg-muted mt-0.5' });
+    const fullList = el('div', { class: 'mt-2 flex flex-col gap-1' });
+
+    function paint() {
+      summary.innerHTML = '';
+      fullList.innerHTML = '';
+      if (!expanded) {
+        summary.appendChild(el('span', {},
+          stale.slice(0, 4).map(s => s.nome).join(' · '),
+          stale.length > 4 ? ` e mais ${stale.length-4}` : '',
+        ));
+        summary.appendChild(el('span', {
+          class: 'block text-rottas-500 font-bold mt-1 cursor-pointer hover:underline',
+        }, `Ver todas as ${stale.length} →`));
+      } else {
+        summary.appendChild(el('span', { class: 'text-rottas-500 font-bold cursor-pointer hover:underline' },
+          '▴ Recolher'));
+        stale.forEach(im => {
+          const last = lastByImob[im.nome];
+          const dayLabel = last
+            ? `${Math.floor((Date.now() - last.getTime()) / 86400000)} dias atrás`
+            : 'nunca visitou';
+          fullList.appendChild(el('div', {
+            class: 'flex justify-between items-center px-3 py-2 rounded-lg',
+            style: { background: 'rgba(245,158,11,0.08)' },
+          },
+            el('span', { class: 'font-medium text-sm' }, im.nome),
+            el('span', { class: 'text-xs text-warning font-semibold' }, dayLabel),
+          ));
+        });
+      }
+    }
+
+    const banner = el('div', {
+      class: 'card p-3 cursor-pointer transition hover:bg-warning/5',
       style: { background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' },
+      onclick: () => { expanded = !expanded; paint(); },
     },
-      el('span', { class: 'text-2xl flex-shrink-0' }, '⚠️'),
-      el('div', { class: 'flex-1 min-w-0' },
-        el('div', { class: 'font-bold text-warning text-sm' },
-          `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais`),
-        el('div', { class: 'text-xs text-fg-muted mt-0.5 truncate' },
-          stale.slice(0, 4).map(s => s.nome).join(' · ') + (stale.length > 4 ? ` e mais ${stale.length-4}` : '')),
+      el('div', { class: 'flex items-start gap-3' },
+        el('span', { class: 'text-2xl flex-shrink-0' }, '⚠️'),
+        el('div', { class: 'flex-1 min-w-0' },
+          el('div', { class: 'font-bold text-warning text-sm' },
+            `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais`),
+          summary,
+        ),
       ),
-    ));
+      fullList,
+    );
+    paint();
+    staleAlertEl.appendChild(banner);
   }
   loadStaleAlert();
 

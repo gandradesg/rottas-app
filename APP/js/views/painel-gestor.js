@@ -418,14 +418,14 @@ export async function painelGestorView(_params, app) {
       return;
     }
 
-    // Banner de alerta consolidado
+    // Banner de alerta consolidado (lista completa visível abaixo nos cards)
     const stale = list.filter(x => !x.lastAt || (Date.now() - x.lastAt.getTime()) >= 7 * 86400000);
     if (stale.length) {
       dash.appendChild(el('div', { class: 'card p-3 flex items-start gap-2', style: { background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)' } },
         el('span', { class: 'text-2xl' }, '⚠️'),
         el('div', { class: 'flex-1' },
           el('div', { class: 'font-bold text-warning text-sm' }, `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais`),
-          el('div', { class: 'text-xs text-fg-muted mt-0.5' }, 'Listadas no topo abaixo. Considere agendar uma visita.'),
+          el('div', { class: 'text-xs text-fg-muted mt-0.5' }, 'Listadas no topo abaixo (cards com borda laranja). Considere agendar uma visita.'),
         ),
       ));
     }
