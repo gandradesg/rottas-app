@@ -340,7 +340,7 @@ function userFormFields(p) {
     el('div', {}, el('label', { class: 'label label-required' }, 'Email'), email,
       p.id && el('p', { class: 'text-xs text-fg-subtle mt-1' }, 'Email não pode ser alterado.')),
     el('div', {}, el('label', { class: 'label label-required' }, 'Perfil de acesso'), roleField),
-    !isMasterEdit && permsCard,
+    permsCard,
     el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
     el('div', { class: 'grid grid-cols-3 gap-2' },
       el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade'), cidade),
