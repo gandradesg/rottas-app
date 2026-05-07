@@ -76,8 +76,10 @@ Deno.serve(async (req) => {
       // (que permite cadastrar nova senha) e manda email custom com visual de invite
       userId = existing.id;
 
-      // Atualiza profile com dados (caso master tenha mudado nome/role/etc)
-      await admin.from('profiles').update({
+      // Upsert profile - INSERT se nao existe (caso de orfaos de deletes antigos), UPDATE se existe
+      await admin.from('profiles').upsert({
+        id: userId,
+        email,
         nome,
         telefone: telefone || null,
         cidade: cidade || null,
@@ -85,7 +87,8 @@ Deno.serve(async (req) => {
         role,
         permissoes: permissoes || {},
         ativo: true,
-      }).eq('id', userId);
+        primeiro_acesso: true,
+      }, { onConflict: 'id' });
 
       // Gera link de recovery - nao invalida senha atual
       const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
