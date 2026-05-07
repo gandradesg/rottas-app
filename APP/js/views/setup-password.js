@@ -142,16 +142,21 @@ function renderSetPasswordMode(app, mode) {
       return;
     }
     loadingBtn(btn, true);
+    // Timeout aumentado para 60s (rede lenta + listeners do Supabase podem demorar)
+    let resolved = false;
     const timeout = setTimeout(() => {
+      if (resolved) return;
       loadingBtn(btn, false);
-      toast('Tempo esgotado - abra o console (F12)', 'error', 6000);
-    }, 20000);
+      toast('A operação está demorando mais que o esperado. Tente novamente ou veja o console (F12)', 'error', 7000);
+    }, 60000);
     try {
       await setPassword(newInput.value);
+      resolved = true;
       clearTimeout(timeout);
       toast('✓ Senha definida!', 'success');
       navigate('/', true);
     } catch (err) {
+      resolved = true;
       clearTimeout(timeout);
       console.error('Erro setPassword:', err);
       toast(err.message || JSON.stringify(err) || 'Erro ao salvar senha', 'error', 6000);

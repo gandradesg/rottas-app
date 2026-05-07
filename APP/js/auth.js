@@ -68,16 +68,22 @@ export function signOut() {
 }
 
 export async function setPassword(newPassword) {
-  if (state.profile) {
-    const { error: pErr } = await supabase
-      .from('profiles')
-      .update({ primeiro_acesso: false })
-      .eq('id', state.profile.id);
-    if (pErr) throw pErr;
-    state.profile.primeiro_acesso = false;
-  }
+  // 1) Atualiza a senha PRIMEIRO (operacao critica - precisa garantir que vai)
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) throw error;
+
+  // 2) Marca primeiro_acesso=false em background (nao bloqueia se falhar - usuario consegue
+  //    logar mesmo assim e gestor pode marcar manualmente depois)
+  if (state.profile) {
+    supabase.from('profiles')
+      .update({ primeiro_acesso: false })
+      .eq('id', state.profile.id)
+      .then(({ error: pErr }) => {
+        if (pErr) console.warn('[setPassword] falha ao marcar primeiro_acesso:', pErr);
+        else state.profile.primeiro_acesso = false;
+      });
+  }
+
   emitStateChange();
 }
 
