@@ -65,17 +65,7 @@ Deno.serve(async (req) => {
     const existing = usersList?.users?.find((u: any) => (u.email || '').toLowerCase() === email.toLowerCase());
 
     if (existing) {
-      // Se ja confirmou email e tem login feito, NAO reconvida (use redefinir senha)
-      if (existing.email_confirmed_at && !existing.user_metadata?.invited_pending) {
-        // Verifica se ja tem profile com primeiro_acesso false (usuario ativo)
-        const { data: prof } = await admin.from('profiles').select('primeiro_acesso').eq('id', existing.id).maybeSingle();
-        if (prof && prof.primeiro_acesso === false) {
-          return new Response(JSON.stringify({
-            error: 'Este usuario ja esta ativo. Use "Esqueci minha senha" para redefinir.',
-          }), { status: 409, headers: corsHeaders });
-        }
-      }
-      // Caso contrario: usuario pendente ou orfao - apaga e reconvida
+      // Sempre permite reconvidar: apaga registro antigo (ativo, pendente ou orfao) e reconvida limpo
       const { error: delErr } = await admin.auth.admin.deleteUser(existing.id);
       if (delErr) {
         return new Response(JSON.stringify({ error: 'Falha ao limpar usuario antigo: ' + delErr.message }), {
