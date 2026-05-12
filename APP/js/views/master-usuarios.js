@@ -201,7 +201,9 @@ function openEditModal(p) {
   }
 
   const submitBtn = el('button', { class: 'btn btn-primary' }, 'Salvar');
-  const resetBtn = p.role !== 'master' ? el('button', {
+  // Reenviar convite permitido pra qualquer um, exceto o master principal
+  // (ele nao deve ser reconvidado - ja tem acesso garantido e protegido).
+  const resetBtn = !isPrincipalMaster(p) ? el('button', {
     class: 'btn btn-ghost text-xs',
     onclick: async () => {
       const ok = await confirmModal({ title: 'Reenviar convite?', message: 'Será enviado um novo email para definir a senha.', confirmLabel: 'Reenviar' });

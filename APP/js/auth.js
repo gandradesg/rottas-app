@@ -72,16 +72,20 @@ export async function setPassword(newPassword) {
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) throw error;
 
-  // 2) Marca primeiro_acesso=false em background (nao bloqueia se falhar - usuario consegue
-  //    logar mesmo assim e gestor pode marcar manualmente depois)
+  // 2) Marca primeiro_acesso=false BLOQUEANTE - precisa terminar ANTES de signOut
+  //    senao o update falha por sessao invalidada e usuario fica em loop
+  //    ao logar de novo (primeiro_acesso ainda true -> redirect pra setup-password)
   if (state.profile) {
-    supabase.from('profiles')
+    const { error: pErr } = await supabase
+      .from('profiles')
       .update({ primeiro_acesso: false })
-      .eq('id', state.profile.id)
-      .then(({ error: pErr }) => {
-        if (pErr) console.warn('[setPassword] falha ao marcar primeiro_acesso:', pErr);
-        else state.profile.primeiro_acesso = false;
-      });
+      .eq('id', state.profile.id);
+    if (pErr) {
+      console.error('[setPassword] CRITICO: falha ao marcar primeiro_acesso:', pErr);
+      // Nao throw - usuario ja tem senha nova, mas avisa
+    } else {
+      state.profile.primeiro_acesso = false;
+    }
   }
 
   emitStateChange();

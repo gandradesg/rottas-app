@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.6';
-export const APP_BUILD_DATE = '2026-05-07';
+export const APP_VERSION = '0.8.7';
+export const APP_BUILD_DATE = '2026-05-08';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.7',
+    date: '08/05/2026',
+    changes: [
+      'Fix: loop infinito ao definir primeira senha - update de primeiro_acesso=false agora é bloqueante (await) antes do signOut',
+      'Reenviar convite agora funciona pra qualquer usuário (incluindo outros masters), exceto o master principal',
+    ],
+  },
   {
     version: '0.8.6',
     date: '07/05/2026',
