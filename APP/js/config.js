@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.7';
+export const APP_VERSION = '0.8.8';
 export const APP_BUILD_DATE = '2026-05-08';
 
 export const CHANGELOG = [
+  {
+    version: '0.8.8',
+    date: '08/05/2026',
+    changes: [
+      'Link de convite/redefinição agora dura 2 horas (era 1h) - mais tempo para o usuário usar',
+      'Templates de email atualizados com novo prazo de expiração',
+    ],
+  },
   {
     version: '0.8.7',
     date: '08/05/2026',
