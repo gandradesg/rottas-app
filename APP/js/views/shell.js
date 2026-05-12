@@ -2,7 +2,6 @@
 import { el, icon, avatar } from '../ui.js';
 import { state } from '../supabase.js';
 import { signOut, isMaster, isGestor, isAdmin, activeViewRole, can, canManageAgenda } from '../auth.js';
-import { state } from '../supabase.js';
 import { toggleTheme, getTheme } from '../theme.js';
 import { navigate, currentPath } from '../router.js';
 
