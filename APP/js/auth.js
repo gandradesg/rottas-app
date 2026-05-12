@@ -155,29 +155,71 @@ export async function initAuth() {
   });
 }
 
+// Hierarquia (do mais baixo ao mais alto). Niveis acima de gerente sao "admin"
+// e tem visibilidade ampliada (varia por contexto - estado/cidade/equipe).
+//   supervisor (1) -> gerente (2) -> gestor_regional (3) -> superintendente (4) -> gestor (5) -> master (6)
+const ROLE_LEVEL = {
+  supervisor: 1, gerente: 2, gestor_regional: 3,
+  superintendente: 4, gestor: 5, master: 6,
+};
+
+export function roleLevel(role) { return ROLE_LEVEL[role] || 0; }
 export function isMaster() { return state.profile?.role === 'master'; }
-// Master principal: o único que NUNCA pode ser excluído (mesmo por outros masters)
+export function isGestor() { return ['master','gestor'].includes(state.profile?.role); }
+// Admin amplo: pode aprovar propostas, ver painel, etc.
+// Inclui gestor_regional e superintendente (que tem visibilidade no escopo deles).
+export function isAdmin() {
+  return ['master','gestor','superintendente','gestor_regional'].includes(state.profile?.role);
+}
+// Niveis acima de gerente vêem tudo (gestor_regional vê só sua cidade,
+// superintendente vê só seu estado, gestor e master veem tudo).
+export function isFieldUser() {
+  return ['supervisor','gerente'].includes(state.profile?.role);
+}
+// Pode planejar agenda? Supervisor NAO pode (agenda fica com gerente).
+export function canManageAgenda() {
+  return state.profile?.role !== 'supervisor';
+}
+// Master principal: NUNCA pode ser excluido (defesa de UI + trigger no banco)
 export function isPrincipalMaster(emailOrProfile) {
   const email = typeof emailOrProfile === 'string' ? emailOrProfile : emailOrProfile?.email;
   return (email || '').toLowerCase() === MASTER_EMAIL.toLowerCase();
 }
-export function isGestor() { return state.profile?.role === 'gestor' || state.profile?.role === 'master'; }
-export function isAdmin() { return isGestor(); }
 export function isLoggedIn() { return !!state.user && !!state.profile; }
 export function needsPasswordSetup() { return state.profile?.primeiro_acesso === true; }
 
-// Master pode escolher entrar como Gestor ou Gerente.
+// Master pode escolher entrar como Gestor ou Gerente (para testar visão de campo)
 export function activeViewRole() {
   if (state.profile?.role === 'master') {
     return localStorage.getItem('rottas-login-as') || 'gestor';
   }
-  return state.profile?.role; // 'gestor' | 'gerente'
+  return state.profile?.role;
 }
 
-// Permissões: master tem tudo; gestor depende de profile.permissoes; gerente nada.
+// Permissões: roles altos (master/gestor) tem tudo; outros dependem de profile.permissoes
 export function can(perm) {
   const role = state.profile?.role;
-  if (role === 'master') return true;
-  if (role !== 'gestor') return false;
-  return state.profile?.permissoes?.[perm] === true;
+  if (role === 'master' || role === 'gestor') return true;
+  // Superintendente e gestor_regional tem permissões implícitas de leitura ampla,
+  // mas precisam de permissoes específicas pra ações cruzadas.
+  if (['superintendente','gestor_regional'].includes(role)) {
+    return state.profile?.permissoes?.[perm] === true ||
+           ['exportar_dados','editar_atividades'].includes(perm); // implícitas
+  }
+  return false;
+}
+
+// Pode aprovar proposta no nivel `level`?
+//   pendente -> gestor_regional+ aprova
+//   aprovada_regional -> superintendente+ aprova
+//   aprovada_super -> master aprova
+export function canApproveLevel(level) {
+  const role = state.profile?.role;
+  const allowed = {
+    gestor_regional: ['gestor_regional','superintendente','gestor','master'],
+    superintendente: ['superintendente','gestor','master'],
+    gestor:          ['gestor','master'],
+    master:          ['master'],
+  };
+  return (allowed[level] || []).includes(role);
 }

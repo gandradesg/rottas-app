@@ -5,6 +5,7 @@ import { state, supabase } from '../supabase.js';
 import { activeViewRole } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
+import { calendarButton } from '../calendar-sync.js';
 
 const STATUS_INFO = {
   pendente:   { label: 'Pendente',   chip: 'chip-yellow', icon: '⏳' },
@@ -379,6 +380,8 @@ async function agendaGerenteView(app) {
         class: 'btn btn-primary btn-sm flex items-center gap-1.5',
         onclick: () => navigate(`/agenda/${item.id}/realizar`)
       }, icon('mapPin', 14), 'Realizar agora'));
+      // Botão sync de calendário (Google/Outlook/.ics)
+      actions.appendChild(calendarButton(item, { el, icon }));
       actions.appendChild(el('button', {
         class: 'btn btn-ghost btn-sm',
         onclick: () => navigate(`/agenda/${item.id}/editar`)

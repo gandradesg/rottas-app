@@ -25,7 +25,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { email, nome, telefone, cidade, estado, role, permissoes } = await req.json();
+    const {
+      email, nome, telefone, cidade, estado, role, permissoes,
+      estados_acesso, cidades_acesso, gerente_supervisor_id,
+    } = await req.json();
 
     if (!email || !nome || !role) {
       return new Response(JSON.stringify({ error: 'email, nome e role sao obrigatorios' }), {
@@ -86,6 +89,9 @@ Deno.serve(async (req) => {
         estado: estado || null,
         role,
         permissoes: permissoes || {},
+        estados_acesso: estados_acesso || [],
+        cidades_acesso: cidades_acesso || [],
+        gerente_supervisor_id: gerente_supervisor_id || null,
         ativo: true,
         primeiro_acesso: true,
       }, { onConflict: 'id' });
@@ -149,6 +155,9 @@ Deno.serve(async (req) => {
         estado: estado || null,
         role,
         permissoes: permissoes || {},
+        estados_acesso: estados_acesso || [],
+        cidades_acesso: cidades_acesso || [],
+        gerente_supervisor_id: gerente_supervisor_id || null,
         ativo: true,
         primeiro_acesso: true,
       }).eq('id', data.user.id);

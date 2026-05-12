@@ -21,7 +21,9 @@ export const state = {
   empreendimentos: [],
   motivosVisita: [],
   motivosOrulo: [],
+  motivosDwv: [],
   locaisVisita: [],
+  cidades: [],
   profiles: [],       // só populado para master
   // listeners
   _listeners: new Set(),
@@ -55,18 +57,22 @@ export async function loadProfile() {
 
 // Helper: carrega todas as listas gerenciadas pelo master
 export async function loadLists() {
-  const [imob, emp, mv, mo, lv] = await Promise.all([
+  const [imob, emp, mv, mo, md, lv, ci] = await Promise.all([
     supabase.from('imobiliarias').select('*').order('nome'),
     supabase.from('empreendimentos').select('*').order('nome'),
     supabase.from('motivos_visita').select('*').order('nome'),
     supabase.from('motivos_orulo').select('*').order('nome'),
+    supabase.from('motivos_dwv').select('*').order('nome'),
     supabase.from('locais_visita').select('*').order('nome'),
+    supabase.from('cidades').select('*').order('estado').order('nome'),
   ]);
   state.imobiliarias    = imob.data    || [];
   state.empreendimentos = emp.data     || [];
   state.motivosVisita   = mv.data      || [];
   state.motivosOrulo    = mo.data      || [];
+  state.motivosDwv      = md.data      || [];
   state.locaisVisita    = lv.data      || [];
+  state.cidades         = ci.data      || [];
   emitStateChange();
 }
 

@@ -174,6 +174,54 @@ export async function atividadeFormView(params, app) {
     if (!id) locationFieldEl = locationField();
     photoPickerEl = photoPicker({});
 
+    // Motivo da visita - quando "Treinamento", abre campos extras (item 3)
+    const motivoSel = creatableSelect({
+      name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita, required: true,
+    });
+
+    // === Campos extras de treinamento ===
+    const localTreinamentoSel = creatableSelect({
+      name: 'local_treinamento', items: state.locaisVisita, value: initial?.local_treinamento,
+      allowAdd: true, onAdd: addLocalVisita,
+    });
+    const qtdPessoasInput = el('input', {
+      class: 'input', type: 'number', name: 'qtd_pessoas', min: 1, max: 999,
+      placeholder: 'Ex: 12', value: initial?.qtd_pessoas || '',
+    });
+    // Multi-select de imobiliárias participantes
+    const initialImobsExtras = Array.isArray(initial?.imobiliarias_participantes)
+      ? initial.imobiliarias_participantes : [];
+    const imobsCheck = {};
+    state.imobiliarias.forEach(im => { imobsCheck[im.nome] = initialImobsExtras.includes(im.nome); });
+    const imobsMulti = el('div', { class: 'card p-2 max-h-48 overflow-y-auto flex flex-col gap-1' },
+      ...(state.imobiliarias.length === 0
+        ? [el('span', { class: 'text-sm text-fg-muted' }, 'Nenhuma imobiliária cadastrada.')]
+        : state.imobiliarias.map(im => {
+          const cb = el('input', { type: 'checkbox', checked: imobsCheck[im.nome] });
+          cb.addEventListener('change', () => { imobsCheck[im.nome] = cb.checked; });
+          return el('label', { class: 'flex items-center gap-2 p-1.5 rounded hover:bg-bg-elev cursor-pointer text-sm' },
+            cb, el('span', {}, im.nome));
+        }))
+    );
+
+    const treinamentoBox = el('div', {
+      class: 'flex flex-col gap-3 hidden',
+      style: { padding: '12px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px' },
+    },
+      el('div', { class: 'text-xs font-bold uppercase tracking-wider text-warning' }, '🎓 Detalhes do treinamento'),
+      field('Local do treinamento', localTreinamentoSel, { help: 'Onde o treinamento aconteceu' }),
+      field('Quantidade de pessoas', qtdPessoasInput),
+      field('Imobiliárias participantes', imobsMulti, { help: 'Marque todas as imobiliárias que enviaram corretores' }),
+    );
+
+    // Reage a mudança no motivo - se virar Treinamento, abre o box
+    function checkTreinamentoMode() {
+      const v = (motivoSel.value || '').trim().toLowerCase();
+      treinamentoBox.classList.toggle('hidden', v !== 'treinamento');
+    }
+    motivoSel.addEventListener('change', checkTreinamentoMode);
+    setTimeout(checkTreinamentoMode, 50);
+
     form.append(
       locationFieldEl ? field('Localização', locationFieldEl, { required: true }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
@@ -181,13 +229,25 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       }), { required: true }),
-      field('Motivo da visita', creatableSelect({
-        name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita, required: true,
-      }), { required: true }),
+      field('Motivo da visita', motivoSel, { required: true }),
+      treinamentoBox,
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
       field('Fotos (até 3)', photoPickerEl, { help: 'Opcional. Máximo 3 fotos.' }),
     );
+
+    // Expõe pra o submit handler ler os valores extras
+    form._treinamentoData = () => {
+      const motivo = (motivoSel.value || '').trim().toLowerCase();
+      if (motivo !== 'treinamento') return {};
+      return {
+        local_treinamento: localTreinamentoSel.value || null,
+        qtd_pessoas: qtdPessoasInput.value ? parseInt(qtdPessoasInput.value, 10) : null,
+        imobiliarias_participantes: state.imobiliarias
+          .filter(im => imobsCheck[im.nome])
+          .map(im => im.nome),
+      };
+    };
   }
 
   // ===== ATENDIMENTO - ordem: Localização, Local visita, Imobiliária, Corretor, Empreendimento, Cliente, Termômetro, Obs =====
@@ -255,8 +315,10 @@ export async function atividadeFormView(params, app) {
     );
   }
 
-  // ===== ÓRULO (imobiliária antes de corretor) =====
-  if (tipo === 'orulo') {
+  // ===== ÓRULO / DWV (mesma estrutura, motivos vêm de tabela diferente) =====
+  if (tipo === 'orulo' || tipo === 'dwv') {
+    const motivosList = tipo === 'dwv' ? state.motivosDwv : state.motivosOrulo;
+    const labelPlataforma = tipo === 'dwv' ? 'DWV' : 'Órulo';
     form.append(
       field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
@@ -266,8 +328,8 @@ export async function atividadeFormView(params, app) {
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: state.empreendimentos, value: initial?.empreendimento, required: true,
       }), { required: true }),
-      field('Motivo do contato', creatableSelect({
-        name: 'motivo_contato', items: state.motivosOrulo, value: initial?.motivo_contato, required: true,
+      field(`Motivo do contato (${labelPlataforma})`, creatableSelect({
+        name: 'motivo_contato', items: motivosList, value: initial?.motivo_contato, required: true,
       }), { required: true }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
@@ -320,6 +382,11 @@ export async function atividadeFormView(params, app) {
         payload.motivo_visita = (fd.get('motivo_visita') || '').toString().trim();
         if (!payload.imobiliaria) throw new Error('Imobiliária é obrigatória');
         if (!payload.motivo_visita) throw new Error('Motivo da visita é obrigatório');
+        // Campos extras de treinamento (quando motivo = "Treinamento")
+        const trei = form._treinamentoData ? form._treinamentoData() : {};
+        if (trei.local_treinamento !== undefined) payload.local_treinamento = trei.local_treinamento;
+        if (trei.qtd_pessoas !== undefined) payload.qtd_pessoas = trei.qtd_pessoas;
+        if (trei.imobiliarias_participantes !== undefined) payload.imobiliarias_participantes = trei.imobiliarias_participantes;
         const files = photoPickerEl?.getFiles?.() || [];
         loadingBtn(submitBtn, true);
 
@@ -394,7 +461,7 @@ export async function atividadeFormView(params, app) {
         loadingBtn(submitBtn, true);
       }
 
-      if (tipo === 'orulo') {
+      if (tipo === 'orulo' || tipo === 'dwv') {
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();

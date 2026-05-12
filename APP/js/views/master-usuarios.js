@@ -2,8 +2,8 @@
 import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
 import { supabase, loadAllProfiles, state } from '../supabase.js';
-import { ESTADOS_BR, PERMISSOES } from '../config.js';
-import { authGuards, isMaster, isPrincipalMaster } from '../auth.js';
+import { ESTADOS_BR, PERMISSOES, ROLES } from '../config.js';
+import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
 
 let listEl = null;
 
@@ -37,18 +37,22 @@ async function reload() {
     listEl.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' }, 'Nenhum usuário cadastrado.'));
     return;
   }
-  // Ordem: master → gestor → gerente
-  const order = { master: 0, gestor: 1, gerente: 2 };
+  // Ordem hierárquica: master no topo, supervisor por último
+  const order = {
+    master: 0, gestor: 1, superintendente: 2,
+    gestor_regional: 3, gerente: 4, supervisor: 5
+  };
   profiles.sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || a.nome.localeCompare(b.nome));
   profiles.forEach(p => listEl.appendChild(userRow(p)));
 }
 
 function userRow(p) {
-  const roleChip = p.role === 'master'
-    ? { label: 'Master', cls: 'chip-orange', icon: '👑' }
-    : p.role === 'gestor'
-      ? { label: 'Gestor', cls: 'chip-orange', icon: '📊' }
-      : { label: 'Gerente', cls: 'chip-blue', icon: '🗺️' };
+  const meta = ROLES[p.role] || { label: p.role || '?', icon: '·', color: 'gray' };
+  const colorCls = {
+    orange: 'chip-orange', blue: 'chip-blue', purple: 'chip-purple',
+    green: 'chip-green', red: 'chip-red', gray: 'chip-gray'
+  }[meta.color] || 'chip-gray';
+  const roleChip = { label: meta.label, cls: colorCls, icon: meta.icon };
 
   return el('div', { class: 'card p-3' },
     el('div', { class: 'flex items-center gap-3' },
@@ -127,6 +131,9 @@ async function inviteUserBackground(v) {
       estado: v.estado,
       role: v.role,
       permissoes: v.permissoes || {},
+      estados_acesso: v.estados_acesso || [],
+      cidades_acesso: v.cidades_acesso || [],
+      gerente_supervisor_id: v.gerente_supervisor_id || null,
     }),
   });
 
@@ -276,15 +283,32 @@ function userFormFields(p) {
     ...ESTADOS_BR.map(u => el('option', { value: u, selected: p.estado === u }, u)),
   );
 
-  // Seletor de role - até três pílulas (Master visível somente quando o usuário logado é master)
-  const canCreateMaster = isMaster();
-  const initialRole = p.role || 'gerente';
-  let chosenRole = initialRole;
-  const roleGerente = el('button', { type: 'button', 'data-role': 'gerente' });
-  const roleGestor = el('button', { type: 'button', 'data-role': 'gestor' });
-  const roleMaster = canCreateMaster ? el('button', { type: 'button', 'data-role': 'master' }) : null;
+  // Seletor de role com TODOS os 6 níveis da hierarquia
+  // supervisor -> gerente -> gestor_regional -> superintendente -> gestor -> master
+  // O master pode escolher qualquer um. Os demais ficam restritos por isMaster check no UI.
+  const callerLevel = roleLevel(state.profile?.role);
+  const allRoles = [
+    'supervisor', 'gerente', 'gestor_regional',
+    'superintendente', 'gestor', 'master'
+  ];
+  // Caller só pode atribuir roles de nível <= ao próprio (master atribui qualquer um;
+  // gestor pode criar gestor_regional/superintendente/etc mas não outro master).
+  // Master principal sempre pode criar tudo.
+  const availableRoles = allRoles.filter(r => {
+    const lvl = roleLevel(r);
+    if (isMaster()) return true; // master atribui qualquer um
+    return lvl <= callerLevel;
+  });
 
-  // Permissões (apenas para gestores, apenas master pode editar)
+  const initialRole = p.role || 'gerente';
+  let chosenRole = availableRoles.includes(initialRole) ? initialRole : 'gerente';
+
+  // Pílulas em grid - se tiver mais de 3, quebra em 2 linhas
+  const roleButtons = availableRoles.map(r => el('button', {
+    type: 'button', 'data-role': r,
+  }));
+
+  // === Permissões (visíveis para todos os roles admin) ===
   const initialPerms = p.permissoes || {};
   const permsState = {};
   PERMISSOES.forEach(perm => { permsState[perm.key] = initialPerms[perm.key] === true; });
@@ -306,10 +330,10 @@ function userFormFields(p) {
 
   const permsCard = el('div', { class: 'card p-3 hidden' },
     el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
-      '🔐 Permissões do Gestor'),
+      '🔐 Permissões adicionais'),
     el('p', { class: 'text-xs text-fg-muted mb-2' },
       isMaster()
-        ? 'Marque o que este Gestor pode fazer no app:'
+        ? 'Marque o que este usuário pode fazer no app:'
         : 'Apenas o Master pode alterar permissões.'
     ),
     permsContainer,
@@ -318,61 +342,153 @@ function userFormFields(p) {
     permsContainer.querySelectorAll('input').forEach(i => i.disabled = true);
   }
 
+  // === Multi-estado (superintendente) ===
+  // Checkboxes pra cada UF. Permite marcar 1 ou mais.
+  const initialEstados = Array.isArray(p.estados_acesso) ? p.estados_acesso : [];
+  const estadosCheck = {};
+  ESTADOS_BR.forEach(uf => { estadosCheck[uf] = initialEstados.includes(uf); });
+  const estadosBox = el('div', { class: 'card p-3 hidden' },
+    el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
+      '🗺️ Estados de acesso'),
+    el('p', { class: 'text-xs text-fg-muted mb-2' },
+      'Superintendente vê tudo dos estados marcados. Pode marcar mais de um.'),
+    el('div', { class: 'grid grid-cols-2 gap-2' },
+      ...ESTADOS_BR.map(uf => {
+        const cb = el('input', { type: 'checkbox', checked: estadosCheck[uf] });
+        cb.addEventListener('change', () => { estadosCheck[uf] = cb.checked; });
+        return el('label', { class: 'flex items-center gap-2 p-2 rounded-lg hover:bg-bg-elev cursor-pointer' },
+          cb, el('span', { class: 'text-sm font-semibold' }, uf));
+      })
+    ),
+  );
+
+  // === Multi-cidade (gestor_regional) ===
+  const initialCidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
+  const cidadesCheck = {};
+  (state.cidades || []).forEach(c => {
+    const key = c.nome + '|' + c.estado;
+    cidadesCheck[key] = initialCidades.some(x => (typeof x === 'string' ? x : x.nome) === c.nome);
+  });
+  const cidadesBox = el('div', { class: 'card p-3 hidden' },
+    el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
+      '🏙️ Cidades de acesso'),
+    el('p', { class: 'text-xs text-fg-muted mb-2' },
+      'Gestor Regional vê tudo das cidades marcadas. Cadastre novas em Listas → Cidades.'),
+    el('div', { class: 'grid grid-cols-2 gap-2 max-h-60 overflow-y-auto' },
+      ...((state.cidades || []).length === 0
+        ? [el('span', { class: 'text-sm text-fg-muted col-span-2' }, 'Nenhuma cidade cadastrada. Cadastre em Listas.')]
+        : (state.cidades || []).map(c => {
+          const key = c.nome + '|' + c.estado;
+          const cb = el('input', { type: 'checkbox', checked: cidadesCheck[key] });
+          cb.addEventListener('change', () => { cidadesCheck[key] = cb.checked; });
+          return el('label', { class: 'flex items-center gap-2 p-2 rounded-lg hover:bg-bg-elev cursor-pointer' },
+            cb, el('span', { class: 'text-sm' }, c.nome, el('span', { class: 'text-xs text-fg-muted ml-1' }, c.estado)));
+        }))
+    ),
+  );
+
+  // === Vínculo Supervisor -> Gerente ===
+  // Quando o role é Supervisor, mostra select de qual gerente ele é subordinado
+  // (1 supervisor pertence a 1 gerente, mas 1 gerente pode ter vários supervisores).
+  const gerentesList = (state.profiles || []).filter(x => x.role === 'gerente' && x.ativo);
+  const supervisorSel = el('select', { class: 'select' },
+    el('option', { value: '' }, 'Sem gerente atribuído'),
+    ...gerentesList.map(g => el('option', {
+      value: g.id, selected: p.gerente_supervisor_id === g.id,
+    }, g.nome + (g.cidade ? ` · ${g.cidade}` : '')))
+  );
+  const supervisorBox = el('div', { class: 'card p-3 hidden' },
+    el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
+      '🔗 Gerente responsável'),
+    el('p', { class: 'text-xs text-fg-muted mb-2' },
+      'Supervisor é subordinado a um Gerente. O Gerente é responsável por planejar a agenda.'),
+    supervisorSel,
+  );
+
   function paint() {
-    const buttons = [roleGerente, roleGestor];
-    if (roleMaster) buttons.push(roleMaster);
-    buttons.forEach(b => {
-      const active = b.dataset.role === chosenRole;
+    roleButtons.forEach(b => {
       const r = b.dataset.role;
-      const activeCls = r === 'master'
-        ? 'border-rottas-500 bg-rottas-50 text-rottas-600 dark:bg-rottas-500/15'
-        : r === 'gestor'
+      const meta = ROLES[r] || { label: r, icon: '·' };
+      const active = r === chosenRole;
+      b.className = 'border-2 rounded-xl py-2.5 px-3 flex items-center justify-center gap-1.5 text-xs font-bold transition ' +
+        (active
           ? 'border-rottas-500 bg-rottas-50 text-rottas-600 dark:bg-rottas-500/15'
-          : 'border-info bg-info/10 text-info';
-      b.className = 'flex-1 border-2 rounded-xl py-3 px-3 flex items-center justify-center gap-2 text-sm font-bold transition ' +
-        (active ? activeCls : 'border-border text-fg-muted hover:border-fg-subtle');
-      b.innerHTML = r === 'master' ? '👑 Master' : r === 'gestor' ? '📊 Gestor' : '🗺️ Gerente de Plataforma';
+          : 'border-border text-fg-muted hover:border-fg-subtle');
+      b.innerHTML = `${meta.icon} <span>${meta.label}</span>`;
     });
-    // Permissões só fazem sentido para Gestor (master tem tudo, gerente não tem painel)
-    permsCard.classList.toggle('hidden', chosenRole !== 'gestor');
+    // Mostra cards condicionais
+    // Permissões: relevante pra superintendente/gestor_regional (gestor/master tem implicito)
+    permsCard.classList.toggle('hidden',
+      !['superintendente','gestor_regional'].includes(chosenRole));
+    // Estados: superintendente
+    estadosBox.classList.toggle('hidden', chosenRole !== 'superintendente');
+    // Cidades: gestor_regional
+    cidadesBox.classList.toggle('hidden', chosenRole !== 'gestor_regional');
+    // Vínculo gerente: supervisor
+    supervisorBox.classList.toggle('hidden', chosenRole !== 'supervisor');
   }
-  roleGerente.addEventListener('click', () => { chosenRole = 'gerente'; paint(); });
-  roleGestor.addEventListener('click', () => { chosenRole = 'gestor'; paint(); });
-  if (roleMaster) roleMaster.addEventListener('click', () => { chosenRole = 'master'; paint(); });
+  roleButtons.forEach(b => {
+    b.addEventListener('click', () => { chosenRole = b.dataset.role; paint(); });
+  });
   paint();
 
-  // Master principal (gabriel.galvao) é READ-ONLY: nem o próprio pode trocar de role
+  // Master principal (gabriel.galvao) READ-ONLY
   const isPrincipal = isPrincipalMaster(p);
   const roleField = isPrincipal
     ? el('div', { class: 'card p-3 flex items-center gap-2 bg-rottas-50 dark:bg-rottas-500/10' },
         '👑 ', el('span', { class: 'font-semibold' }, 'Master Principal'),
         el('span', { class: 'text-xs text-fg-muted ml-auto' }, 'Não editável'))
-    : el('div', { class: 'flex gap-2 flex-wrap' }, roleGerente, roleGestor, roleMaster);
+    : el('div', { class: 'grid grid-cols-2 sm:grid-cols-3 gap-2' }, ...roleButtons);
 
   form.append(
     el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), nome),
     el('div', {}, el('label', { class: 'label label-required' }, 'Email'), email,
       p.id && el('p', { class: 'text-xs text-fg-subtle mt-1' }, 'Email não pode ser alterado.')),
     el('div', {}, el('label', { class: 'label label-required' }, 'Perfil de acesso'), roleField),
+    estadosBox,
+    cidadesBox,
+    supervisorBox,
     permsCard,
     el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
     el('div', { class: 'grid grid-cols-3 gap-2' },
-      el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade'), cidade),
-      el('div', {}, el('label', { class: 'label' }, 'UF'), estado),
+      el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade base'), cidade),
+      el('div', {}, el('label', { class: 'label' }, 'UF base'), estado),
     ),
   );
 
   return {
     form,
-    values: () => ({
-      nome: nome.value.trim(),
-      email: email.value.trim().toLowerCase(),
-      telefone: tel.value.trim() || null,
-      cidade: cidade.value.trim() || null,
-      estado: estado.value || null,
-      role: isPrincipal ? 'master' : chosenRole,
-      // Permissões: só master pode setar; master implícito tem tudo (não usa permissoes)
-      permissoes: chosenRole === 'gestor' && isMaster() ? { ...permsState } : (chosenRole === 'gestor' ? initialPerms : {}),
-    }),
+    values: () => {
+      const v = {
+        nome: nome.value.trim(),
+        email: email.value.trim().toLowerCase(),
+        telefone: tel.value.trim() || null,
+        cidade: cidade.value.trim() || null,
+        estado: estado.value || null,
+        role: isPrincipal ? 'master' : chosenRole,
+        permissoes: ['superintendente','gestor_regional'].includes(chosenRole) && isMaster()
+          ? { ...permsState }
+          : (['superintendente','gestor_regional'].includes(chosenRole) ? initialPerms : {}),
+      };
+      // Multi-estado (superintendente)
+      if (chosenRole === 'superintendente') {
+        v.estados_acesso = ESTADOS_BR.filter(uf => estadosCheck[uf]);
+      } else {
+        v.estados_acesso = [];
+      }
+      // Multi-cidade (gestor_regional)
+      if (chosenRole === 'gestor_regional') {
+        v.cidades_acesso = (state.cidades || [])
+          .filter(c => cidadesCheck[c.nome + '|' + c.estado])
+          .map(c => c.nome);
+      } else {
+        v.cidades_acesso = [];
+      }
+      // Supervisor -> Gerente
+      v.gerente_supervisor_id = chosenRole === 'supervisor'
+        ? (supervisorSel.value || null)
+        : null;
+      return v;
+    },
   };
 }

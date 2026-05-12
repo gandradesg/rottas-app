@@ -1,8 +1,35 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.8.8';
-export const APP_BUILD_DATE = '2026-05-08';
+export const APP_VERSION = '0.9.0';
+export const APP_BUILD_DATE = '2026-05-12';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.0',
+    date: '12/05/2026',
+    changes: [
+      'NOVA HIERARQUIA: 6 perfis - Supervisor → Gerente → Gestor Regional → Superintendente → Gestor → Master',
+      'Superintendente: visão multi-estado (PR e/ou SC selecionáveis)',
+      'Gestor Regional: visão multi-cidade (lista cadastrável em Listas → Cidades)',
+      'Supervisor de Plataforma: subordinado a um Gerente (campo no cadastro), sem aba Agenda',
+      'Captação por estado: PR usa Órulo, SC usa DWV (escolhido automaticamente)',
+      'Check-in com motivo "Treinamento" abre campos: Local, Quantidade de pessoas, Imobiliárias participantes (multi-select)',
+      'WORKFLOW DE APROVAÇÃO DE PROPOSTAS: pendente → Regional → Superintendente → Master, com possibilidade de escalar ou rejeitar',
+      'Histórico completo de aprovação visível em cada proposta',
+      'Cadastro de Empreendimento agora aceita link de produto (campo opcional)',
+      'Sincronização de Agenda: botão "Sync calendário" baixa .ics OU abre Google Calendar/Outlook pré-preenchidos',
+      'Listas: nova aba Cidades + Motivos DWV',
+      'BUG FIX: Importar lista agora processa item-a-item (não falha o batch inteiro por causa de 1 duplicado)',
+      'Sistema de backup automático: 10 versões anteriores ficam em .backups/ dentro do projeto',
+    ],
+  },
+  {
+    version: '0.8.9',
+    date: '12/05/2026',
+    changes: [
+      'Fix DEFINITIVO loop de definir senha: trigger no banco marca primeiro_acesso=false automaticamente quando o usuário troca a senha',
+      'Reset manual aplicado em todos os users que já tinham logado e estavam presos no loop',
+    ],
+  },
   {
     version: '0.8.8',
     date: '08/05/2026',
@@ -315,13 +342,53 @@ export const TIPO_ATIVIDADE = {
   atendimento:  { label: 'Atendimento', icon: '👥', color: 'purple' },
   proposta:     { label: 'Proposta',    icon: '📄', color: 'yellow' },
   orulo:        { label: 'Órulo',       icon: '🌐', color: 'green'  },
+  dwv:          { label: 'DWV',         icon: '🌐', color: 'green'  },
+};
+
+// Tipos de captação por estado:
+//   PR -> Órulo, SC -> DWV
+// Helper retorna o tipo correto baseado no estado do gerente
+export const TIPO_CAPTACAO_POR_ESTADO = {
+  PR: 'orulo',
+  SC: 'dwv',
+};
+export function getTipoCaptacao(estado) {
+  return TIPO_CAPTACAO_POR_ESTADO[estado] || 'orulo';
+}
+
+// Hierarquia de roles (do mais baixo ao mais alto)
+// supervisor -> gerente -> gestor_regional -> superintendente -> gestor -> master
+export const ROLES = {
+  supervisor:       { label: 'Supervisor de Plataforma', icon: '👁️', color: 'blue',   level: 1 },
+  gerente:          { label: 'Gerente de Plataforma',    icon: '🗺️', color: 'blue',   level: 2 },
+  gestor_regional:  { label: 'Gestor Regional',          icon: '🌆', color: 'purple', level: 3 },
+  superintendente:  { label: 'Superintendente',          icon: '🏛️', color: 'orange', level: 4 },
+  gestor:           { label: 'Gestor',                   icon: '📊', color: 'orange', level: 5 },
+  master:           { label: 'Master',                   icon: '👑', color: 'orange', level: 6 },
+};
+
+// Workflow de aprovação de propostas (escalation chain)
+// pendente -> aprovada_regional -> (escalada) -> aprovada_super -> (escalada) -> aprovada_master
+export const PROPOSTA_STATUS = {
+  pendente:           { label: 'Aguardando aprovação',  color: 'yellow', icon: '⏳' },
+  aprovada_regional:  { label: 'Aprovada (Regional)',   color: 'blue',   icon: '✓'  },
+  aprovada_super:     { label: 'Aprovada (Superint.)',  color: 'purple', icon: '✓✓' },
+  aprovada_master:    { label: 'Aprovada (Master)',     color: 'green',  icon: '🏆' },
+  rejeitada:          { label: 'Rejeitada',             color: 'red',    icon: '✕'  },
+};
+
+// Próximo nível de escalation a partir do status atual
+export const NEXT_APPROVER = {
+  pendente:          'gestor_regional',
+  aprovada_regional: 'superintendente',
+  aprovada_super:    'master',
 };
 
 // Permissões disponíveis para Gestores (Master pode marcar/desmarcar)
 export const PERMISSOES = [
-  { key: 'gerenciar_usuarios',   label: 'Gerenciar usuários',         desc: 'Criar, editar e desativar Gerentes de Plataforma' },
+  { key: 'gerenciar_usuarios',   label: 'Gerenciar usuários',         desc: 'Criar, editar e desativar usuários abaixo na hierarquia' },
   { key: 'gerenciar_listas',     label: 'Gerenciar listas',           desc: 'Adicionar/editar imobiliárias, empreendimentos, motivos' },
-  { key: 'editar_atividades',    label: 'Editar atividades',          desc: 'Editar atividades de qualquer Gerente (não só as próprias)' },
+  { key: 'editar_atividades',    label: 'Editar atividades',          desc: 'Editar atividades de qualquer usuário (não só as próprias)' },
   { key: 'excluir_atividades',   label: 'Excluir atividades',         desc: 'Remover atividades do histórico' },
   { key: 'exportar_dados',       label: 'Exportar dados',             desc: 'Baixar relatórios em Excel e PNG' },
 ];

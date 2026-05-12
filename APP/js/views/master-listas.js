@@ -3,12 +3,30 @@ import { el, icon, toast, confirmModal, modal, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { supabase, loadLists, state } from '../supabase.js';
 
+// Cada tab pode ter `extraFields` (lista de campos além do `nome`)
+// e `displayExtra(item)` para mostrar metadado adicional na linha
 const TABS = [
   { id: 'imobiliarias',    table: 'imobiliarias',    label: 'Imobiliárias',      stateKey: 'imobiliarias' },
   { id: 'locais_visita',   table: 'locais_visita',   label: 'Locais de visita',  stateKey: 'locaisVisita' },
-  { id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos' },
+  {
+    id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos',
+    extraFields: [
+      { key: 'link_url', label: 'Link do produto (opcional)', type: 'url', placeholder: 'https://...' }
+    ],
+    displayExtra: (item) => item.link_url
+      ? el('a', { href: item.link_url, target: '_blank', class: 'text-xs text-rottas-500 hover:underline truncate' }, '🔗 ' + item.link_url.replace(/^https?:\/\//, '').slice(0, 40))
+      : null,
+  },
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
   { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo',     stateKey: 'motivosOrulo' },
+  { id: 'motivos_dwv',     table: 'motivos_dwv',     label: 'Motivos DWV',       stateKey: 'motivosDwv' },
+  {
+    id: 'cidades',         table: 'cidades',         label: 'Cidades',           stateKey: 'cidades',
+    extraFields: [
+      { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'], required: true }
+    ],
+    displayExtra: (item) => el('span', { class: 'text-xs text-fg-muted ml-2' }, item.estado || ''),
+  },
 ];
 
 export async function masterListasView(_params, app) {
@@ -59,8 +77,12 @@ export async function masterListasView(_params, app) {
     }
 
     items.forEach(it => {
+      const extra = tab.displayExtra ? tab.displayExtra(it) : null;
       dash.appendChild(el('div', { class: 'card p-3 flex items-center gap-3' },
-        el('div', { class: 'flex-1 font-medium' }, it.nome),
+        el('div', { class: 'flex-1 min-w-0' },
+          el('div', { class: 'font-medium' }, it.nome),
+          extra,
+        ),
         el('button', {
           class: 'p-1.5 rounded hover:bg-bg-elev transition',
           onclick: () => openEdit(tab, it)
@@ -85,29 +107,66 @@ export async function masterListasView(_params, app) {
     });
   }
 
+  // Helper: renderiza um campo extra (input ou select) e retorna {el, getValue}
+  function renderExtraField(extraDef, initial) {
+    let inputEl;
+    if (extraDef.type === 'select') {
+      inputEl = el('select', { class: 'select' },
+        el('option', { value: '' }, '—'),
+        ...extraDef.options.map(o => el('option', { value: o, selected: initial === o }, o))
+      );
+    } else {
+      inputEl = el('input', {
+        class: 'input', type: extraDef.type || 'text',
+        placeholder: extraDef.placeholder || '',
+        value: initial || '',
+      });
+    }
+    return {
+      wrapper: el('div', {},
+        el('label', { class: 'label ' + (extraDef.required ? 'label-required' : '') }, extraDef.label),
+        inputEl,
+      ),
+      getValue: () => inputEl.value.trim() || null,
+    };
+  }
+
   function openCreate(tab) {
     const input = el('input', { class: 'input', placeholder: `Nome (ex: Imobiliária ABC)`, required: true });
+    const extras = (tab.extraFields || []).map(ef => renderExtraField(ef, null));
     const submit = el('button', { class: 'btn btn-primary' }, 'Adicionar');
     const cancel = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
     const m = modal({
       title: `Novo: ${tab.label}`,
       size: 'sm',
-      content: el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), input),
+      content: el('div', { class: 'flex flex-col gap-3' },
+        el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), input),
+        ...extras.map(e => e.wrapper),
+      ),
       footer: [cancel, submit],
     });
     setTimeout(() => input.focus(), 50);
     submit.addEventListener('click', () => {
       const nome = input.value.trim();
       if (!nome) return toast('Informe o nome', 'error');
+      // Coleta campos extras
+      const extraData = {};
+      (tab.extraFields || []).forEach((ef, i) => {
+        const v = extras[i].getValue();
+        if (ef.required && !v) {
+          toast(`${ef.label} é obrigatório`, 'error');
+          return;
+        }
+        extraData[ef.key] = v;
+      });
+      const payload = { nome, ...extraData };
       // UI otimista
       m.close();
-      // Adiciona ao state local imediatamente
-      const tempItem = { id: 'temp-' + Date.now(), nome };
+      const tempItem = { id: 'temp-' + Date.now(), ...payload };
       state[tab.stateKey].push(tempItem);
       state[tab.stateKey].sort((a,b) => a.nome.localeCompare(b.nome));
       renderActive();
-      // Salva no banco em bg
-      supabase.from(tab.table).insert({ nome }).select().then(({ data, error }) => {
+      supabase.from(tab.table).insert(payload).select().then(({ data, error }) => {
         const idx = state[tab.stateKey].indexOf(tempItem);
         if (error) {
           console.error('[lista insert] erro:', error);
@@ -131,32 +190,41 @@ export async function masterListasView(_params, app) {
 
   function openEdit(tab, item) {
     const input = el('input', { class: 'input', value: item.nome });
+    const extras = (tab.extraFields || []).map(ef => renderExtraField(ef, item[ef.key]));
     const submit = el('button', { class: 'btn btn-primary' }, 'Salvar');
     const cancel = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
     const m = modal({
       title: `Editar: ${tab.label}`,
       size: 'sm',
-      content: el('div', {}, el('label', { class: 'label' }, 'Nome'), input),
+      content: el('div', { class: 'flex flex-col gap-3' },
+        el('div', {}, el('label', { class: 'label' }, 'Nome'), input),
+        ...extras.map(e => e.wrapper),
+      ),
       footer: [cancel, submit],
     });
     setTimeout(() => input.focus(), 60);
     submit.addEventListener('click', () => {
       const nome = input.value.trim();
       if (!nome) return;
+      // Snapshot pra rollback se falhar
+      const snapshot = { ...item };
+      const patch = { nome };
+      (tab.extraFields || []).forEach((ef, i) => {
+        patch[ef.key] = extras[i].getValue();
+      });
       // UI otimista
       m.close();
-      const oldName = item.nome;
-      item.nome = nome;
+      Object.assign(item, patch);
       renderActive();
-      supabase.from(tab.table).update({ nome }).eq('id', item.id).select().then(({ data, error }) => {
+      supabase.from(tab.table).update(patch).eq('id', item.id).select().then(({ data, error }) => {
         if (error) {
           console.error('[lista update] erro:', error);
-          item.nome = oldName; renderActive();
+          Object.assign(item, snapshot); renderActive();
           toast('Erro: ' + error.message, 'error', 5000);
           return;
         }
         if (!data || !data.length) {
-          item.nome = oldName; renderActive();
+          Object.assign(item, snapshot); renderActive();
           toast('❌ Sem permissão para editar (RLS rejeitou)', 'error', 6000);
           return;
         }
@@ -227,21 +295,47 @@ export async function masterListasView(_params, app) {
         return;
       }
       loadingBtn(submit, true);
-      try {
-        const rows = novos.map(nome => ({ nome }));
-        const { data, error } = await supabase.from(tab.table).insert(rows).select();
-        if (error) throw error;
-        if (!data || data.length !== novos.length) {
-          toast(`Apenas ${data?.length || 0} de ${novos.length} foram importados (RLS pode ter rejeitado parte)`, 'warning', 6000);
-        } else {
-          toast(`✓ ${data.length} ${tab.label.toLowerCase()} importados!`, 'success', 4000);
+
+      // Estratégia robusta: insert um a um com try/catch.
+      // O bulk insert falha inteiro se UMA linha violar UNIQUE constraint,
+      // perdendo itens válidos. Loop individual permite reportar quantos foram.
+      let ok = 0, skipped = 0, failed = 0;
+      const errors = [];
+      for (const nome of novos) {
+        try {
+          const { error } = await supabase.from(tab.table).insert({ nome });
+          if (error) {
+            // 23505 = unique_violation (item já existe com case/acento diferente)
+            if (error.code === '23505' || /duplicate|unique/i.test(error.message)) {
+              skipped++;
+            } else {
+              failed++;
+              if (errors.length < 3) errors.push(`"${nome}": ${error.message}`);
+            }
+          } else {
+            ok++;
+          }
+        } catch (err) {
+          failed++;
+          if (errors.length < 3) errors.push(`"${nome}": ${err.message}`);
         }
-        await loadLists();
-        m.close();
-        renderActive();
-      } catch (err) {
-        loadingBtn(submit, false);
-        toast('Erro: ' + (err.message || err), 'error', 6000);
+      }
+
+      loadingBtn(submit, false);
+      await loadLists();
+      m.close();
+      renderActive();
+
+      // Toast com resultado consolidado
+      let msg = '';
+      if (ok > 0) msg += `✓ ${ok} importado${ok!==1?'s':''}`;
+      if (skipped > 0) msg += (msg ? ' · ' : '') + `${skipped} já existia${skipped!==1?'m':''}`;
+      if (failed > 0) msg += (msg ? ' · ' : '') + `${failed} com erro`;
+      const type = failed > 0 ? 'warning' : 'success';
+      toast(msg || 'Nada importado', type, 5000);
+      if (errors.length) {
+        console.error('[import] erros:', errors);
+        setTimeout(() => toast('Veja console (F12) para detalhes dos erros', 'info', 4000), 800);
       }
     });
   }

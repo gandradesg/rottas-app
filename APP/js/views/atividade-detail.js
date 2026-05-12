@@ -2,9 +2,9 @@
 import { el, icon, fmt, toast, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
-import { isMaster, isGestor, can } from '../auth.js';
+import { isMaster, isGestor, can, canApproveLevel, roleLevel } from '../auth.js';
 import { navigate } from '../router.js';
-import { TIPO_ATIVIDADE } from '../config.js';
+import { TIPO_ATIVIDADE, PROPOSTA_STATUS, NEXT_APPROVER, ROLES } from '../config.js';
 import { gmapsLink } from '../geo.js';
 
 export async function atividadeDetailView(params, app) {
@@ -72,11 +72,28 @@ export async function atividadeDetailView(params, app) {
       }
       break;
     case 'orulo':
+    case 'dwv':
       addRow('Corretor', a.corretor);
       addRow('Imobiliária', a.imobiliaria);
       addRow('Empreendimento', a.empreendimento);
       addRow('Motivo do contato', a.motivo_contato);
       break;
+  }
+
+  // ===== Detalhes extras de Check-in com Treinamento =====
+  if (a.tipo === 'checkin' && (a.motivo_visita || '').toLowerCase() === 'treinamento') {
+    if (a.local_treinamento) addRow('Local do treinamento', a.local_treinamento);
+    if (a.qtd_pessoas) addRow('Quantidade de pessoas', a.qtd_pessoas + ' pessoas');
+    if (Array.isArray(a.imobiliarias_participantes) && a.imobiliarias_participantes.length) {
+      rows.push(el('div', { class: 'flex flex-col py-2 border-b border-border' },
+        el('span', { class: 'text-xs uppercase tracking-wider text-fg-subtle font-semibold' }, 'Imobiliárias participantes'),
+        el('div', { class: 'flex flex-wrap gap-1.5 mt-2' },
+          ...a.imobiliarias_participantes.map(nome =>
+            el('span', { class: 'chip chip-blue' }, nome)
+          )
+        ),
+      ));
+    }
   }
 
   if (a.observacoes) {
@@ -142,8 +159,12 @@ export async function atividadeDetailView(params, app) {
     ),
   ) : null;
 
+  // ===== Banner de status de aprovação (só pra propostas) =====
+  const aprovacaoBanner = a.tipo === 'proposta' ? renderAprovacaoBanner(a) : null;
+
   const content = el('div', { class: 'flex flex-col gap-3' },
     header,
+    aprovacaoBanner,
     pendingBanner,
     el('div', { class: 'card p-4' }, ...rows),
     fotosSection,
@@ -240,6 +261,9 @@ export async function atividadeDetailView(params, app) {
         navigate('/historico', true);
       }
     }, icon('trash', 16), 'Excluir'),
+
+    // ===== AÇÕES DE WORKFLOW DE PROPOSTA (Aprovar / Escalar / Rejeitar) =====
+    ...(a.tipo === 'proposta' ? renderPropostaActions(a) : []),
   );
 
   app.appendChild(shell(content, {
@@ -294,4 +318,161 @@ function locationMapRow(lat, lng) {
       href: mapsUrl, target: '_blank', rel: 'noopener'
     }, icon('mapPin', 14), 'Abrir no Google Maps'),
   );
+}
+
+// ===== WORKFLOW DE APROVAÇÃO DE PROPOSTAS =====
+// Status: pendente -> aprovada_regional -> aprovada_super -> aprovada_master
+// A qualquer momento pode ser rejeitada (com motivo).
+// O aprovador atual pode: aprovar, escalar pro próximo nível, ou rejeitar.
+
+function renderAprovacaoBanner(a) {
+  const status = a.status_aprovacao || 'pendente';
+  const meta = PROPOSTA_STATUS[status] || PROPOSTA_STATUS.pendente;
+  const colors = {
+    yellow: { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.4)', text: '#B45309' },
+    blue:   { bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.4)', text: '#1D4ED8' },
+    purple: { bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.4)', text: '#6D28D9' },
+    green:  { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.4)', text: '#047857' },
+    red:    { bg: 'rgba(239,68,68,0.1)',  border: 'rgba(239,68,68,0.4)',  text: '#B91C1C' },
+  }[meta.color] || { bg: '#F3F4F6', border: '#E5E7EB', text: '#374151' };
+
+  const historico = Array.isArray(a.historico_aprovacao) ? a.historico_aprovacao : [];
+
+  return el('div', {
+    class: 'card p-3 border-2',
+    style: { borderColor: colors.border, background: colors.bg },
+  },
+    el('div', { class: 'flex items-center gap-2' },
+      el('span', { class: 'text-2xl' }, meta.icon),
+      el('div', { class: 'flex-1' },
+        el('div', { class: 'font-bold text-sm', style: { color: colors.text } }, meta.label),
+        a.escalada_para && el('div', { class: 'text-xs text-fg-muted' },
+          '↗ Escalada para: ' + (ROLES[a.escalada_para]?.label || a.escalada_para)),
+        a.aprovado_em && el('div', { class: 'text-xs text-fg-subtle' },
+          'Última ação: ' + fmt.relative(a.aprovado_em)),
+      ),
+    ),
+    a.motivo_rejeicao && el('div', { class: 'mt-2 text-xs text-fg-muted italic' },
+      '"' + a.motivo_rejeicao + '"'),
+    // Histórico (collapsible)
+    historico.length > 0 && el('details', { class: 'mt-2' },
+      el('summary', { class: 'text-xs text-fg-muted cursor-pointer' }, `Histórico (${historico.length})`),
+      el('div', { class: 'mt-2 flex flex-col gap-1' },
+        ...historico.map(h => el('div', { class: 'text-xs text-fg-muted' },
+          `${h.acao} por ${h.por_nome || h.por || '?'} em ${fmt.dateTime(h.em)}` +
+          (h.motivo ? ` - ${h.motivo}` : '')
+        ))
+      )
+    ),
+  );
+}
+
+function renderPropostaActions(a) {
+  const status = a.status_aprovacao || 'pendente';
+  const actions = [];
+  // Status final: nao mostra mais botoes
+  if (status === 'aprovada_master' || status === 'rejeitada') return actions;
+
+  // Próximo aprovador esperado (ou para quem foi escalado)
+  const expected = a.escalada_para || NEXT_APPROVER[status];
+  if (!expected || !canApproveLevel(expected)) return actions;
+
+  // === APROVAR ===
+  actions.push(el('button', {
+    class: 'btn btn-primary',
+    onclick: async () => {
+      const ok = await confirmModal({
+        title: 'Aprovar proposta?',
+        message: `Você está aprovando esta proposta como ${ROLES[expected]?.label || expected}.`,
+        confirmLabel: 'Aprovar',
+      });
+      if (!ok) return;
+      await applyPropostaAction(a, 'aprovar', expected);
+    }
+  }, icon('check', 16), `✓ Aprovar como ${ROLES[expected]?.label || expected}`));
+
+  // === ESCALAR (só se há nível acima) ===
+  const nextLevel = NEXT_APPROVER[
+    expected === 'gestor_regional' ? 'pendente' :
+    expected === 'superintendente' ? 'aprovada_regional' :
+    expected === 'master' ? 'aprovada_super' : null
+  ];
+  // Simplificando: a partir do nível atual, qual seria o próximo?
+  const chain = ['gestor_regional', 'superintendente', 'master'];
+  const idx = chain.indexOf(expected);
+  const nextEscalation = (idx >= 0 && idx < chain.length - 1) ? chain[idx + 1] : null;
+
+  if (nextEscalation) {
+    actions.push(el('button', {
+      class: 'btn btn-secondary',
+      onclick: async () => {
+        const motivo = prompt(`Por que está escalando para ${ROLES[nextEscalation]?.label}? (opcional)`);
+        if (motivo === null) return; // cancelou
+        await applyPropostaAction(a, 'escalar', expected, { escalar_para: nextEscalation, motivo });
+      }
+    }, '↗ Escalar para ' + ROLES[nextEscalation]?.label));
+  }
+
+  // === REJEITAR ===
+  actions.push(el('button', {
+    class: 'btn btn-ghost text-danger',
+    onclick: async () => {
+      const motivo = prompt('Motivo da rejeição:');
+      if (!motivo || !motivo.trim()) return;
+      await applyPropostaAction(a, 'rejeitar', expected, { motivo: motivo.trim() });
+    }
+  }, '✕ Rejeitar proposta'));
+
+  return actions;
+}
+
+async function applyPropostaAction(a, acao, nivel, opts = {}) {
+  const now = new Date().toISOString();
+  const historico = Array.isArray(a.historico_aprovacao) ? [...a.historico_aprovacao] : [];
+  const meuNome = state.profile?.nome || '?';
+  historico.push({
+    acao,
+    nivel,
+    por: state.user.id,
+    por_nome: meuNome,
+    em: now,
+    motivo: opts.motivo || null,
+    escalar_para: opts.escalar_para || null,
+  });
+
+  const patch = {
+    historico_aprovacao: historico,
+    aprovado_em: now,
+    aprovador_id: state.user.id,
+  };
+
+  if (acao === 'aprovar') {
+    const statusMap = {
+      gestor_regional: 'aprovada_regional',
+      superintendente: 'aprovada_super',
+      master: 'aprovada_master',
+    };
+    patch.status_aprovacao = statusMap[nivel];
+    patch.escalada_para = null;
+  } else if (acao === 'escalar') {
+    // Mantém status anterior, mas marca escalation
+    patch.escalada_para = opts.escalar_para;
+    patch.motivo_rejeicao = null;
+  } else if (acao === 'rejeitar') {
+    patch.status_aprovacao = 'rejeitada';
+    patch.motivo_rejeicao = opts.motivo;
+    patch.escalada_para = null;
+  }
+
+  const { error } = await supabase.from('atividades').update(patch).eq('id', a.id);
+  if (error) {
+    toast('Erro: ' + error.message, 'error', 5000);
+    return;
+  }
+  toast({
+    aprovar: '✓ Proposta aprovada',
+    escalar: '↗ Proposta escalada',
+    rejeitar: 'Proposta rejeitada',
+  }[acao] || 'OK', acao === 'rejeitar' ? 'info' : 'success');
+  location.reload();
 }

@@ -1,7 +1,8 @@
 // Shell: header + main + bottom nav. Usado por todas as telas autenticadas.
 import { el, icon, avatar } from '../ui.js';
 import { state } from '../supabase.js';
-import { signOut, isMaster, isGestor, activeViewRole, can } from '../auth.js';
+import { signOut, isMaster, isGestor, isAdmin, activeViewRole, can, canManageAgenda } from '../auth.js';
+import { state } from '../supabase.js';
 import { toggleTheme, getTheme } from '../theme.js';
 import { navigate, currentPath } from '../router.js';
 
@@ -58,17 +59,26 @@ export function shell(content, opts = {}) {
   // Main
   const main = el('main', { class: 'max-w-screen-md mx-auto px-4 py-4 ' + (hideBottomNav ? 'pb-6' : 'pb-24') }, content);
 
-  // Bottom nav
+  // Bottom nav (varia por role/visao)
+  // Supervisor: tem registro + historico (sem agenda - quem planeja é o gerente)
+  // Gerente: agenda + inicio + historico + registrar
+  // Roles admin (gestor/master/superintendente/gestor_regional): painel + historico + outros
   let bottom = null;
   if (!hideBottomNav) {
     const view = activeViewRole();
+    const role = state.profile?.role;
     let items;
-    if (view === 'gestor') {
+    if (role === 'supervisor') {
       items = [
-        { p: '/',           label: 'Agenda',     ic: 'calendar'   },
-        { p: '/painel',     label: 'Painel',     ic: 'barChart'   },
+        { p: '/inicio',     label: 'Início',     ic: 'home'       },
         { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
+        { p: '/registrar',  label: 'Registrar',  ic: 'plus', primary: true },
       ];
+    } else if (view === 'gestor' || ['gestor','superintendente','gestor_regional','master'].includes(role)) {
+      items = [];
+      if (canManageAgenda()) items.push({ p: '/', label: 'Agenda', ic: 'calendar' });
+      items.push({ p: '/painel',     label: 'Painel',    ic: 'barChart' });
+      items.push({ p: '/historico',  label: 'Histórico', ic: 'fileText' });
       if (can('gerenciar_usuarios')) items.push({ p: '/usuarios', label: 'Usuários', ic: 'users' });
       if (can('gerenciar_listas'))   items.push({ p: '/listas',   label: 'Listas',   ic: 'list'  });
     } else {
