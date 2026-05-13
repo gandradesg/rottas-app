@@ -296,46 +296,34 @@ export async function masterListasView(_params, app) {
       }
       loadingBtn(submit, true);
 
-      // Estratégia robusta: insert um a um com try/catch.
-      // O bulk insert falha inteiro se UMA linha violar UNIQUE constraint,
-      // perdendo itens válidos. Loop individual permite reportar quantos foram.
-      let ok = 0, skipped = 0, failed = 0;
-      const errors = [];
-      for (const nome of novos) {
-        try {
-          const { error } = await supabase.from(tab.table).insert({ nome });
-          if (error) {
-            // 23505 = unique_violation (item já existe com case/acento diferente)
-            if (error.code === '23505' || /duplicate|unique/i.test(error.message)) {
-              skipped++;
-            } else {
-              failed++;
-              if (errors.length < 3) errors.push(`"${nome}": ${error.message}`);
-            }
-          } else {
-            ok++;
-          }
-        } catch (err) {
-          failed++;
-          if (errors.length < 3) errors.push(`"${nome}": ${err.message}`);
-        }
-      }
+      // 1 query rápida em vez de N sequenciais. upsert com ignoreDuplicates
+      // pula linhas que violariam o UNIQUE(nome) sem quebrar o batch inteiro.
+      // Para tabela `cidades` (UNIQUE composto nome+estado), so importa nome puro.
+      const rows = novos.map(nome => ({ nome }));
+      try {
+        const { data, error } = await supabase
+          .from(tab.table)
+          .upsert(rows, { onConflict: 'nome', ignoreDuplicates: true })
+          .select();
 
-      loadingBtn(submit, false);
-      await loadLists();
-      m.close();
-      renderActive();
+        if (error) throw error;
 
-      // Toast com resultado consolidado
-      let msg = '';
-      if (ok > 0) msg += `✓ ${ok} importado${ok!==1?'s':''}`;
-      if (skipped > 0) msg += (msg ? ' · ' : '') + `${skipped} já existia${skipped!==1?'m':''}`;
-      if (failed > 0) msg += (msg ? ' · ' : '') + `${failed} com erro`;
-      const type = failed > 0 ? 'warning' : 'success';
-      toast(msg || 'Nada importado', type, 5000);
-      if (errors.length) {
-        console.error('[import] erros:', errors);
-        setTimeout(() => toast('Veja console (F12) para detalhes dos erros', 'info', 4000), 800);
+        const inseridos = data?.length || 0;
+        const duplicados = novos.length - inseridos;
+
+        loadingBtn(submit, false);
+        await loadLists();
+        m.close();
+        renderActive();
+
+        let msg = '';
+        if (inseridos > 0) msg += `✓ ${inseridos} importado${inseridos!==1?'s':''}`;
+        if (duplicados > 0) msg += (msg ? ' · ' : '') + `${duplicados} já existia${duplicados!==1?'m':''} (ignorado)`;
+        toast(msg || 'Nada novo pra importar', inseridos > 0 ? 'success' : 'info', 5000);
+      } catch (err) {
+        loadingBtn(submit, false);
+        console.error('[import] erro:', err);
+        toast('Erro ao importar: ' + (err.message || err), 'error', 6000);
       }
     });
   }
