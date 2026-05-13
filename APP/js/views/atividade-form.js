@@ -215,9 +215,13 @@ export async function atividadeFormView(params, app) {
     );
 
     // Reage a mudança no motivo - se virar Treinamento, abre o box
+    // motivoSel é um wrapper do creatableSelect; o valor real está no hidden input
+    function getMotivoValue() {
+      const hidden = motivoSel.querySelector('input[type="hidden"]');
+      return (hidden?.value || '').trim().toLowerCase();
+    }
     function checkTreinamentoMode() {
-      const v = (motivoSel.value || '').trim().toLowerCase();
-      treinamentoBox.classList.toggle('hidden', v !== 'treinamento');
+      treinamentoBox.classList.toggle('hidden', getMotivoValue() !== 'treinamento');
     }
     motivoSel.addEventListener('change', checkTreinamentoMode);
     setTimeout(checkTreinamentoMode, 50);
@@ -238,10 +242,11 @@ export async function atividadeFormView(params, app) {
 
     // Expõe pra o submit handler ler os valores extras
     form._treinamentoData = () => {
-      const motivo = (motivoSel.value || '').trim().toLowerCase();
-      if (motivo !== 'treinamento') return {};
+      if (getMotivoValue() !== 'treinamento') return {};
+      // localTreinamentoSel também é creatableSelect → ler do hidden input dele
+      const ltHidden = localTreinamentoSel.querySelector('input[type="hidden"]');
       return {
-        local_treinamento: localTreinamentoSel.value || null,
+        local_treinamento: ltHidden?.value || null,
         qtd_pessoas: qtdPessoasInput.value ? parseInt(qtdPessoasInput.value, 10) : null,
         imobiliarias_participantes: state.imobiliarias
           .filter(im => imobsCheck[im.nome])

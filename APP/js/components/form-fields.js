@@ -46,6 +46,10 @@ export function creatableSelect({ name, items, value, required, allowAdd = false
     const newSpan = el('span', { class: 'truncate ' + (v ? '' : 'text-fg-subtle') }, v || 'Selecione...');
     labelSpan.replaceWith(newSpan);
     labelSpan = newSpan;
+    // Dispara eventos change pra listeners externos poderem reagir
+    // (ex: form que mostra campos extras quando Motivo = Treinamento)
+    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+    wrap.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   function renderList(filter = '') {
