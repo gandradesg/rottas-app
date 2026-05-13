@@ -342,16 +342,16 @@ function userFormFields(p) {
     permsContainer.querySelectorAll('input').forEach(i => i.disabled = true);
   }
 
-  // === Multi-estado (superintendente) ===
+  // === Multi-estado (superintendente, gestor, master) ===
   // Checkboxes pra cada UF. Permite marcar 1 ou mais.
+  // Pra master/gestor, vazio = sem restrição (vê tudo).
   const initialEstados = Array.isArray(p.estados_acesso) ? p.estados_acesso : [];
   const estadosCheck = {};
   ESTADOS_BR.forEach(uf => { estadosCheck[uf] = initialEstados.includes(uf); });
   const estadosBox = el('div', { class: 'card p-3 hidden' },
     el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
       '🗺️ Estados de acesso'),
-    el('p', { class: 'text-xs text-fg-muted mb-2' },
-      'Superintendente vê tudo dos estados marcados. Pode marcar mais de um.'),
+    el('p', { class: 'text-xs text-fg-muted mb-2' }, ''),
     el('div', { class: 'grid grid-cols-2 gap-2' },
       ...ESTADOS_BR.map(uf => {
         const cb = el('input', { type: 'checkbox', checked: estadosCheck[uf] });
@@ -361,6 +361,7 @@ function userFormFields(p) {
       })
     ),
   );
+  const estadosHelpEl = estadosBox.querySelector('p');
 
   // === Multi-cidade (gestor_regional) ===
   const initialCidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
@@ -417,11 +418,16 @@ function userFormFields(p) {
       b.innerHTML = `${meta.icon} <span>${meta.label}</span>`;
     });
     // Mostra cards condicionais
-    // Permissões: relevante pra superintendente/gestor_regional (gestor/master tem implicito)
     permsCard.classList.toggle('hidden',
       !['superintendente','gestor_regional'].includes(chosenRole));
-    // Estados: superintendente
-    estadosBox.classList.toggle('hidden', chosenRole !== 'superintendente');
+    // Estados de acesso: superintendente OU gestor/master (estes ultimos opcionais)
+    const showEstados = ['superintendente','gestor','master'].includes(chosenRole);
+    estadosBox.classList.toggle('hidden', !showEstados);
+    if (showEstados) {
+      estadosHelpEl.textContent = chosenRole === 'superintendente'
+        ? 'Superintendente vê tudo dos estados marcados. Pode marcar mais de um.'
+        : 'Opcional. Se vazio, vê tudo. Se marcar, fica restrito aos estados marcados.';
+    }
     // Cidades: gestor_regional
     cidadesBox.classList.toggle('hidden', chosenRole !== 'gestor_regional');
     // Vínculo gerente: supervisor
@@ -470,8 +476,8 @@ function userFormFields(p) {
           ? { ...permsState }
           : (['superintendente','gestor_regional'].includes(chosenRole) ? initialPerms : {}),
       };
-      // Multi-estado (superintendente)
-      if (chosenRole === 'superintendente') {
+      // Multi-estado: superintendente, gestor, master podem usar
+      if (['superintendente','gestor','master'].includes(chosenRole)) {
         v.estados_acesso = ESTADOS_BR.filter(uf => estadosCheck[uf]);
       } else {
         v.estados_acesso = [];
