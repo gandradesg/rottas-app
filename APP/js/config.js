@@ -1,8 +1,20 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.9.0';
+export const APP_VERSION = '0.9.1';
 export const APP_BUILD_DATE = '2026-05-12';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.1',
+    date: '12/05/2026',
+    changes: [
+      'Empreendimentos agora podem ser linkados a uma cidade (e o estado é preenchido automaticamente)',
+      'Importar Empreendimentos aceita formato CSV: "Nome;Cidade" (separadores ; , ou TAB)',
+      'Importar Cidades aceita formato CSV: "Nome;PR" ou "Nome;SC"',
+      'Importar de listas usa upsert em lote (~10x mais rápido, era sequencial)',
+      'Bottom nav respeita 100% o toggle de visão (Gerente = visão de campo, sem itens admin)',
+      'Toggle de visão expandido para todos roles admin (master, gestor, superintendente, gestor_regional)',
+    ],
+  },
   {
     version: '0.9.0',
     date: '12/05/2026',

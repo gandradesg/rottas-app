@@ -11,11 +11,17 @@ const TABS = [
   {
     id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos',
     extraFields: [
+      { key: 'cidade', label: 'Cidade', type: 'cidade-select', placeholder: 'Escolha uma cidade' },
       { key: 'link_url', label: 'Link do produto (opcional)', type: 'url', placeholder: 'https://...' }
     ],
-    displayExtra: (item) => item.link_url
-      ? el('a', { href: item.link_url, target: '_blank', class: 'text-xs text-rottas-500 hover:underline truncate' }, '🔗 ' + item.link_url.replace(/^https?:\/\//, '').slice(0, 40))
-      : null,
+    // Import aceita CSV: "Nome;Cidade" ou "Nome,Cidade" (cidade vira lookup em state.cidades)
+    importColumns: ['nome', 'cidade'],
+    displayExtra: (item) => {
+      const parts = [];
+      if (item.cidade) parts.push(el('span', { class: 'text-xs text-fg-muted' }, '📍 ' + item.cidade + (item.estado ? ` · ${item.estado}` : '')));
+      if (item.link_url) parts.push(el('a', { href: item.link_url, target: '_blank', class: 'text-xs text-rottas-500 hover:underline truncate ml-2' }, '🔗 ' + item.link_url.replace(/^https?:\/\//, '').slice(0, 30)));
+      return parts.length ? el('div', { class: 'flex items-center gap-2 flex-wrap mt-0.5' }, ...parts) : null;
+    },
   },
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
   { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo',     stateKey: 'motivosOrulo' },
@@ -25,6 +31,8 @@ const TABS = [
     extraFields: [
       { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'], required: true }
     ],
+    // Aceita CSV: "Nome;PR" ou "Nome,SC"
+    importColumns: ['nome', 'estado'],
     displayExtra: (item) => el('span', { class: 'text-xs text-fg-muted ml-2' }, item.estado || ''),
   },
 ];
@@ -107,14 +115,31 @@ export async function masterListasView(_params, app) {
     });
   }
 
-  // Helper: renderiza um campo extra (input ou select) e retorna {el, getValue}
+  // Helper: renderiza um campo extra (input/select/cidade-select) e retorna {wrapper, getValue, getExtras}
+  // cidade-select: dropdown puxando de state.cidades; ao selecionar, retorna {cidade, estado}
   function renderExtraField(extraDef, initial) {
     let inputEl;
+    let extraGetter = null;
     if (extraDef.type === 'select') {
       inputEl = el('select', { class: 'select' },
         el('option', { value: '' }, '—'),
         ...extraDef.options.map(o => el('option', { value: o, selected: initial === o }, o))
       );
+    } else if (extraDef.type === 'cidade-select') {
+      // initial pode ser string (nome da cidade) ou null
+      inputEl = el('select', { class: 'select' },
+        el('option', { value: '' }, extraDef.placeholder || '—'),
+        ...(state.cidades || []).map(c =>
+          el('option', { value: c.nome + '|' + c.estado, selected: initial === c.nome }, `${c.nome} (${c.estado})`)
+        )
+      );
+      // Quando salva, separa nome|estado e retorna nome (estado vai no extras)
+      extraGetter = () => {
+        const v = inputEl.value;
+        if (!v) return { estado: null };
+        const [, estado] = v.split('|');
+        return { estado: estado || null };
+      };
     } else {
       inputEl = el('input', {
         class: 'input', type: extraDef.type || 'text',
@@ -127,7 +152,15 @@ export async function masterListasView(_params, app) {
         el('label', { class: 'label ' + (extraDef.required ? 'label-required' : '') }, extraDef.label),
         inputEl,
       ),
-      getValue: () => inputEl.value.trim() || null,
+      getValue: () => {
+        if (extraDef.type === 'cidade-select') {
+          const v = inputEl.value;
+          if (!v) return null;
+          return v.split('|')[0]; // só o nome da cidade
+        }
+        return inputEl.value.trim() || null;
+      },
+      getExtras: extraGetter,
     };
   }
 
@@ -149,7 +182,7 @@ export async function masterListasView(_params, app) {
     submit.addEventListener('click', () => {
       const nome = input.value.trim();
       if (!nome) return toast('Informe o nome', 'error');
-      // Coleta campos extras
+      // Coleta campos extras (+ extras implícitos como `estado` derivado da cidade)
       const extraData = {};
       (tab.extraFields || []).forEach((ef, i) => {
         const v = extras[i].getValue();
@@ -158,6 +191,8 @@ export async function masterListasView(_params, app) {
           return;
         }
         extraData[ef.key] = v;
+        // Cidade-select retorna `estado` automaticamente em getExtras()
+        if (extras[i].getExtras) Object.assign(extraData, extras[i].getExtras());
       });
       const payload = { nome, ...extraData };
       // UI otimista
@@ -211,6 +246,7 @@ export async function masterListasView(_params, app) {
       const patch = { nome };
       (tab.extraFields || []).forEach((ef, i) => {
         patch[ef.key] = extras[i].getValue();
+        if (extras[i].getExtras) Object.assign(patch, extras[i].getExtras());
       });
       // UI otimista
       m.close();
@@ -235,10 +271,15 @@ export async function masterListasView(_params, app) {
 
   // Importa lista em massa: aceita texto colado (1 nome por linha) ou arquivo .txt/.csv
   function openImport(tab) {
+    // Empreendimentos aceita multi-coluna: Nome;Cidade ou Nome,Cidade
+    const isMultiCol = (tab.importColumns || []).length > 1;
+    const placeholderTxt = isMultiCol
+      ? `Cole aqui (separador ; ou , ou TAB):\n\nBarra Home Resort;Curitiba\nMeo Anita;Joinville\nVega Jaraguá;Jaraguá do Sul\n...\n\nFormato: ${tab.importColumns.join(' ; ')}`
+      : 'Cole aqui a lista, um nome por linha:\n\nImobiliária ABC\nImobiliária XYZ\nLopes Imóveis\n...';
     const textArea = el('textarea', {
       class: 'input',
       rows: 8,
-      placeholder: 'Cole aqui a lista, um nome por linha:\n\nImobiliária ABC\nImobiliária XYZ\nLopes Imóveis\n...',
+      placeholder: placeholderTxt,
       style: { resize: 'vertical', minHeight: '160px', fontFamily: 'monospace' },
     });
     const fileInput = el('input', {
@@ -253,13 +294,49 @@ export async function masterListasView(_params, app) {
       },
     });
     const previewEl = el('div', { class: 'text-xs text-fg-muted' });
-    function updatePreview() {
+
+    // Parser: cada linha vira um objeto baseado em tab.importColumns
+    // - Single column: { nome: "Nome" }
+    // - Multi column:  { nome, cidade, ... } - aceita ; , TAB como separadores
+    // Bonus: pra empreendimentos, faz lookup da cidade em state.cidades pra pegar estado automaticamente
+    function parseLines() {
       const lines = textArea.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      const unique = [...new Set(lines)];
+      const cols = tab.importColumns || ['nome'];
+      return lines.map(line => {
+        const parts = cols.length > 1
+          ? line.split(/[;,\t]/).map(s => s.trim())
+          : [line];
+        const obj = {};
+        cols.forEach((col, i) => { if (parts[i]) obj[col] = parts[i]; });
+        // Empreendimentos com cidade → lookup pra inferir estado
+        if (tab.table === 'empreendimentos' && obj.cidade) {
+          const match = (state.cidades || []).find(c =>
+            c.nome.toLowerCase() === obj.cidade.toLowerCase()
+          );
+          if (match) {
+            obj.cidade = match.nome; // normaliza pra capitalização do cadastro
+            obj.estado = match.estado;
+          }
+        }
+        return obj;
+      }).filter(o => o.nome);
+    }
+
+    function updatePreview() {
+      const parsed = parseLines();
+      const unique = [];
+      const seen = new Set();
+      parsed.forEach(p => {
+        const k = p.nome.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); unique.push(p); }
+      });
       const existing = (state[tab.stateKey] || []).map(x => x.nome.toLowerCase());
-      const novos = unique.filter(n => !existing.includes(n.toLowerCase()));
+      const novos = unique.filter(p => !existing.includes(p.nome.toLowerCase()));
       const dups = unique.length - novos.length;
-      previewEl.textContent = `Total: ${lines.length} · Únicos: ${unique.length} · Novos: ${novos.length}${dups ? ` · Já existem: ${dups}` : ''}`;
+      const extras = isMultiCol
+        ? ` · ${novos.filter(p => p.cidade).length} c/ cidade`
+        : '';
+      previewEl.textContent = `Total: ${parsed.length} · Únicos: ${unique.length} · Novos: ${novos.length}${dups ? ` · Já existem: ${dups}` : ''}${extras}`;
       return novos;
     }
     textArea.addEventListener('input', updatePreview);
@@ -298,8 +375,8 @@ export async function masterListasView(_params, app) {
 
       // 1 query rápida em vez de N sequenciais. upsert com ignoreDuplicates
       // pula linhas que violariam o UNIQUE(nome) sem quebrar o batch inteiro.
-      // Para tabela `cidades` (UNIQUE composto nome+estado), so importa nome puro.
-      const rows = novos.map(nome => ({ nome }));
+      // novos ja vem como objetos {nome, cidade?, estado?, ...}
+      const rows = novos.map(p => ({ ...p }));
       try {
         const { data, error } = await supabase
           .from(tab.table)
