@@ -11,14 +11,18 @@ const TABS = [
   {
     id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos',
     extraFields: [
-      { key: 'cidade', label: 'Cidade', type: 'cidade-select', placeholder: 'Escolha uma cidade' },
+      { key: 'cidade', label: 'Cidade', type: 'text', placeholder: 'Ex: Ponta Grossa' },
+      { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'] },
       { key: 'link_url', label: 'Link do produto (opcional)', type: 'url', placeholder: 'https://...' }
     ],
-    // Import aceita CSV: "Nome;Cidade" ou "Nome,Cidade" (cidade vira lookup em state.cidades)
-    importColumns: ['nome', 'cidade'],
+    // Import aceita CSV de 3 colunas: "Nome;Cidade;Estado" (separadores ; , ou TAB)
+    importColumns: ['nome', 'cidade', 'estado'],
     displayExtra: (item) => {
       const parts = [];
-      if (item.cidade) parts.push(el('span', { class: 'text-xs text-fg-muted' }, '📍 ' + item.cidade + (item.estado ? ` · ${item.estado}` : '')));
+      if (item.cidade || item.estado) {
+        const locStr = [item.cidade, item.estado].filter(Boolean).join(' · ');
+        parts.push(el('span', { class: 'text-xs text-fg-muted' }, '📍 ' + locStr));
+      }
       if (item.link_url) parts.push(el('a', { href: item.link_url, target: '_blank', class: 'text-xs text-rottas-500 hover:underline truncate ml-2' }, '🔗 ' + item.link_url.replace(/^https?:\/\//, '').slice(0, 30)));
       return parts.length ? el('div', { class: 'flex items-center gap-2 flex-wrap mt-0.5' }, ...parts) : null;
     },
@@ -331,15 +335,10 @@ export async function masterListasView(_params, app) {
           : [line];
         const obj = {};
         cols.forEach((col, i) => { if (parts[i]) obj[col] = parts[i]; });
-        // Empreendimentos com cidade → lookup pra inferir estado
-        if (tab.table === 'empreendimentos' && obj.cidade) {
-          const match = (state.cidades || []).find(c =>
-            c.nome.toLowerCase() === obj.cidade.toLowerCase()
-          );
-          if (match) {
-            obj.cidade = match.nome; // normaliza pra capitalização do cadastro
-            obj.estado = match.estado;
-          }
+        // Normaliza estado pra maiúsculas (aceita "pr", "Pr", "PR")
+        if (obj.estado) {
+          const uf = obj.estado.toUpperCase();
+          obj.estado = ['PR','SC'].includes(uf) ? uf : null;
         }
         return obj;
       }).filter(o => o.nome);
