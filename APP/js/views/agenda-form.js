@@ -24,6 +24,22 @@ export async function agendaFormView(params, app) {
     initial = data;
   }
 
+  // Carrega supervisores subordinados ao gerente logado (RLS: gerente_supervisor_id = auth.uid())
+  // Se o user é supervisor, não carrega ninguém (supervisor não cria agendamento na agenda)
+  const meuId = state.user.id;
+  let supervisores = [];
+  if (state.profile?.role === 'gerente') {
+    const { data: subs } = await supabase
+      .from('profiles')
+      .select('id, nome')
+      .eq('gerente_supervisor_id', meuId)
+      .eq('ativo', true)
+      .order('nome');
+    supervisores = subs || [];
+  }
+  // Default responsável: o próprio gerente. Se editando, mantém o gerente_id atual.
+  let responsavelId = initial?.gerente_id || meuId;
+
   // Tipo padrão (legado: proposta/orulo viram 'outro')
   const initialTipo = initial?.tipo && TIPOS.find(t => t.id === initial.tipo) ? initial.tipo : 'checkin';
   let chosenTipo = initialTipo;
@@ -128,9 +144,30 @@ export async function agendaFormView(params, app) {
   const cancelBtn = el('button', { class: 'btn btn-ghost w-full', type: 'button',
     onclick: () => history.back() }, 'Cancelar');
 
+  // === Seletor de Responsável (só aparece se o gerente tem supervisores) ===
+  // Permite o gerente escolher se ele mesmo vai cumprir ou um supervisor dele.
+  // O gerente_id do agendamento aponta pra essa pessoa, então quem é "dono"
+  // executa o check-in/atividade depois.
+  let responsavelField = null;
+  if (supervisores.length > 0) {
+    const meuNome = state.profile?.nome || 'Você';
+    const respSel = el('select', { class: 'select' },
+      el('option', { value: meuId, selected: responsavelId === meuId }, `${meuNome} (você)`),
+      ...supervisores.map(s =>
+        el('option', { value: s.id, selected: responsavelId === s.id }, s.nome + ' (Supervisor)')
+      )
+    );
+    respSel.addEventListener('change', () => { responsavelId = respSel.value; });
+    responsavelField = field('Responsável pela atividade', respSel, {
+      required: true,
+      help: 'Quem vai cumprir esta agenda - você ou um dos seus supervisores',
+    });
+  }
+
   const form = el('form', { class: 'flex flex-col gap-4' },
     field('Tipo', el('div', { class: 'flex gap-2' }, ...tipoButtons), { required: true }),
     field('Data e hora prevista', dataInput, { required: true }),
+    responsavelField,
     imobWrap, motivoWrap,         // check-in
     localWrap, empWrap, cliWrap, corWrap, // atendimento
     field('Título / descrição', tituloInput, { help: 'Texto livre para identificar o agendamento' }),
@@ -151,7 +188,7 @@ export async function agendaFormView(params, app) {
     const localAtend = (fd.get('local_visita_disp') || '').toString().trim();
 
     const payload = {
-      gerente_id: state.user.id,
+      gerente_id: responsavelId, // Próprio gerente OU um supervisor escolhido
       tipo: chosenTipo,
       data_prevista: dataIso,
       titulo: (fd.get('titulo') || '').toString().trim() || null,
