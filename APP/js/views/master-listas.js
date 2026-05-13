@@ -126,19 +126,42 @@ export async function masterListasView(_params, app) {
         ...extraDef.options.map(o => el('option', { value: o, selected: initial === o }, o))
       );
     } else if (extraDef.type === 'cidade-select') {
-      // initial pode ser string (nome da cidade) ou null
-      inputEl = el('select', { class: 'select' },
-        el('option', { value: '' }, extraDef.placeholder || '—'),
+      // Input texto livre + autocomplete via datalist (HTML5).
+      // - Sugere cidades de state.cidades (com indicador de UF)
+      // - Aceita qualquer texto digitado (ex: "Ponta Grossa" mesmo se não cadastrada)
+      // - Ao salvar, busca o estado da cidade em state.cidades; se não achar, estado=null
+      const listId = 'cidades-dl-' + Math.random().toString(36).slice(2, 8);
+      inputEl = el('input', {
+        class: 'input',
+        type: 'text',
+        placeholder: extraDef.placeholder || 'Digite ou escolha uma cidade',
+        value: initial || '',
+        list: listId,
+        autocomplete: 'off',
+      });
+      const dl = el('datalist', { id: listId },
         ...(state.cidades || []).map(c =>
-          el('option', { value: c.nome + '|' + c.estado, selected: initial === c.nome }, `${c.nome} (${c.estado})`)
+          el('option', { value: c.nome }, `${c.nome} (${c.estado})`)
         )
       );
-      // Quando salva, separa nome|estado e retorna nome (estado vai no extras)
+      // Função pra inferir estado pelo nome digitado
       extraGetter = () => {
-        const v = inputEl.value;
+        const v = (inputEl.value || '').trim();
         if (!v) return { estado: null };
-        const [, estado] = v.split('|');
-        return { estado: estado || null };
+        const match = (state.cidades || []).find(c =>
+          c.nome.toLowerCase() === v.toLowerCase()
+        );
+        return { estado: match?.estado || null };
+      };
+      // Anexa o datalist depois do input
+      const orig = el('div', {}, inputEl, dl);
+      return {
+        wrapper: el('div', {},
+          el('label', { class: 'label ' + (extraDef.required ? 'label-required' : '') }, extraDef.label),
+          orig,
+        ),
+        getValue: () => (inputEl.value || '').trim() || null,
+        getExtras: extraGetter,
       };
     } else {
       inputEl = el('input', {
