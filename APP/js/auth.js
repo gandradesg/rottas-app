@@ -188,12 +188,24 @@ export function isPrincipalMaster(emailOrProfile) {
 export function isLoggedIn() { return !!state.user && !!state.profile; }
 export function needsPasswordSetup() { return state.profile?.primeiro_acesso === true; }
 
-// Master pode escolher entrar como Gestor ou Gerente (para testar visão de campo)
+// Todos os roles admin (master, gestor, superintendente, gestor_regional) podem
+// alternar entre a própria visão administrativa e a visão "gerente" (campo).
+// Roles operacionais (gerente, supervisor) retornam o role real - sem toggle.
 export function activeViewRole() {
-  if (state.profile?.role === 'master') {
-    return localStorage.getItem('rottas-login-as') || 'gestor';
+  const role = state.profile?.role;
+  const adminRoles = ['master','gestor','superintendente','gestor_regional'];
+  if (adminRoles.includes(role)) {
+    const chosen = localStorage.getItem('rottas-login-as');
+    if (chosen === 'gerente') return 'gerente';
+    // Default: a própria visão administrativa do user
+    return role === 'master' ? 'gestor' : role;
   }
-  return state.profile?.role;
+  return role;
+}
+
+// Helper pra UI: o toggle aparece pra esses roles
+export function canToggleView() {
+  return ['master','gestor','superintendente','gestor_regional'].includes(state.profile?.role);
 }
 
 // Permissões: roles altos (master/gestor) tem tudo; outros dependem de profile.permissoes

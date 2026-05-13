@@ -1,7 +1,8 @@
 // Shell: header + main + bottom nav. Usado por todas as telas autenticadas.
 import { el, icon, avatar } from '../ui.js';
 import { state } from '../supabase.js';
-import { signOut, isMaster, isGestor, isAdmin, activeViewRole, can, canManageAgenda } from '../auth.js';
+import { signOut, isMaster, isGestor, isAdmin, activeViewRole, can, canManageAgenda, canToggleView } from '../auth.js';
+import { ROLES } from '../config.js';
 import { toggleTheme, getTheme } from '../theme.js';
 import { navigate, currentPath } from '../router.js';
 
@@ -9,21 +10,26 @@ export function shell(content, opts = {}) {
   const { title, subtitle, back, headerActions, hideBottomNav } = opts;
   const path = currentPath();
 
-  // Toggle de perfil para master (alterna entre visão Gestor e Gerente)
+  // Toggle de perfil para roles admin (master, gestor, superintendente, gestor_regional)
+  // Permite alternar entre a visao administrativa propria e a visao de gerente (campo)
   let roleToggle = null;
-  if (isMaster() && !back) {
+  if (canToggleView() && !back) {
     const view = activeViewRole();
+    const isGerView = view === 'gerente';
+    const ownAdminLabel = ROLES[state.profile?.role]?.label || 'Gestor';
     roleToggle = el('button', {
       class: 'btn-sm flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border border-border hover:bg-bg-elev transition',
-      style: { color: view === 'gestor' ? '#F26B22' : '#3B82F6' },
+      style: { color: isGerView ? '#3B82F6' : '#F26B22' },
       onclick: () => {
-        const next = view === 'gestor' ? 'gerente' : 'gestor';
+        const next = isGerView ? state.profile?.role : 'gerente';
         localStorage.setItem('rottas-login-as', next);
-        navigate('/', true);
-        // força re-render
-        setTimeout(() => location.reload(), 50);
+        // Volta pra raiz pra recalcular tudo no novo contexto e force reload
+        location.href = '/';
       }
-    }, icon(view === 'gestor' ? 'barChart' : 'mapPin', 12), view === 'gestor' ? 'Gestor' : 'Gerente');
+    },
+      icon(isGerView ? 'mapPin' : 'barChart', 12),
+      isGerView ? 'Gerente' : ownAdminLabel
+    );
   }
 
   // Header
@@ -58,36 +64,35 @@ export function shell(content, opts = {}) {
   // Main
   const main = el('main', { class: 'max-w-screen-md mx-auto px-4 py-4 ' + (hideBottomNav ? 'pb-6' : 'pb-24') }, content);
 
-  // Bottom nav (varia por role/visao)
-  // Supervisor: tem registro + historico (sem agenda - quem planeja é o gerente)
-  // Gerente: agenda + inicio + historico + registrar
-  // Roles admin (gestor/master/superintendente/gestor_regional): painel + historico + outros
+  // Bottom nav decidido pelo VIEW ATIVO (respeita o toggle), nao pelo role real.
+  // - view='gerente'   -> nav de gerente (Agenda + Inicio + Historico + Registrar)
+  // - view='supervisor'-> sem Agenda (gerente planeja), so Inicio + Historico + Registrar
+  // - view admin       -> Agenda + Painel + Historico + Usuarios/Listas conforme perms
   let bottom = null;
   if (!hideBottomNav) {
     const view = activeViewRole();
-    const role = state.profile?.role;
     let items;
-    if (role === 'supervisor') {
+    if (view === 'supervisor') {
       items = [
         { p: '/inicio',     label: 'Início',     ic: 'home'       },
         { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
         { p: '/registrar',  label: 'Registrar',  ic: 'plus', primary: true },
       ];
-    } else if (view === 'gestor' || ['gestor','superintendente','gestor_regional','master'].includes(role)) {
-      items = [];
-      if (canManageAgenda()) items.push({ p: '/', label: 'Agenda', ic: 'calendar' });
-      items.push({ p: '/painel',     label: 'Painel',    ic: 'barChart' });
-      items.push({ p: '/historico',  label: 'Histórico', ic: 'fileText' });
-      if (can('gerenciar_usuarios')) items.push({ p: '/usuarios', label: 'Usuários', ic: 'users' });
-      if (can('gerenciar_listas'))   items.push({ p: '/listas',   label: 'Listas',   ic: 'list'  });
-    } else {
-      // gerente
+    } else if (view === 'gerente') {
       items = [
         { p: '/',           label: 'Agenda',     ic: 'calendar'   },
         { p: '/inicio',     label: 'Início',     ic: 'home'       },
         { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
         { p: '/registrar',  label: 'Registrar',  ic: 'plus', primary: true },
       ];
+    } else {
+      // Visao administrativa: gestor, master, superintendente, gestor_regional
+      items = [];
+      if (canManageAgenda()) items.push({ p: '/', label: 'Agenda', ic: 'calendar' });
+      items.push({ p: '/painel',     label: 'Painel',    ic: 'barChart' });
+      items.push({ p: '/historico',  label: 'Histórico', ic: 'fileText' });
+      if (can('gerenciar_usuarios')) items.push({ p: '/usuarios', label: 'Usuários', ic: 'users' });
+      if (can('gerenciar_listas'))   items.push({ p: '/listas',   label: 'Listas',   ic: 'list'  });
     }
 
     bottom = el('nav', { class: 'fixed bottom-0 left-0 right-0 z-30 glass border-t border-border no-print' },
