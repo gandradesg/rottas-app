@@ -42,29 +42,19 @@ export async function loginView(_params, app) {
     loadingBtn(submitBtn, true);
     try {
       await signIn(emailInput.value.trim().toLowerCase(), passInput.value);
-      const userRole = state.profile?.role;
-      // Master pode entrar em qualquer perfil. Gestor só entra como gestor. Gerente só como gerente.
-      if (userRole === 'master') {
-        // Master usa o perfil escolhido - fica armazenado para a sessão
-        toast(`Logado como ${accent.label}`, 'success');
-      } else if (userRole === 'gestor' && chosenRole === 'gerente') {
-        await signOut();
-        toast('Sua conta é de Gestor. Volte e selecione "Gestor".', 'error', 6000);
-        loadingBtn(submitBtn, false);
-        return;
-      } else if (userRole === 'gerente' && chosenRole === 'gestor') {
-        await signOut();
-        toast('Sua conta é de Gerente. Volte e selecione "Gerente".', 'error', 6000);
-        loadingBtn(submitBtn, false);
-        return;
-      } else if (!state.profile?.ativo) {
+
+      // Sem pré-escolha de role (tela /role removida).
+      // O role real do user no banco define a visão padrão; o toggle no header
+      // permite admin alternar pra visão Gerente depois.
+      // Bloqueia APENAS se profile existe E ativo=false (não bloqueia quando
+      // profile ainda não carregou - evita race condition).
+      if (state.profile && state.profile.ativo === false) {
         await signOut();
         toast('Conta desativada. Procure o administrador.', 'error', 6000);
         loadingBtn(submitBtn, false);
         return;
-      } else {
-        toast('Login realizado!', 'success');
       }
+      toast('Login realizado!', 'success');
       navigate('/', true);
     } catch (err) {
       toast(err.message || 'Falha no login', 'error');

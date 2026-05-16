@@ -15,6 +15,11 @@ export function setChosenLoginRole(role) {
 }
 
 export async function roleSelectView(_params, app) {
+  // Tela DESCONTINUADA - hoje vai direto pro login. Mantemos só pra absorver
+  // links/caches antigos que ainda apontem pra /role.
+  navigate('/login', true);
+  return;
+  // ----- código antigo abaixo (não roda mais) -----
   const themeBtn = el('button', {
     class: 'absolute top-4 right-4 p-2.5 rounded-full bg-bg-card border border-border hover:bg-bg-elev transition z-10',
     onclick: () => { toggleTheme(); app.innerHTML=''; roleSelectView({}, app); }
