@@ -71,10 +71,24 @@ async function agendaGerenteView(app) {
   const to   = new Date(today.getFullYear(), today.getMonth() + 7, 0); to.setHours(23,59,59);
 
   cal.innerHTML = '<div class="skeleton h-32"></div>';
+
+  // Carrega IDs do "meu time": eu + supervisores que reportam pra mim
+  // (gerente vê tudo do supervisor pra acompanhar; supervisor vê só dele)
+  const meuId = state.user.id;
+  let teamIds = [meuId];
+  if (state.profile?.role === 'gerente') {
+    const { data: subs } = await supabase
+      .from('profiles')
+      .select('id, nome')
+      .eq('gerente_supervisor_id', meuId)
+      .eq('ativo', true);
+    if (subs?.length) teamIds = [meuId, ...subs.map(s => s.id)];
+  }
+
   const { data, error } = await supabase
     .from('agendamentos')
-    .select('*')
-    .eq('gerente_id', state.user.id)
+    .select('*, profiles!agendamentos_gerente_id_fkey(nome, role)')
+    .in('gerente_id', teamIds)
     .gte('data_prevista', from.toISOString())
     .lte('data_prevista', to.toISOString())
     .order('data_prevista', { ascending: true });
@@ -354,6 +368,12 @@ async function agendaGerenteView(app) {
     const titulo = item.titulo || item.imobiliaria || item.empreendimento || tipo.label;
     const data = new Date(item.data_prevista);
 
+    // Chip do responsável quando NÃO é do próprio user (gerente vendo de supervisor)
+    const isMine = item.gerente_id === state.user.id;
+    const respChip = (!isMine && item.profiles?.nome)
+      ? el('span', { class: 'chip chip-purple text-[10px]' }, '👁️ ' + item.profiles.nome)
+      : null;
+
     const card = el('div', { class: 'card p-3 flex flex-col gap-2' });
     card.appendChild(el('div', { class: 'flex items-start gap-3' },
       el('div', { class: `activity-icon activity-${item.tipo}` },
@@ -363,6 +383,7 @@ async function agendaGerenteView(app) {
         el('div', { class: 'flex items-center gap-2 flex-wrap' },
           el('span', { class: 'font-semibold truncate' }, titulo),
           el('span', { class: `chip ${status.chip}` }, status.icon, ' ', status.label),
+          respChip,
         ),
         el('div', { class: 'text-xs text-fg-muted mt-0.5' },
           fmt.time(item.data_prevista), ' · ', tipo.label,
@@ -447,7 +468,7 @@ async function agendaGestorView(app) {
     el('option', { value: 'checkin' }, 'Check-ins'),
     el('option', { value: 'atendimento' }, 'Atendimentos'),
     el('option', { value: 'proposta' }, 'Propostas'),
-    el('option', { value: 'orulo' }, 'Órulo'),
+    el('option', { value: 'orulo' }, 'Órulo/DWV'),
     el('option', { value: 'outro' }, 'Outro'),
   );
   const gerenteSel = el('select', { class: 'select' },

@@ -106,7 +106,7 @@ function splash() {
 function authGuard(handler) {
   return async (params, app) => {
     if (!isLoggedIn()) {
-      navigate('/role', true);
+      navigate('/login', true);
       return;
     }
     if (needsPasswordSetup()) {
@@ -249,6 +249,6 @@ onStateChange(() => {
   const path = location.hash.slice(1) || '/';
   // Permite /setup-password sem sessão se houver erro de recovery
   if (!isLoggedIn() && path === '/setup-password' && recoveryState.error) return;
-  if (!isLoggedIn() && path !== '/role' && path !== '/login') navigate('/role', true);
+  if (!isLoggedIn() && path !== '/login' && path !== '/role') navigate('/login', true);
   else if (isLoggedIn() && needsPasswordSetup() && path !== '/setup-password') navigate('/setup-password', true);
 });

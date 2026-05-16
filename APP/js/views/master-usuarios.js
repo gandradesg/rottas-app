@@ -74,8 +74,15 @@ function userRow(p) {
           p.telefone || 'sem telefone',
         ),
       ),
-      // Master edita Master/Gestor. Gestor edita Gerente ou a si mesmo.
-      (isMaster() || p.role === 'gerente' || p.id === state.profile?.id) && el('button', {
+      // Quem pode editar este profile?
+      // - Master/Gestor: tudo (RLS valida)
+      // - Superintendente: gerentes/supervisores/gestor_regional do seu estado
+      // - Gestor Regional: gerentes/supervisores da sua cidade
+      // - O próprio user: ele mesmo
+      // Como a RLS no banco já garante segurança, mostramos o botão sempre que faz
+      // sentido na UI - se a edição falhar por permissão, o user vê o erro.
+      (isMaster() || ['gestor','superintendente','gestor_regional'].includes(state.profile?.role)
+        || p.id === state.profile?.id) && el('button', {
         class: 'p-2 rounded-lg hover:bg-bg-elev transition flex-shrink-0',
         onclick: () => openEditModal(p)
       }, icon('edit', 18, 'text-fg-muted')),
@@ -254,6 +261,9 @@ function openEditModal(p) {
       estado: v.estado,
       role: v.role,
       permissoes: v.permissoes || {},
+      estados_acesso: v.estados_acesso || [],
+      cidades_acesso: v.cidades_acesso || [],
+      gerente_supervisor_id: v.gerente_supervisor_id || null,
       ativo,
     }).eq('id', p.id).select().then(({ data, error }) => {
       if (error) {

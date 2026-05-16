@@ -73,7 +73,10 @@ export function shell(content, opts = {}) {
     const view = activeViewRole();
     let items;
     if (view === 'supervisor') {
+      // Supervisor TAMBÉM tem Agenda - vê o que o Gerente atribuiu pra ele
+      // (mas não pode CRIAR agendamentos - só o Gerente planeja)
       items = [
+        { p: '/',           label: 'Agenda',     ic: 'calendar'   },
         { p: '/inicio',     label: 'Início',     ic: 'home'       },
         { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
         { p: '/registrar',  label: 'Registrar',  ic: 'plus', primary: true },

@@ -6,13 +6,10 @@ import { getChosenLoginRole, setChosenLoginRole } from './role-select.js';
 import { state } from '../supabase.js';
 
 export async function loginView(_params, app) {
-  const chosenRole = getChosenLoginRole();
-  if (!chosenRole) { navigate('/role', true); return; }
-
-  const isGestor = chosenRole === 'gestor';
-  const accent = isGestor
-    ? { bg: 'rgba(242,107,34,0.12)', fg: '#F26B22', label: 'Gestor', ic: 'barChart' }
-    : { bg: 'rgba(59,130,246,0.12)', fg: '#3B82F6', label: 'Gerente de Plataforma', ic: 'mapPin' };
+  // Login simplificado - sem pré-escolha de perfil. O role real do user define a visão.
+  // Roles admin podem alternar pra "visão Gerente" pelo toggle no header depois.
+  const accent = { bg: 'rgba(242,107,34,0.12)', fg: '#F26B22', label: 'Plataforma de Gerentes', ic: 'barChart' };
+  const isGestor = false;
 
   const form = el('form', { class: 'flex flex-col gap-4 w-full' });
   const emailInput = el('input', { class: 'input', type: 'email', name: 'email', required: true,
@@ -80,10 +77,7 @@ export async function loginView(_params, app) {
     onclick: () => { toggleTheme(); }
   }, icon('sun', 18));
 
-  const backBtn = el('button', {
-    class: 'absolute top-4 left-4 p-2.5 rounded-full bg-bg-card border border-border hover:bg-bg-elev transition flex items-center gap-2',
-    onclick: () => { setChosenLoginRole(null); navigate('/role', true); }
-  }, icon('arrowLeft', 18), el('span', { class: 'text-sm pr-1' }, 'Trocar'));
+  const backBtn = null; // Removido - sem tela de role-select
 
   const layout = el('div', { class: 'min-h-screen flex flex-col items-center justify-center p-6 relative' },
     backBtn, themeBtn,

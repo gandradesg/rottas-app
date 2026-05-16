@@ -188,30 +188,63 @@ export async function atividadeFormView(params, app) {
       class: 'input', type: 'number', name: 'qtd_pessoas', min: 1, max: 999,
       placeholder: 'Ex: 12', value: initial?.qtd_pessoas || '',
     });
-    // Multi-select de imobiliárias participantes
+    // Multi-select de imobiliárias participantes COM busca
     const initialImobsExtras = Array.isArray(initial?.imobiliarias_participantes)
       ? initial.imobiliarias_participantes : [];
     const imobsCheck = {};
     state.imobiliarias.forEach(im => { imobsCheck[im.nome] = initialImobsExtras.includes(im.nome); });
-    const imobsMulti = el('div', { class: 'card p-2 max-h-48 overflow-y-auto flex flex-col gap-1' },
-      ...(state.imobiliarias.length === 0
-        ? [el('span', { class: 'text-sm text-fg-muted' }, 'Nenhuma imobiliária cadastrada.')]
-        : state.imobiliarias.map(im => {
-          const cb = el('input', { type: 'checkbox', checked: imobsCheck[im.nome] });
-          cb.addEventListener('change', () => { imobsCheck[im.nome] = cb.checked; });
-          return el('label', { class: 'flex items-center gap-2 p-1.5 rounded hover:bg-bg-elev cursor-pointer text-sm' },
-            cb, el('span', {}, im.nome));
-        }))
-    );
+
+    const imobsSearchInput = el('input', {
+      type: 'text',
+      class: 'input',
+      placeholder: '🔍 Buscar imobiliária...',
+      autocomplete: 'off',
+    });
+    const imobsListEl = el('div', { class: 'max-h-48 overflow-y-auto flex flex-col gap-1 mt-2' });
+    function renderImobsList() {
+      const f = (imobsSearchInput.value || '').trim().toLowerCase();
+      imobsListEl.innerHTML = '';
+      const filtered = state.imobiliarias.filter(im =>
+        !f || im.nome.toLowerCase().includes(f)
+      );
+      if (state.imobiliarias.length === 0) {
+        imobsListEl.appendChild(el('span', { class: 'text-sm text-fg-muted px-2 py-1' }, 'Nenhuma imobiliária cadastrada.'));
+        return;
+      }
+      if (filtered.length === 0) {
+        imobsListEl.appendChild(el('span', { class: 'text-sm text-fg-muted px-2 py-1' }, 'Nenhuma encontrada.'));
+        return;
+      }
+      // Marcadas primeiro (já selecionadas), depois alfabético
+      filtered.sort((a,b) => {
+        const aChk = imobsCheck[a.nome] ? 0 : 1;
+        const bChk = imobsCheck[b.nome] ? 0 : 1;
+        return aChk - bChk || a.nome.localeCompare(b.nome);
+      });
+      filtered.forEach(im => {
+        const cb = el('input', { type: 'checkbox', checked: !!imobsCheck[im.nome] });
+        cb.addEventListener('change', () => { imobsCheck[im.nome] = cb.checked; });
+        imobsListEl.appendChild(el('label', {
+          class: 'flex items-center gap-2 p-1.5 rounded hover:bg-bg-elev cursor-pointer text-sm'
+        }, cb, el('span', {},
+          im.nome,
+          (im.cidade || im.estado) && el('span', { class: 'text-xs text-fg-muted ml-2' },
+            '· ' + [im.cidade, im.estado].filter(Boolean).join(' · '))
+        )));
+      });
+    }
+    imobsSearchInput.addEventListener('input', renderImobsList);
+    const imobsMulti = el('div', { class: 'card p-2' }, imobsSearchInput, imobsListEl);
+    renderImobsList();
 
     const treinamentoBox = el('div', {
       class: 'flex flex-col gap-3 hidden',
       style: { padding: '12px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px' },
     },
       el('div', { class: 'text-xs font-bold uppercase tracking-wider text-warning' }, '🎓 Detalhes do treinamento'),
-      field('Local do treinamento', localTreinamentoSel, { help: 'Onde o treinamento aconteceu' }),
-      field('Quantidade de pessoas', qtdPessoasInput),
-      field('Imobiliárias participantes', imobsMulti, { help: 'Marque todas as imobiliárias que enviaram corretores' }),
+      field('Local do treinamento', localTreinamentoSel, { required: true, help: 'Onde o treinamento aconteceu' }),
+      field('Quantidade de pessoas', qtdPessoasInput, { required: true }),
+      field('Imobiliárias participantes', imobsMulti, { required: true, help: 'Marque todas as imobiliárias que enviaram corretores' }),
     );
 
     // Reage a mudança no motivo - se virar Treinamento, abre o box
@@ -322,7 +355,16 @@ export async function atividadeFormView(params, app) {
 
   // ===== ÓRULO/DWV (unificado - mesma plataforma conceitualmente, motivos únicos) =====
   if (tipo === 'orulo' || tipo === 'dwv') {
+    // Select de plataforma (Órulo PR ou DWV SC) - texto livre salvo em motivo_contato
+    // ou num campo dedicado. Vamos usar `plataforma` numa coluna nova OU como tag
+    // dentro de observações. Pra simplicidade, salva como prefixo do motivo_contato.
+    const plataformaSel = el('select', { class: 'select', name: 'plataforma', required: true },
+      el('option', { value: '' }, 'Selecione a plataforma...'),
+      el('option', { value: 'Órulo', selected: (initial?.plataforma || '') === 'Órulo' }, 'Órulo (PR)'),
+      el('option', { value: 'DWV', selected: (initial?.plataforma || '') === 'DWV' }, 'DWV (SC)'),
+    );
     form.append(
+      field('Plataforma', plataformaSel, { required: true, help: 'Por qual plataforma o contato veio' }),
       field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
@@ -387,9 +429,17 @@ export async function atividadeFormView(params, app) {
         if (!payload.motivo_visita) throw new Error('Motivo da visita é obrigatório');
         // Campos extras de treinamento (quando motivo = "Treinamento")
         const trei = form._treinamentoData ? form._treinamentoData() : {};
-        if (trei.local_treinamento !== undefined) payload.local_treinamento = trei.local_treinamento;
-        if (trei.qtd_pessoas !== undefined) payload.qtd_pessoas = trei.qtd_pessoas;
-        if (trei.imobiliarias_participantes !== undefined) payload.imobiliarias_participantes = trei.imobiliarias_participantes;
+        if (trei.local_treinamento !== undefined) {
+          // Validação: quando é treinamento, os 3 campos extras são obrigatórios
+          if (!trei.local_treinamento) throw new Error('Treinamento: informe o Local do treinamento');
+          if (!trei.qtd_pessoas) throw new Error('Treinamento: informe a Quantidade de pessoas');
+          if (!Array.isArray(trei.imobiliarias_participantes) || trei.imobiliarias_participantes.length === 0) {
+            throw new Error('Treinamento: marque pelo menos uma Imobiliária participante');
+          }
+          payload.local_treinamento = trei.local_treinamento;
+          payload.qtd_pessoas = trei.qtd_pessoas;
+          payload.imobiliarias_participantes = trei.imobiliarias_participantes;
+        }
         const files = photoPickerEl?.getFiles?.() || [];
         loadingBtn(submitBtn, true);
 
@@ -465,6 +515,10 @@ export async function atividadeFormView(params, app) {
       }
 
       if (tipo === 'orulo' || tipo === 'dwv') {
+        payload.tipo = 'orulo'; // canonicalizar (DWV é apenas label visual da plataforma)
+        const plataforma = (fd.get('plataforma')||'').toString().trim();
+        if (!plataforma) throw new Error('Selecione a plataforma (Órulo ou DWV)');
+        payload.plataforma = plataforma;
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();

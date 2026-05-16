@@ -1,8 +1,25 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.9.2';
+export const APP_VERSION = '0.9.3';
 export const APP_BUILD_DATE = '2026-05-16';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.3',
+    date: '16/05/2026',
+    changes: [
+      'BUG FIX: Gestor Regional - cidades de acesso agora salvam corretamente (Londrina, etc)',
+      'Check-in TREINAMENTO: campos Local + Quantidade + Imobiliárias agora são obrigatórios',
+      'Imobiliárias participantes: campo de busca pra filtrar a lista (ordenadas com marcadas no topo)',
+      'Órulo → renomeado para "Órulo/DWV" em todo o app (cards, KPIs, filtros, agenda)',
+      'Atividade Órulo/DWV: novo campo obrigatório "Plataforma" (Órulo PR ou DWV SC) no início do form',
+      'Login simplificado: tela de pré-escolha (Gestor/Gerente) removida - vai direto pro login',
+      'Toggle de visão no header continua disponível pra admins alternarem entre visão própria e Gerente',
+      'Supervisor agora tem aba Agenda - vê os agendamentos que o Gerente atribuiu',
+      'Gerente vê na própria agenda os agendamentos dos seus supervisores (chip 👁️ Nome)',
+      'Hierarquia RLS: Gestor Regional vê tudo das cidades dele, Superintendente vê tudo dos estados dele',
+      'Gestor Regional / Superintendente podem editar perfis dos subordinados (RLS valida)',
+    ],
+  },
   {
     version: '0.9.2',
     date: '16/05/2026',

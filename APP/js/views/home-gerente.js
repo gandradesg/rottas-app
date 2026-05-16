@@ -310,8 +310,8 @@ function activityRow(a) {
       if (a.unidade) meta = `Un. ${a.unidade}` + (meta ? ` · ${meta}`:'');
       break;
     case 'orulo':
-      title = a.empreendimento || a.imobiliaria || 'Órulo';
-      chips.push({ label: 'Órulo', cls: 'chip-green' });
+      title = a.empreendimento || a.imobiliaria || 'Órulo/DWV';
+      chips.push({ label: 'Órulo/DWV', cls: 'chip-green' });
       if (a.motivo_contato) meta = a.motivo_contato;
       break;
   }
