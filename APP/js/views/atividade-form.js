@@ -320,10 +320,8 @@ export async function atividadeFormView(params, app) {
     );
   }
 
-  // ===== ÓRULO / DWV (mesma estrutura, motivos vêm de tabela diferente) =====
+  // ===== ÓRULO/DWV (unificado - mesma plataforma conceitualmente, motivos únicos) =====
   if (tipo === 'orulo' || tipo === 'dwv') {
-    const motivosList = tipo === 'dwv' ? state.motivosDwv : state.motivosOrulo;
-    const labelPlataforma = tipo === 'dwv' ? 'DWV' : 'Órulo';
     form.append(
       field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
@@ -333,8 +331,8 @@ export async function atividadeFormView(params, app) {
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: state.empreendimentos, value: initial?.empreendimento, required: true,
       }), { required: true }),
-      field(`Motivo do contato (${labelPlataforma})`, creatableSelect({
-        name: 'motivo_contato', items: motivosList, value: initial?.motivo_contato, required: true,
+      field('Motivo do contato', creatableSelect({
+        name: 'motivo_contato', items: state.motivosOrulo, value: initial?.motivo_contato, required: true,
       }), { required: true }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),

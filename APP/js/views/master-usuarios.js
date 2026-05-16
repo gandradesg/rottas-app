@@ -364,9 +364,24 @@ function userFormFields(p) {
   const estadosHelpEl = estadosBox.querySelector('p');
 
   // === Multi-cidade (gestor_regional) ===
+  // Lista vem dos empreendimentos cadastrados (campos cidade+estado).
+  // Dedup case-insensitive, ordenado por estado→cidade.
+  const cidadesFromEmps = [];
+  const seenCity = new Set();
+  (state.empreendimentos || []).forEach(e => {
+    if (!e.cidade) return;
+    const key = (e.cidade + '|' + (e.estado || '')).toLowerCase();
+    if (seenCity.has(key)) return;
+    seenCity.add(key);
+    cidadesFromEmps.push({ nome: e.cidade, estado: e.estado || '' });
+  });
+  cidadesFromEmps.sort((a,b) =>
+    (a.estado||'').localeCompare(b.estado||'') || a.nome.localeCompare(b.nome)
+  );
+
   const initialCidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
   const cidadesCheck = {};
-  (state.cidades || []).forEach(c => {
+  cidadesFromEmps.forEach(c => {
     const key = c.nome + '|' + c.estado;
     cidadesCheck[key] = initialCidades.some(x => (typeof x === 'string' ? x : x.nome) === c.nome);
   });
@@ -374,16 +389,16 @@ function userFormFields(p) {
     el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
       '🏙️ Cidades de acesso'),
     el('p', { class: 'text-xs text-fg-muted mb-2' },
-      'Gestor Regional vê tudo das cidades marcadas. Cadastre novas em Listas → Cidades.'),
+      'Gestor Regional vê tudo das cidades marcadas. Lista puxa das cidades dos empreendimentos cadastrados.'),
     el('div', { class: 'grid grid-cols-2 gap-2 max-h-60 overflow-y-auto' },
-      ...((state.cidades || []).length === 0
-        ? [el('span', { class: 'text-sm text-fg-muted col-span-2' }, 'Nenhuma cidade cadastrada. Cadastre em Listas.')]
-        : (state.cidades || []).map(c => {
+      ...(cidadesFromEmps.length === 0
+        ? [el('span', { class: 'text-sm text-fg-muted col-span-2' }, 'Nenhuma cidade encontrada. Cadastre empreendimentos com cidade+estado preenchidos.')]
+        : cidadesFromEmps.map(c => {
           const key = c.nome + '|' + c.estado;
           const cb = el('input', { type: 'checkbox', checked: cidadesCheck[key] });
           cb.addEventListener('change', () => { cidadesCheck[key] = cb.checked; });
           return el('label', { class: 'flex items-center gap-2 p-2 rounded-lg hover:bg-bg-elev cursor-pointer' },
-            cb, el('span', { class: 'text-sm' }, c.nome, el('span', { class: 'text-xs text-fg-muted ml-1' }, c.estado)));
+            cb, el('span', { class: 'text-sm' }, c.nome, c.estado && el('span', { class: 'text-xs text-fg-muted ml-1' }, c.estado)));
         }))
     ),
   );
@@ -482,9 +497,9 @@ function userFormFields(p) {
       } else {
         v.estados_acesso = [];
       }
-      // Multi-cidade (gestor_regional)
+      // Multi-cidade (gestor_regional): vem da lista derivada de empreendimentos
       if (chosenRole === 'gestor_regional') {
-        v.cidades_acesso = (state.cidades || [])
+        v.cidades_acesso = cidadesFromEmps
           .filter(c => cidadesCheck[c.nome + '|' + c.estado])
           .map(c => c.nome);
       } else {

@@ -1,8 +1,21 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.9.1';
-export const APP_BUILD_DATE = '2026-05-12';
+export const APP_VERSION = '0.9.2';
+export const APP_BUILD_DATE = '2026-05-16';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.2',
+    date: '16/05/2026',
+    changes: [
+      'Órulo e DWV unificados como um único tipo "Órulo/DWV" (uma plataforma conceitual, motivos compartilhados)',
+      'Lista "Motivos DWV" removida (motivos foram migrados para Motivos Órulo/DWV automaticamente)',
+      'Cidades de acesso (Gestor Regional) agora vêm dinâmicas dos empreendimentos cadastrados - sem necessidade de cadastro separado',
+      'Aba "Cidades" removida de Listas (deixou de ser necessária)',
+      'Imobiliárias agora têm cidade e estado obrigatórios no cadastro',
+      'Nome de imobiliária sempre em UPPERCASE - você digita como quiser, o sistema normaliza',
+      'Ao cadastrar nova imobiliária durante check-in (gerente/supervisor), abre modal pedindo cidade+estado',
+    ],
+  },
   {
     version: '0.9.1',
     date: '12/05/2026',
@@ -349,23 +362,18 @@ export const TERMOMETRO_OPTIONS = [
   { value: 'frio',   label: 'Frio',   color: 'blue',   icon: '❄️' },
 ];
 
+// Órulo (PR) e DWV (SC) são a mesma coisa conceitualmente - plataformas de captação.
+// Salvamos sempre tipo='orulo' no banco. A UI mostra "Órulo/DWV" pra clareza visual.
 export const TIPO_ATIVIDADE = {
   checkin:      { label: 'Check-in',    icon: '📍', color: 'blue'   },
   atendimento:  { label: 'Atendimento', icon: '👥', color: 'purple' },
   proposta:     { label: 'Proposta',    icon: '📄', color: 'yellow' },
-  orulo:        { label: 'Órulo',       icon: '🌐', color: 'green'  },
-  dwv:          { label: 'DWV',         icon: '🌐', color: 'green'  },
+  orulo:        { label: 'Órulo/DWV',   icon: '🌐', color: 'green'  },
 };
 
-// Tipos de captação por estado:
-//   PR -> Órulo, SC -> DWV
-// Helper retorna o tipo correto baseado no estado do gerente
-export const TIPO_CAPTACAO_POR_ESTADO = {
-  PR: 'orulo',
-  SC: 'dwv',
-};
-export function getTipoCaptacao(estado) {
-  return TIPO_CAPTACAO_POR_ESTADO[estado] || 'orulo';
+// Tipo de captação - sempre 'orulo' agora (DWV é o mesmo registro, apenas label visual)
+export function getTipoCaptacao(_estado) {
+  return 'orulo';
 }
 
 // Hierarquia de roles (do mais baixo ao mais alto)

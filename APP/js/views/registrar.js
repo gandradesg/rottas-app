@@ -5,23 +5,13 @@ import { navigate } from '../router.js';
 import { state } from '../supabase.js';
 import { getTipoCaptacao } from '../config.js';
 
-// Captação muda conforme o estado do gerente: PR=Órulo, SC=DWV
-function captacaoCard() {
-  const estado = state.profile?.estado;
-  const id = getTipoCaptacao(estado);
-  const label = id === 'dwv' ? 'DWV' : 'Órulo';
-  const desc = id === 'dwv'
-    ? 'Contato via plataforma DWV'
-    : 'Contato via plataforma Órulo';
-  return { id, title: label, desc, ic: 'globe', bg: 'rgba(16,185,129,0.10)', fg: '#10B981' };
-}
-
+// Tipos disponíveis pra registro. Órulo/DWV é o mesmo card (plataformas de captação).
 function getTipos() {
   return [
     { id: 'checkin',     title: 'Check-in',     desc: 'Visita à imobiliária com localização',  ic: 'mapPin',   bg: 'rgba(59,130,246,0.10)',  fg: '#3B82F6' },
     { id: 'atendimento', title: 'Atendimento',  desc: 'Visita com cliente em apartamento',     ic: 'users',    bg: 'rgba(139,92,246,0.10)',  fg: '#8B5CF6' },
     { id: 'proposta',    title: 'Proposta',     desc: 'Proposta enviada ou venda fechada',     ic: 'fileText', bg: 'rgba(245,158,11,0.10)',  fg: '#F59E0B' },
-    captacaoCard(),
+    { id: 'orulo',       title: 'Órulo/DWV',    desc: 'Contato via plataforma Órulo (PR) ou DWV (SC)', ic: 'globe', bg: 'rgba(16,185,129,0.10)', fg: '#10B981' },
   ];
 }
 

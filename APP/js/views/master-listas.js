@@ -6,7 +6,19 @@ import { supabase, loadLists, state } from '../supabase.js';
 // Cada tab pode ter `extraFields` (lista de campos além do `nome`)
 // e `displayExtra(item)` para mostrar metadado adicional na linha
 const TABS = [
-  { id: 'imobiliarias',    table: 'imobiliarias',    label: 'Imobiliárias',      stateKey: 'imobiliarias' },
+  {
+    id: 'imobiliarias',    table: 'imobiliarias',    label: 'Imobiliárias',      stateKey: 'imobiliarias',
+    extraFields: [
+      { key: 'cidade', label: 'Cidade', type: 'text', placeholder: 'Ex: Curitiba', required: true },
+      { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'], required: true },
+    ],
+    // Import CSV: "Nome;Cidade;Estado"
+    importColumns: ['nome', 'cidade', 'estado'],
+    displayExtra: (item) => (item.cidade || item.estado)
+      ? el('span', { class: 'text-xs text-fg-muted' },
+          '📍 ' + [item.cidade, item.estado].filter(Boolean).join(' · '))
+      : null,
+  },
   { id: 'locais_visita',   table: 'locais_visita',   label: 'Locais de visita',  stateKey: 'locaisVisita' },
   {
     id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos',
@@ -28,17 +40,7 @@ const TABS = [
     },
   },
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
-  { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo',     stateKey: 'motivosOrulo' },
-  { id: 'motivos_dwv',     table: 'motivos_dwv',     label: 'Motivos DWV',       stateKey: 'motivosDwv' },
-  {
-    id: 'cidades',         table: 'cidades',         label: 'Cidades',           stateKey: 'cidades',
-    extraFields: [
-      { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'], required: true }
-    ],
-    // Aceita CSV: "Nome;PR" ou "Nome,SC"
-    importColumns: ['nome', 'estado'],
-    displayExtra: (item) => el('span', { class: 'text-xs text-fg-muted ml-2' }, item.estado || ''),
-  },
+  { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo/DWV', stateKey: 'motivosOrulo' },
 ];
 
 export async function masterListasView(_params, app) {
