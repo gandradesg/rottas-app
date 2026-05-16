@@ -55,7 +55,17 @@ export async function loginView(_params, app) {
         return;
       }
       toast('Login realizado!', 'success');
+      // Fallback robusto: navigate primeiro (SPA), se em 300ms ainda estiver
+      // na tela de login força reload completo. Cobre casos de cache antigo
+      // ou middleware travando o redirect.
       navigate('/', true);
+      setTimeout(() => {
+        const stillOnLogin = (location.hash || '').includes('login');
+        if (stillOnLogin) {
+          console.warn('[login] navigate falhou, forçando reload...');
+          location.replace('/');
+        }
+      }, 300);
     } catch (err) {
       toast(err.message || 'Falha no login', 'error');
       loadingBtn(submitBtn, false);

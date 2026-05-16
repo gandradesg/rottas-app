@@ -29,12 +29,19 @@ export function detectRecoveryFromUrl() {
 }
 
 export async function signIn(email, password) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  state.user = data.user;
-  await Promise.all([loadProfile(), loadLists()]);
-  emitStateChange();
-  return data;
+  // Suprime o listener de auth durante o signIn manual pra evitar
+  // dupla execução de loadProfile/loadLists (a função aqui já carrega).
+  authGuards.suppressed = true;
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    state.user = data.user;
+    await Promise.all([loadProfile(), loadLists()]);
+    emitStateChange();
+    return data;
+  } finally {
+    authGuards.suppressed = false;
+  }
 }
 
 // Logout AGRESSIVO - limpa TODO storage Supabase + redireciona

@@ -57,22 +57,22 @@ export async function loadProfile() {
 
 // Helper: carrega todas as listas gerenciadas pelo master
 export async function loadLists() {
-  const [imob, emp, mv, mo, md, lv, ci] = await Promise.all([
-    supabase.from('imobiliarias').select('*').order('nome'),
-    supabase.from('empreendimentos').select('*').order('nome'),
-    supabase.from('motivos_visita').select('*').order('nome'),
-    supabase.from('motivos_orulo').select('*').order('nome'),
-    supabase.from('motivos_dwv').select('*').order('nome'),
-    supabase.from('locais_visita').select('*').order('nome'),
-    supabase.from('cidades').select('*').order('estado').order('nome'),
+  // 5 queries em paralelo (cortou motivos_dwv unificado em motivos_orulo,
+  // e cidades que não é mais necessária)
+  const [imob, emp, mv, mo, lv] = await Promise.all([
+    supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome'),
+    supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url').order('nome'),
+    supabase.from('motivos_visita').select('id, nome').order('nome'),
+    supabase.from('motivos_orulo').select('id, nome').order('nome'),
+    supabase.from('locais_visita').select('id, nome').order('nome'),
   ]);
   state.imobiliarias    = imob.data    || [];
   state.empreendimentos = emp.data     || [];
   state.motivosVisita   = mv.data      || [];
   state.motivosOrulo    = mo.data      || [];
-  state.motivosDwv      = md.data      || [];
+  state.motivosDwv      = mo.data      || []; // alias - unificado
   state.locaisVisita    = lv.data      || [];
-  state.cidades         = ci.data      || [];
+  state.cidades         = [];          // descontinuado
   emitStateChange();
 }
 

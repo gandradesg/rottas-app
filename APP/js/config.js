@@ -1,8 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.9.3';
+export const APP_VERSION = '0.9.4';
 export const APP_BUILD_DATE = '2026-05-16';
 
 export const CHANGELOG = [
+  {
+    version: '0.9.4',
+    date: '16/05/2026',
+    changes: [
+      'PERFORMANCE: RLS Postgres reescritas com funções STABLE/SECURITY DEFINER cacheadas (10x mais rápido)',
+      'PERFORMANCE: loadLists reduziu de 7 para 5 queries em paralelo, só colunas necessárias',
+      'PERFORMANCE: signIn não duplica mais loadProfile/loadLists (suprime listener durante login)',
+      'Indexes adicionados em atividades.gerente_id, agendamentos.gerente_id, profiles.role',
+      'Login: fallback robusto - se navigate falhar em 300ms, força reload pra liberar de cache zumbi',
+    ],
+  },
   {
     version: '0.9.3',
     date: '16/05/2026',
