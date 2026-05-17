@@ -1,10 +1,10 @@
 /* ============================================================
-   Rottas App — Variáveis de tema (claro/escuro) e estilos base
+   Rottas App - Variáveis de tema (claro/escuro) e estilos base
    ============================================================ */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* Tema claro — creme/laranja inspirado no site Rottas */
+  /* Tema claro - creme/laranja inspirado no site Rottas */
   --bg:        255 248 240;   /* #FFF8F0 */
   --bg-elev:  255 255 255;
   --bg-card:  255 255 255;
@@ -15,7 +15,7 @@
 }
 
 .dark {
-  /* Tema escuro — navy profundo + laranja */
+  /* Tema escuro - navy profundo + laranja */
   --bg:        13  19  32;    /* #0D1320 */
   --bg-elev:   22  29  46;
   --bg-card:   28  36  56;

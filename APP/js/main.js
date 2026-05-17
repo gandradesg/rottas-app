@@ -91,6 +91,7 @@ import { masterUsuariosView } from './views/master-usuarios.js';
 import { masterListasView } from './views/master-listas.js';
 import { agendaView } from './views/agenda.js';
 import { agendaFormView } from './views/agenda-form.js';
+import { dashboardView } from './views/dashboard.js';
 
 // Splash screen rápido enquanto auth carrega
 function splash() {
@@ -186,6 +187,7 @@ route('/inicio',                   inicioGerenteView);
 route('/historico',                authGuard(historicoView));
 route('/usuarios',                 permGuard('gerenciar_usuarios', masterUsuariosView));
 route('/listas',                   permGuard('gerenciar_listas',   masterListasView));
+route('/dashboard',                authGuard(dashboardView));
 route('/sobre',                    authGuard((p, a) => import('./views/sobre.js').then(m => m.sobreView(p, a))));
 
 // Boot

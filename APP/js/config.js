@@ -1,8 +1,24 @@
 // Configuração da aplicação
-export const APP_VERSION = '0.9.4';
-export const APP_BUILD_DATE = '2026-05-16';
+export const APP_VERSION = '1.0.0';
+export const APP_BUILD_DATE = '2026-05-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.0.0',
+    date: '17/05/2026',
+    changes: [
+      'NOVO: Dashboard Analítico completo com 6 KPIs (VGV Vendas, VGV Propostas, Conv. Atend→Prop, Conv. Prop→Venda, Pace Visitas, Pace Propostas)',
+      'NOVO: Gráfico de visitas por dia (linha temporal com Chart.js)',
+      'NOVO: Funil de conversão visual (Visitas → Propostas → Vendas)',
+      'NOVO: 5 rankings intercambiáveis — Gerente, Estado, Cidade, Empreendimento, Imobiliária',
+      'NOVO: Filtros globais — Período (Hoje/7d/30d/90d/Tudo), Estado, Cidade, Empreendimento, Gerente',
+      'NOVO: Pace = volume atual vs período anterior proporcional — verde ≥100%, amarelo 80-100%, vermelho <80%',
+      'NOVO: Histórico de snapshots (últimos 20) salvo a cada Atualizar',
+      'NOVO: Chat IA com Google Gemini Flash (gratuito) — analisa KPIs e responde perguntas em PT-BR',
+      'NOVO: Acesso por role — Gerente/Supervisor veem apenas seus dados; filtros respeitam hierarquia',
+      'Dashboard disponível no bottom nav admin como "Dashboard" (ícone trendingUp)',
+    ],
+  },
   {
     version: '0.9.4',
     date: '16/05/2026',
