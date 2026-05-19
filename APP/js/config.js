@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.1';
+export const APP_VERSION = '1.0.2';
 export const APP_BUILD_DATE = '2026-05-19';
 
 export const CHANGELOG = [
+  {
+    version: '1.0.2',
+    date: '19/05/2026',
+    changes: [
+      'Botão "Dashboard" no header do app — atalho para a página /dashboard (apenas Master/Gestor/Superintendente/Gestor Regional)',
+      'Botão fica ao lado do toggle Master/Gerente com destaque laranja gradient',
+    ],
+  },
   {
     version: '1.0.1',
     date: '19/05/2026',

@@ -32,6 +32,26 @@ export function shell(content, opts = {}) {
     );
   }
 
+  // Botão Dashboard (pagina externa /dashboard) - aparece pra roles admin
+  // Master, Gestor, Superintendente, Gestor Regional veem; demais nao tem acesso
+  let dashboardBtn = null;
+  const adminRoles = ['master', 'gestor', 'superintendente', 'gestor_regional'];
+  if (adminRoles.includes(state.profile?.role) && !back) {
+    dashboardBtn = el('button', {
+      class: 'btn-sm flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition',
+      style: {
+        background: 'linear-gradient(135deg, #F26B22, #D5530F)',
+        color: '#ffffff',
+        boxShadow: '0 3px 10px rgba(242,107,34,0.25)',
+      },
+      title: 'Abrir Dashboard Analitico',
+      onclick: () => { window.location.href = '/dashboard'; },
+    },
+      icon('trendingUp', 12),
+      'Dashboard'
+    );
+  }
+
   // Header
   const header = el('header', { class: 'sticky top-0 z-30 glass border-b border-border' },
     el('div', { class: 'max-w-screen-md mx-auto px-4 py-3 flex items-center gap-3' },
@@ -44,7 +64,8 @@ export function shell(content, opts = {}) {
           : el('h1', { class: 'text-base font-bold' }, 'ROTTAS', el('span', { class: 'text-rottas-500 ml-1' }, '•')),
         subtitle && el('p', { class: 'text-xs text-fg-muted truncate' }, subtitle),
       ),
-      el('div', { class: 'flex items-center gap-1' },
+      el('div', { class: 'flex items-center gap-1.5' },
+        dashboardBtn,
         roleToggle,
         ...(headerActions || []),
         el('button', {
