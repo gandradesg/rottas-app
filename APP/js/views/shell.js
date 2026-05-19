@@ -92,7 +92,6 @@ export function shell(content, opts = {}) {
       // Visao administrativa: gestor, master, superintendente, gestor_regional
       items = [];
       if (canManageAgenda()) items.push({ p: '/', label: 'Agenda', ic: 'calendar' });
-      items.push({ p: '/dashboard',  label: 'Dashboard', ic: 'trendingUp' });
       items.push({ p: '/painel',     label: 'Painel',    ic: 'barChart' });
       items.push({ p: '/historico',  label: 'Histórico', ic: 'fileText' });
       if (can('gerenciar_usuarios')) items.push({ p: '/usuarios', label: 'Usuários', ic: 'users' });

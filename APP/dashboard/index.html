@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0F1525" />
+  <title>Dashboard Analítico · Imob Rottas</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=imob1" />
+  <link rel="apple-touch-icon" href="/assets/app-icon-512.png?v=080" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            rottas: { 50:'#fff4ed', 100:'#ffe6d5', 200:'#ffc7a4', 300:'#ffa76b',
+                      400:'#ff8633', 500:'#F26B22', 600:'#D5530F', 700:'#b14010',
+                      800:'#8e3514', 900:'#742e15' },
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #0F1525; --bg-card: #161e33; --bg-elev: #1d2640;
+      --border: rgba(255,255,255,0.07); --fg: #e2e8f0; --fg-muted: #94a3b8;
+      --accent: #F26B22; --green: #10B981; --yellow: #F59E0B; --red: #EF4444;
+      --sb-width: 230px;
+    }
+    html.light {
+      --bg: #f7f8fb; --bg-card: #ffffff; --bg-elev: #f1f3f8;
+      --border: rgba(15,21,37,0.08); --fg: #0f172a; --fg-muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    html, body { background: var(--bg); color: var(--fg); font-family: 'Inter', system-ui, sans-serif; }
+    body { min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+    /* Cards */
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; }
+    .card-elev { background: var(--bg-elev); }
+
+    /* Sidebar */
+    .sb { width: var(--sb-width); background: var(--bg-card); border-right: 1px solid var(--border);
+          position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; display: flex; flex-direction: column; transition: transform .25s; }
+    .sb-link { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px;
+               color: var(--fg-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
+    .sb-link:hover { background: var(--bg-elev); color: var(--fg); }
+    .sb-link.active { background: linear-gradient(135deg, #F26B22, #D5530F); color: white; box-shadow: 0 4px 14px rgba(242,107,34,0.25); }
+    .sb-link svg { flex-shrink: 0; }
+    .sb-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+                        color: var(--fg-muted); padding: 12px 12px 6px; font-weight: 700; }
+
+    /* Topbar */
+    .topbar { height: 62px; background: var(--bg-card); border-bottom: 1px solid var(--border);
+              display: flex; align-items: center; gap: 10px; padding: 0 20px; position: sticky; top: 0; z-index: 30; backdrop-filter: blur(8px); }
+
+    /* Inputs */
+    .ctrl { background: var(--bg-elev); border: 1px solid var(--border); color: var(--fg);
+            border-radius: 8px; padding: 6px 10px; font-size: 12.5px; outline: none; transition: border .15s; }
+    .ctrl:focus { border-color: var(--accent); }
+    .ctrl-pill { display: inline-flex; align-items: center; gap: 4px; padding: 5px 9px; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px;
+           padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+           border: none; transition: all .15s; white-space: nowrap; }
+    .btn-primary { background: linear-gradient(135deg, #F26B22, #D5530F); color: white; box-shadow: 0 4px 12px rgba(242,107,34,0.25); }
+    .btn-primary:hover { box-shadow: 0 6px 18px rgba(242,107,34,0.35); transform: translateY(-1px); }
+    .btn-secondary { background: var(--bg-elev); color: var(--fg); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-icon { padding: 6px 8px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* KPI Cards */
+    .kpi { padding: 16px 18px; border-radius: 14px; background: var(--bg-card);
+           border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px;
+           position: relative; overflow: hidden; transition: transform .15s; }
+    .kpi:hover { transform: translateY(-2px); border-color: rgba(242,107,34,0.3); }
+    .kpi-label { font-size: 11px; color: var(--fg-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: center; gap: 6px; }
+    .kpi-value { font-size: 26px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+    .kpi-sub { font-size: 11px; color: var(--fg-muted); display: flex; align-items: center; gap: 4px; }
+    .kpi-trend-up { color: var(--green); }
+    .kpi-trend-flat { color: var(--yellow); }
+    .kpi-trend-down { color: var(--red); }
+    .kpi-accent::before { content:''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+
+    /* Pace cards (color-coded) */
+    .pace-green::before { background: var(--green); }
+    .pace-yellow::before { background: var(--yellow); }
+    .pace-red::before { background: var(--red); }
+
+    /* Tabs */
+    .tab { background: var(--bg-elev); color: var(--fg-muted); border-radius: 8px;
+           padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+           border: none; transition: all .15s; white-space: nowrap; }
+    .tab:hover { color: var(--fg); }
+    .tab.active { background: var(--accent); color: white; box-shadow: 0 3px 10px rgba(242,107,34,0.3); }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; color: var(--fg-muted); font-weight: 600; font-size: 11px;
+               text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px;
+               border-bottom: 1px solid var(--border); }
+    tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    tbody tr:hover td { background: var(--bg-elev); }
+    .num { font-variant-numeric: tabular-nums; text-align: right; }
+
+    /* Scrollbars */
+    .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 22px; height: 22px; border: 2px solid var(--border); border-top-color: var(--accent);
+               border-radius: 50%; animation: spin .7s linear infinite; }
+
+    /* Skeleton shimmer */
+    @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+    .skeleton { background: linear-gradient(90deg, var(--bg-elev) 25%, var(--border) 50%, var(--bg-elev) 75%);
+                background-size: 400px 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
+
+    /* Chat */
+    .chat-bubble-user { background: linear-gradient(135deg, #F26B22, #D5530F); color: white;
+                       padding: 8px 12px; border-radius: 14px 14px 4px 14px; max-width: 85%;
+                       align-self: flex-end; font-size: 13px; line-height: 1.45; }
+    .chat-bubble-ai { background: var(--bg-elev); color: var(--fg); padding: 9px 13px;
+                     border-radius: 14px 14px 14px 4px; max-width: 90%; align-self: flex-start;
+                     font-size: 13px; line-height: 1.5; border: 1px solid var(--border); }
+
+    /* Mobile */
+    .sb-toggle { display: none; }
+    @media (max-width: 900px) {
+      .sb { transform: translateX(-100%); }
+      .sb.open { transform: translateX(0); }
+      .main { margin-left: 0 !important; }
+      .sb-toggle { display: inline-flex; }
+      .topbar-filters { display: none !important; }
+    }
+
+    .main { margin-left: var(--sb-width); min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn .3s ease-out; }
+
+    /* Toast */
+    #toast-root { position: fixed; top: 16px; right: 16px; z-index: 100;
+                  display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    .toast { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+             padding: 10px 14px; font-size: 13px; display: flex; align-items: center; gap: 9px;
+             box-shadow: 0 8px 24px rgba(0,0,0,.3); pointer-events: auto;
+             animation: fadeIn .25s ease-out; max-width: 340px; }
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error   { border-left: 3px solid var(--red); }
+    .toast.warning { border-left: 3px solid var(--yellow); }
+
+    /* Section divider */
+    .sec-title { font-size: 13px; font-weight: 700; color: var(--fg-muted);
+                 text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ AUTH GATE (mostrado durante verificação de sessão) ═════════════════ -->
+<div id="auth-gate" class="fixed inset-0 flex flex-col items-center justify-center gap-4" style="background:var(--bg);z-index:200;">
+  <img src="/assets/logo-rottas.png" style="height:42px;opacity:.85;" onerror="this.style.display='none'" />
+  <div class="spinner"></div>
+  <p id="auth-msg" style="color:var(--fg-muted);font-size:13px;">Verificando sessão...</p>
+</div>
+
+<!-- ═══ APP (oculto até auth) ═══════════════════════════════════════════════ -->
+<div id="app" style="display:none;">
+
+  <!-- SIDEBAR -->
+  <aside class="sb" id="sidebar">
+    <div style="padding:18px 14px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:10px;">
+      <img src="/assets/logo-icon.png" style="height:30px;object-fit:contain;" onerror="this.style.display='none'" />
+      <div>
+        <div style="font-weight:800;font-size:14px;line-height:1.1;">Imob Rottas</div>
+        <div style="font-size:10px;color:var(--fg-muted);letter-spacing:0.05em;text-transform:uppercase;font-weight:600;">Dashboard</div>
+      </div>
+    </div>
+
+    <div class="sb-section-label">Análise</div>
+    <nav style="padding: 0 10px; display: flex; flex-direction: column; gap: 2px;">
+      <a class="sb-link active" data-anchor="overview">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12L12 3l9 9M5 10v10h14V10"/></svg>
+        Visão Geral
+      </a>
+      <a class="sb-link" data-anchor="charts">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>
+        Curvas & Funil
+      </a>
+      <a class="sb-link" data-anchor="rankings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/></svg>
+        Rankings
+      </a>
+      <a class="sb-link" data-anchor="history">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3 3"/></svg>
+        Histórico
+      </a>
+      <a class="sb-link" data-anchor="ai" id="sb-ai-link">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8V4M4 12H2M22 12h-2M12 20v-2M6 6l-2-2M20 20l-2-2M18 6l2-2M4 20l2-2"/><circle cx="12" cy="12" r="4"/></svg>
+        Chat IA
+        <span style="margin-left:auto;background:rgba(242,107,34,0.18);color:#F26B22;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700;letter-spacing:0.04em;">BETA</span>
+      </a>
+    </nav>
+
+    <div style="margin-top:auto; padding: 14px; border-top: 1px solid var(--border); display:flex; flex-direction:column; gap:6px;">
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 4px;">
+        <div id="user-avatar" style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#F26B22,#D5530F);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">?</div>
+        <div style="flex:1;min-width:0;">
+          <div id="user-name" style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Carregando...</div>
+          <div id="user-role" style="font-size:10.5px;color:var(--fg-muted);"></div>
+        </div>
+      </div>
+      <a href="/" class="sb-link" style="font-size:11.5px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Voltar ao App
+      </a>
+      <button id="btn-logout" class="sb-link" style="font-size:11.5px;background:none;border:none;text-align:left;width:100%;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        Sair
+      </button>
+      <div style="font-size:9.5px;color:var(--fg-muted);text-align:center;padding-top:4px;letter-spacing:0.05em;">v1.0.1 · Build 2026</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <button class="btn btn-secondary btn-icon sb-toggle" id="sb-toggle-btn" aria-label="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+
+      <h1 style="font-size:15px;font-weight:700;flex-shrink:0;margin-right:8px;">
+        <span style="color:var(--fg-muted);font-weight:500;">Dashboard</span> ›
+        <span id="section-title">Visão Geral</span>
+      </h1>
+
+      <div class="topbar-filters" style="flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+        <select id="f-periodo" class="ctrl">
+          <option value="hoje">Hoje</option>
+          <option value="7d">7 dias</option>
+          <option value="30d" selected>30 dias</option>
+          <option value="90d">90 dias</option>
+          <option value="12m">12 meses</option>
+          <option value="tudo">Tudo</option>
+        </select>
+        <select id="f-estado" class="ctrl">
+          <option value="todos">Todos estados</option>
+          <option value="PR">PR</option>
+          <option value="SC">SC</option>
+        </select>
+        <select id="f-cidade" class="ctrl">
+          <option value="todas">Todas cidades</option>
+        </select>
+        <select id="f-empreend" class="ctrl">
+          <option value="todos">Todos empreend.</option>
+        </select>
+        <select id="f-imob" class="ctrl">
+          <option value="todas">Todas imobiliárias</option>
+        </select>
+        <select id="f-gerente" class="ctrl">
+          <option value="todos">Todos gerentes</option>
+        </select>
+        <button id="btn-reset" class="btn btn-secondary" title="Limpar filtros">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0115-6.7L21 8M21 3v5h-5M21 12a9 9 0 01-15 6.7L3 16M3 21v-5h5"/></svg>
+        </button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <button id="btn-refresh" class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          <span id="btn-refresh-label">Atualizar</span>
+        </button>
+        <button id="btn-theme" class="btn btn-secondary btn-icon" title="Alternar tema">
+          <span id="theme-icon">☀️</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div style="padding:6px 20px;font-size:11px;color:var(--fg-muted);background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+      <div id="pulse-dot" style="width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(16,185,129,0.7);"></div>
+      <span id="status-text">Conectado · aguardando primeira atualização</span>
+      <span style="margin-left:auto;" id="status-counts"></span>
+    </div>
+
+    <!-- CONTENT -->
+    <main style="flex:1; padding: 20px; max-width: 1500px; width: 100%; margin: 0 auto;">
+
+      <!-- ── SEÇÃO: VISÃO GERAL (KPIs) ──────────────────────────────────── -->
+      <section id="sec-overview" class="fade-in" style="margin-bottom: 24px;">
+        <div class="sec-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12L12 3l9 9M5 10v10h14V10"/></svg>
+          Visão Geral
+        </div>
+        <div id="kpi-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px;">
+          <!-- Skeletons -->
+          <div class="kpi skeleton" style="height:96px;"></div>
+          <div class="kpi skeleton" style="height:96px;"></div>
+          <div class="kpi skeleton" style="height:96px;"></div>
+          <div class="kpi skeleton" style="height:96px;"></div>
+          <div class="kpi skeleton" style="height:96px;"></div>
+          <div class="kpi skeleton" style="height:96px;"></div>
+        </div>
+      </section>
+
+      <!-- ── SEÇÃO: CHARTS ─────────────────────────────────────────────── -->
+      <section id="sec-charts" class="fade-in" style="margin-bottom: 24px;">
+        <div class="sec-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>
+          Curvas & Funil de Conversão
+        </div>
+        <div style="display:grid; grid-template-columns: 1.6fr 1fr; gap: 14px;" class="grid-charts">
+          <div class="card" style="padding: 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <h3 style="font-size:13.5px;font-weight:700;">Atividades por dia</h3>
+              <div style="font-size:10.5px;color:var(--fg-muted);">Visitas · Atendimentos · Propostas</div>
+            </div>
+            <div id="chart-line-wrap" style="position:relative;height:240px;">
+              <div class="spinner" style="margin:90px auto;"></div>
+            </div>
+          </div>
+          <div class="card" style="padding: 18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Funil de Conversão</h3>
+            <div id="chart-funnel-wrap" style="position:relative;height:240px;">
+              <div class="spinner" style="margin:90px auto;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SEÇÃO: RANKINGS ───────────────────────────────────────────── -->
+      <section id="sec-rankings" class="fade-in" style="margin-bottom: 24px;">
+        <div class="sec-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/></svg>
+          Rankings
+        </div>
+        <div class="card" style="padding: 16px;">
+          <div id="rank-tabs" style="display:flex; gap:6px; margin-bottom: 14px; overflow-x:auto;" class="no-scrollbar">
+            <button class="tab active" data-rank="gerente">Gerente</button>
+            <button class="tab" data-rank="regional">Regional (Estado)</button>
+            <button class="tab" data-rank="cidade">Cidade</button>
+            <button class="tab" data-rank="empreendimento">Empreendimento</button>
+            <button class="tab" data-rank="imobiliaria">Imobiliária</button>
+          </div>
+          <div id="rank-table-wrap" style="overflow-x:auto;">
+            <div class="spinner" style="margin:30px auto;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── SEÇÃO: HISTÓRICO + CHAT IA ────────────────────────────────── -->
+      <section id="sec-history-ai" class="fade-in">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px;" class="grid-bottom">
+          <div class="card" style="padding: 18px;">
+            <div class="sec-title" style="margin-bottom: 12px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3 3"/></svg>
+              Histórico de atualizações
+            </div>
+            <div id="history-list" style="max-height: 360px; overflow-y: auto;" class="scroll-thin">
+              <div class="spinner" style="margin:30px auto;"></div>
+            </div>
+          </div>
+
+          <div class="card" style="padding: 18px; display: flex; flex-direction: column;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom: 12px;">
+              <div class="sec-title" style="margin-bottom: 0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 8V4M4 12H2M22 12h-2M12 20v-2"/></svg>
+                Chat IA
+              </div>
+              <span style="font-size:10px;color:var(--fg-muted);background:var(--bg-elev);padding:3px 8px;border-radius:8px;">Gemini 2.0 Flash · grátis</span>
+            </div>
+
+            <div id="ai-keybox" style="margin-bottom: 10px;"></div>
+            <div id="ai-suggestions" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;"></div>
+            <div id="ai-history" style="flex:1; min-height: 200px; max-height: 280px; overflow-y: auto; display:flex; flex-direction:column; gap: 8px; padding: 6px 0;" class="scroll-thin"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <input id="ai-input" type="text" class="ctrl" style="flex:1;" placeholder="Pergunte sobre os KPIs..." />
+              <button id="ai-send" class="btn btn-primary">↑</button>
+            </div>
+            <div style="font-size:10px;color:var(--fg-muted);margin-top:6px;text-align:right;">
+              <span id="ai-rate">20 perguntas/hora · 0 usadas</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-root"></div>
+
+<style>
+  @media (max-width: 1100px) {
+    .grid-charts { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 900px) {
+    .grid-bottom { grid-template-columns: 1fr !important; }
+  }
+</style>
+
+<script type="module" src="/dashboard/app.js?v=101"></script>
+</body>
+</html>

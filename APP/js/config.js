@@ -1,22 +1,23 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.0';
-export const APP_BUILD_DATE = '2026-05-17';
+export const APP_VERSION = '1.0.1';
+export const APP_BUILD_DATE = '2026-05-19';
 
 export const CHANGELOG = [
   {
-    version: '1.0.0',
-    date: '17/05/2026',
+    version: '1.0.1',
+    date: '19/05/2026',
     changes: [
-      'NOVO: Dashboard Analítico completo com 6 KPIs (VGV Vendas, VGV Propostas, Conv. Atend→Prop, Conv. Prop→Venda, Pace Visitas, Pace Propostas)',
-      'NOVO: Gráfico de visitas por dia (linha temporal com Chart.js)',
-      'NOVO: Funil de conversão visual (Visitas → Propostas → Vendas)',
-      'NOVO: 5 rankings intercambiáveis — Gerente, Estado, Cidade, Empreendimento, Imobiliária',
-      'NOVO: Filtros globais — Período (Hoje/7d/30d/90d/Tudo), Estado, Cidade, Empreendimento, Gerente',
-      'NOVO: Pace = volume atual vs período anterior proporcional — verde ≥100%, amarelo 80-100%, vermelho <80%',
-      'NOVO: Histórico de snapshots (últimos 20) salvo a cada Atualizar',
-      'NOVO: Chat IA com Google Gemini Flash (gratuito) — analisa KPIs e responde perguntas em PT-BR',
-      'NOVO: Acesso por role — Gerente/Supervisor veem apenas seus dados; filtros respeitam hierarquia',
-      'Dashboard disponível no bottom nav admin como "Dashboard" (ícone trendingUp)',
+      'NOVO: Dashboard Analítico STANDALONE em /dashboard (página separada, não fica dentro do app)',
+      'Dashboard exclusivo para gerência e diretoria (master, gestor, superintendente, gestor_regional)',
+      'Sessão compartilhada com o app — quem está logado no app entra direto no dashboard',
+      '6 KPIs: VGV Vendas, VGV Propostas, Conv. Atend→Prop, Conv. Prop→Venda, Pace Visitas, Pace Propostas',
+      'Curva temporal Chart.js (visitas, atendimentos, propostas sobrepostas) + funil ECharts (Visitas → Atendimentos → Propostas → Vendas)',
+      '5 abas de Ranking: Gerente, Regional (PR/SC), Cidade, Empreendimento, Imobiliária',
+      'Filtros globais persistidos: Período (Hoje/7d/30d/90d/12m/Tudo), Estado, Cidade dinâmica, Empreendimento, Imobiliária, Gerente',
+      'Pace semafórico: verde ≥100% · amarelo 80-100% · vermelho <80% vs período anterior proporcional',
+      'Histórico: 20 últimos snapshots em dashboard_snapshots (trigger mantém últimos 100)',
+      'Chat IA Gemini 2.0 Flash (gratuito) — analisa KPIs e sugere ações, rate limit 20/hora',
+      'Tema claro/escuro próprio + sidebar fixa desktop + hamburger mobile',
     ],
   },
   {
