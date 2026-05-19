@@ -6,6 +6,7 @@
 // ═════════════════════════════════════════════════════════════════════════
 
 const GEMINI_LOCAL_KEY   = 'rottas-dash-gemini-key';     // fallback local
+const GEMINI_MODEL_CACHE = 'rottas-dash-gemini-model';   // último modelo que funcionou
 const RATE_STORAGE       = 'rottas-dash-ai-rate';
 const RATE_LIMIT_PER_HR  = 20;
 const APP_SETTINGS_KEY   = 'gemini_api_key';             // key na tabela app_settings
@@ -186,7 +187,7 @@ async function testKey(key) {
   // Etapa 2: tenta uma chamada real em modelos preferenciais (na ordem)
   resultEl.innerHTML = `<span style="color:var(--fg-muted);">⏳ Etapa 2/2: testando chamada real... (${availableModels.length} modelos disponíveis)</span>`;
 
-  const preferred = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp', 'gemini-1.5-pro'];
+  const preferred = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
   const tryOrder = [
     ...preferred.filter(m => availableModels.includes(m)),
     ...availableModels.filter(m => /flash|pro/i.test(m) && !preferred.includes(m)),
@@ -210,6 +211,8 @@ async function testKey(key) {
         const j = await res.json();
         const reply = j?.candidates?.[0]?.content?.parts?.[0]?.text || '(vazio)';
         workingModel = model;
+        // Cache o modelo que funcionou — sendMessage vai usar primeiro
+        try { localStorage.setItem(GEMINI_MODEL_CACHE, model); } catch {}
         tries.push({ model, ok: true, reply: reply.trim().slice(0, 20) });
         break;
       } else {
@@ -314,9 +317,18 @@ async function sendMessage() {
   _refs.historyEl.appendChild(thinking);
   _refs.historyEl.scrollTop = _refs.historyEl.scrollHeight;
 
-  // Modelos a tentar em ordem (fallback se o primeiro falhar com 404)
-  // gemini-pro foi DEPRECIADO em v1beta. Removido da lista.
-  const MODELS_FALLBACK = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp', 'gemini-1.5-pro'];
+  // Modelos a tentar em ordem (fallback se o primeiro falhar com 404).
+  // Inclui 2.5 (mais novo, set/2025), 2.0 e 1.5 como fallback.
+  // Se o botão Testar descobriu um modelo específico, usamos PRIMEIRO esse.
+  const cachedModel = localStorage.getItem(GEMINI_MODEL_CACHE);
+  const baseFallback = [
+    'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro',
+    'gemini-2.0-flash', 'gemini-2.0-flash-exp',
+    'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro',
+  ];
+  const MODELS_FALLBACK = cachedModel
+    ? [cachedModel, ...baseFallback.filter(m => m !== cachedModel)]
+    : baseFallback;
   let res, usedModel;
   const payload = JSON.stringify({
     contents: [{ parts: [{ text: `${buildContext()}\n\nPergunta do gestor: ${q}` }] }],
@@ -370,6 +382,8 @@ async function sendMessage() {
     }
     const json = await res.json();
     const answer = json?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da IA.';
+    // Cache o modelo que respondeu — próximas chamadas usam direto
+    if (usedModel) { try { localStorage.setItem(GEMINI_MODEL_CACHE, usedModel); } catch {} }
     thinking.innerHTML = formatMarkdownLite(answer);
     bumpRate();
     updateRateLabel();
