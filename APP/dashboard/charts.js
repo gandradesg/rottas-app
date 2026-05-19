@@ -51,7 +51,9 @@ function getThemeColors() {
 }
 
 // ─── LINE CHART (3 séries: visitas, atendimentos, propostas) ─────────────
-let _lineChartInst = null;
+// Mantém uma instância POR ELEMENTO (necessário porque a mesma função é chamada
+// para o gráfico pequeno do overview E o grande do sec-charts simultaneamente)
+const _lineCharts = new WeakMap();
 
 export async function renderLineChart(wrapEl, atividades, periodo) {
   await loadChartJS();
@@ -91,14 +93,15 @@ export async function renderLineChart(wrapEl, atividades, periodo) {
   const sVisitas = sorted.map(([, v]) => v.checkin + v.atendimento);
 
   const c = getThemeColors();
-  if (_lineChartInst) { _lineChartInst.destroy(); _lineChartInst = null; }
+  // Destrói instância PRÉVIA deste elemento (não global!)
+  if (_lineCharts.has(wrapEl)) { try { _lineCharts.get(wrapEl).destroy(); } catch {} _lineCharts.delete(wrapEl); }
 
   if (!sorted.length) {
     wrapEl.innerHTML = `<p style="text-align:center;padding:80px;color:var(--fg-muted);font-size:13px;">Sem atividades no período.</p>`;
     return;
   }
 
-  _lineChartInst = new window.Chart(canvas, {
+  const instance = new window.Chart(canvas, {
     type: 'line',
     data: {
       labels,
@@ -123,10 +126,11 @@ export async function renderLineChart(wrapEl, atividades, periodo) {
       },
     },
   });
+  _lineCharts.set(wrapEl, instance);
 }
 
 // ─── FUNNEL CHART (ECharts) ──────────────────────────────────────────────
-let _funnelChartInst = null;
+const _funnelCharts = new WeakMap();
 
 export async function renderFunnel(wrapEl, kpis) {
   await loadECharts();
@@ -152,9 +156,9 @@ export async function renderFunnel(wrapEl, kpis) {
   const convAtPr  = totalAtend > 0 ? (totalProp / totalAtend * 100).toFixed(1) : '0';
   const convPrVd  = totalProp > 0 ? (totalVend / totalProp * 100).toFixed(1) : '0';
 
-  if (_funnelChartInst) { _funnelChartInst.dispose(); _funnelChartInst = null; }
-  _funnelChartInst = window.echarts.init(div, c.isDark ? 'dark' : null, { renderer: 'canvas' });
-  _funnelChartInst.setOption({
+  if (_funnelCharts.has(wrapEl)) { try { _funnelCharts.get(wrapEl).dispose(); } catch {} _funnelCharts.delete(wrapEl); }
+  const funnelInstance = window.echarts.init(div, c.isDark ? 'dark' : null, { renderer: 'canvas' });
+  funnelInstance.setOption({
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
@@ -199,15 +203,17 @@ export async function renderFunnel(wrapEl, kpis) {
     }],
   });
 
-  // Resize handler
+  _funnelCharts.set(wrapEl, funnelInstance);
+
+  // Resize handler — re-pega a instância atual via WeakMap (não fica stale)
   if (!wrapEl._resizeBound) {
-    const ro = new ResizeObserver(() => { _funnelChartInst?.resize(); });
+    const ro = new ResizeObserver(() => { _funnelCharts.get(wrapEl)?.resize(); });
     ro.observe(wrapEl);
     wrapEl._resizeBound = true;
   }
 }
 
 export function destroyAllCharts() {
-  if (_lineChartInst)   { _lineChartInst.destroy();   _lineChartInst = null; }
-  if (_funnelChartInst) { _funnelChartInst.dispose(); _funnelChartInst = null; }
+  // WeakMap não tem iterator; instâncias serão coletadas com seus elementos
+  // (mantido para compatibilidade da API)
 }

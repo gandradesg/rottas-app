@@ -140,43 +140,107 @@ async function renderKeyBox() {
   document.getElementById('ai-key-test')?.addEventListener('click', () => testKey(inp.value.trim()));
 }
 
-// Testa a chave usando endpoint /models (lista modelos disponíveis) — barato e confiável
+// Testa a chave fazendo (1) lista de modelos disponíveis e (2) chamada REAL de
+// generateContent num modelo flash. Reporta qual modelo funcionou.
 async function testKey(key) {
   const resultEl = document.getElementById('ai-key-test-result');
   if (!resultEl) return;
-  if (!key) {
-    resultEl.innerHTML = '<span style="color:var(--yellow);">⚠ Cole a chave antes de testar.</span>';
-    return;
-  }
-  resultEl.innerHTML = '<span style="color:var(--fg-muted);">⏳ Testando...</span>';
+  if (!key) { resultEl.innerHTML = '<span style="color:var(--yellow);">⚠ Cole a chave antes de testar.</span>'; return; }
+
+  resultEl.innerHTML = '<span style="color:var(--fg-muted);">⏳ Etapa 1/2: listando modelos...</span>';
+
+  // Etapa 1: ListModels
+  let availableModels = [];
   try {
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
     const txt = await res.text();
     let json = {}; try { json = JSON.parse(txt); } catch {}
-
-    if (res.ok && Array.isArray(json.models)) {
-      const flashModels = json.models.filter(m => /flash/i.test(m.name) && m.supportedGenerationMethods?.includes('generateContent'));
-      const flashNames = flashModels.map(m => m.name.replace('models/', '')).slice(0, 8);
-      resultEl.innerHTML = `
-        <div style="color:var(--green);font-weight:600;margin-bottom:4px;">✓ Chave válida — ${json.models.length} modelos disponíveis</div>
-        <div style="color:var(--fg-muted);">Modelos Flash com generateContent:</div>
-        <div style="margin-top:3px;background:var(--bg-elev);padding:5px 7px;border-radius:6px;font-family:monospace;font-size:10px;">${flashNames.join('<br>') || 'nenhum Flash disponível'}</div>
-        <div style="color:var(--fg-muted);margin-top:5px;">Pode fechar e fazer perguntas no chat.</div>
-      `;
+    if (!res.ok) {
+      const msg = json?.error?.message || txt.slice(0, 200);
+      if (res.status === 400) {
+        resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Chave INVÁLIDA (400)</div><div style="color:var(--fg-muted);margin-top:3px;">Crie outra em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/app/apikey</a>.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
+      } else if (res.status === 403) {
+        resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">🚫 API não habilitada (403)</div><div style="color:var(--fg-muted);margin-top:3px;">Habilite a "Generative Language API" em <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" style="color:var(--accent);">console.cloud.google.com</a>.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
+      } else {
+        resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Erro ${res.status}</div><div style="color:var(--fg-muted);margin-top:3px;font-size:9.5px;">${escapeHtml(msg)}</div>`;
+      }
       return;
     }
-    const msg = json?.error?.message || txt.slice(0, 200) || 'sem detalhes';
-    if (res.status === 400) {
-      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Chave INVÁLIDA (HTTP 400)</div><div style="color:var(--fg-muted);margin-top:3px;">A Google rejeitou o formato da chave. Crie outra em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/app/apikey</a>.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
-    } else if (res.status === 403) {
-      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">🚫 API não habilitada (HTTP 403)</div><div style="color:var(--fg-muted);margin-top:3px;">A "Generative Language API" não está habilitada no projeto Google Cloud da chave. Habilite em <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" style="color:var(--accent);">console.cloud.google.com</a>.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
-    } else if (res.status === 429) {
-      resultEl.innerHTML = `<div style="color:var(--yellow);font-weight:600;">⏳ Cota esgotada (HTTP 429)</div><div style="color:var(--fg-muted);margin-top:3px;">Aguarde 1-2 min OU crie outra chave.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
-    } else {
-      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Erro HTTP ${res.status}</div><div style="color:var(--fg-muted);margin-top:3px;font-size:9.5px;">${escapeHtml(msg)}</div>`;
+    if (!Array.isArray(json.models)) {
+      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Resposta inesperada</div><div style="font-size:10px;color:var(--fg-muted);margin-top:3px;">${escapeHtml(txt.slice(0,200))}</div>`;
+      return;
     }
+    availableModels = json.models
+      .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+      .map(m => m.name.replace('models/', ''));
   } catch (err) {
     resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Erro de rede</div><div style="color:var(--fg-muted);margin-top:3px;font-size:10px;">${escapeHtml(err.message || String(err))}</div>`;
+    return;
+  }
+
+  if (!availableModels.length) {
+    resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Nenhum modelo com generateContent disponível</div><div style="color:var(--fg-muted);margin-top:3px;font-size:10.5px;">A chave existe mas não tem acesso a nenhum modelo capaz de gerar texto. Provavelmente o projeto Google Cloud não tem a API habilitada corretamente. Tente criar uma chave NOVA em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a>.</div>`;
+    return;
+  }
+
+  // Etapa 2: tenta uma chamada real em modelos preferenciais (na ordem)
+  resultEl.innerHTML = `<span style="color:var(--fg-muted);">⏳ Etapa 2/2: testando chamada real... (${availableModels.length} modelos disponíveis)</span>`;
+
+  const preferred = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp', 'gemini-1.5-pro'];
+  const tryOrder = [
+    ...preferred.filter(m => availableModels.includes(m)),
+    ...availableModels.filter(m => /flash|pro/i.test(m) && !preferred.includes(m)),
+  ].slice(0, 5);
+
+  const tries = [];
+  let workingModel = null;
+  for (const model of tryOrder) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
+        {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Responda apenas "OK".' }] }],
+            generationConfig: { maxOutputTokens: 5, temperature: 0 },
+          }),
+        }
+      );
+      if (res.ok) {
+        const j = await res.json();
+        const reply = j?.candidates?.[0]?.content?.parts?.[0]?.text || '(vazio)';
+        workingModel = model;
+        tries.push({ model, ok: true, reply: reply.trim().slice(0, 20) });
+        break;
+      } else {
+        const txt = await res.text();
+        let parsedMsg = '';
+        try { parsedMsg = JSON.parse(txt)?.error?.message || ''; } catch {}
+        tries.push({ model, ok: false, status: res.status, msg: parsedMsg || txt.slice(0, 80) });
+      }
+    } catch (err) {
+      tries.push({ model, ok: false, msg: err.message });
+    }
+  }
+
+  if (workingModel) {
+    const triedHtml = tries.map(t => t.ok ? `<div style="color:var(--green);">✓ <b>${t.model}</b> respondeu "${escapeHtml(t.reply)}"</div>` : `<div style="color:var(--red);">✕ ${t.model} (${t.status || 'erro'})</div>`).join('');
+    resultEl.innerHTML = `
+      <div style="color:var(--green);font-weight:600;margin-bottom:5px;">✓ Chave funcionando! Modelo ativo: <b>${workingModel}</b></div>
+      ${triedHtml}
+      <div style="color:var(--fg-muted);margin-top:6px;font-size:10px;">Clique <b>Salvar</b> acima e feche este painel para usar o chat.</div>
+    `;
+  } else {
+    const triedHtml = tries.map(t => `<div style="color:var(--red);">✕ ${t.model}: HTTP ${t.status || '?'} — ${escapeHtml(t.msg || 'sem detalhe')}</div>`).join('');
+    resultEl.innerHTML = `
+      <div style="color:var(--red);font-weight:600;margin-bottom:5px;">✕ Chave existe mas nenhum modelo respondeu</div>
+      ${triedHtml}
+      <div style="color:var(--fg-muted);margin-top:6px;font-size:10px;">
+        <b>Modelos disponíveis nesta chave:</b><br>
+        <span style="font-family:monospace;font-size:9.5px;background:var(--bg-elev);padding:3px 6px;border-radius:4px;display:inline-block;margin-top:3px;">${availableModels.slice(0, 10).join(', ')}</span><br><br>
+        Crie uma chave NOVA em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a> escolhendo "Create API key in new project".
+      </div>
+    `;
   }
 }
 
@@ -251,7 +315,8 @@ async function sendMessage() {
   _refs.historyEl.scrollTop = _refs.historyEl.scrollHeight;
 
   // Modelos a tentar em ordem (fallback se o primeiro falhar com 404)
-  const MODELS_FALLBACK = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp', 'gemini-pro'];
+  // gemini-pro foi DEPRECIADO em v1beta. Removido da lista.
+  const MODELS_FALLBACK = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp', 'gemini-1.5-pro'];
   let res, usedModel;
   const payload = JSON.stringify({
     contents: [{ parts: [{ text: `${buildContext()}\n\nPergunta do gestor: ${q}` }] }],
