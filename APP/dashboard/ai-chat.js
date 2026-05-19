@@ -106,17 +106,19 @@ async function renderKeyBox() {
     : '<span style="background:rgba(245,158,11,0.15);color:#F59E0B;padding:2px 7px;border-radius:6px;font-size:9.5px;font-weight:700;">LOCAL</span>';
 
   _refs.keyboxEl.innerHTML = `
-    <details style="font-size:11px;">
+    <details style="font-size:11px;" ${key ? '' : 'open'}>
       <summary style="cursor:pointer;color:var(--fg-muted);padding:4px 0;display:flex;align-items:center;gap:6px;">
         ⚙️ ${key ? 'Chave Gemini cadastrada' : '⚠ Configure a chave Gemini'} ${statusBadge}
       </summary>
       <div style="display:flex;gap:6px;margin-top:6px;">
         <input id="ai-key-input" type="password" class="ctrl" style="flex:1;" placeholder="Cole a chave da Gemini API" value="${escapeAttr(key)}" />
         <button id="ai-key-save" class="btn btn-secondary">Salvar</button>
+        <button id="ai-key-test" class="btn btn-secondary" title="Testar a chave agora">🧪 Testar</button>
       </div>
+      <div id="ai-key-test-result" style="margin-top:6px;font-size:10.5px;line-height:1.4;"></div>
       <p style="font-size:10px;color:var(--fg-muted);margin-top:6px;line-height:1.4;">
         ${sharedOK
-          ? 'Esta chave é COMPARTILHADA com todos os admins via Supabase. Cadastre uma vez e todos usam.'
+          ? 'Esta chave é COMPARTILHADA com todos os admins via Supabase.'
           : '⚠ Tabela app_settings não encontrada — chave salva apenas neste navegador. Aplique a migration v18 no Supabase para compartilhar.'}
         <br>Obtenha grátis em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a>
       </p>
@@ -125,7 +127,7 @@ async function renderKeyBox() {
   const inp = document.getElementById('ai-key-input');
   document.getElementById('ai-key-save')?.addEventListener('click', async () => {
     const v = inp.value.trim();
-    setLocalKey(v); // sempre salva local como fallback
+    setLocalKey(v);
     if (sharedOK) {
       const ok = await saveSharedKey(v);
       _refs.toast?.(ok ? 'Chave Gemini compartilhada salva ✓' : 'Salva localmente (falha no compartilhar)', ok ? 'success' : 'warning');
@@ -135,6 +137,47 @@ async function renderKeyBox() {
     }
     await renderKeyBox();
   });
+  document.getElementById('ai-key-test')?.addEventListener('click', () => testKey(inp.value.trim()));
+}
+
+// Testa a chave usando endpoint /models (lista modelos disponíveis) — barato e confiável
+async function testKey(key) {
+  const resultEl = document.getElementById('ai-key-test-result');
+  if (!resultEl) return;
+  if (!key) {
+    resultEl.innerHTML = '<span style="color:var(--yellow);">⚠ Cole a chave antes de testar.</span>';
+    return;
+  }
+  resultEl.innerHTML = '<span style="color:var(--fg-muted);">⏳ Testando...</span>';
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+    const txt = await res.text();
+    let json = {}; try { json = JSON.parse(txt); } catch {}
+
+    if (res.ok && Array.isArray(json.models)) {
+      const flashModels = json.models.filter(m => /flash/i.test(m.name) && m.supportedGenerationMethods?.includes('generateContent'));
+      const flashNames = flashModels.map(m => m.name.replace('models/', '')).slice(0, 8);
+      resultEl.innerHTML = `
+        <div style="color:var(--green);font-weight:600;margin-bottom:4px;">✓ Chave válida — ${json.models.length} modelos disponíveis</div>
+        <div style="color:var(--fg-muted);">Modelos Flash com generateContent:</div>
+        <div style="margin-top:3px;background:var(--bg-elev);padding:5px 7px;border-radius:6px;font-family:monospace;font-size:10px;">${flashNames.join('<br>') || 'nenhum Flash disponível'}</div>
+        <div style="color:var(--fg-muted);margin-top:5px;">Pode fechar e fazer perguntas no chat.</div>
+      `;
+      return;
+    }
+    const msg = json?.error?.message || txt.slice(0, 200) || 'sem detalhes';
+    if (res.status === 400) {
+      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Chave INVÁLIDA (HTTP 400)</div><div style="color:var(--fg-muted);margin-top:3px;">A Google rejeitou o formato da chave. Crie outra em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/app/apikey</a>.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
+    } else if (res.status === 403) {
+      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">🚫 API não habilitada (HTTP 403)</div><div style="color:var(--fg-muted);margin-top:3px;">A "Generative Language API" não está habilitada no projeto Google Cloud da chave. Habilite em <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" style="color:var(--accent);">console.cloud.google.com</a>.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
+    } else if (res.status === 429) {
+      resultEl.innerHTML = `<div style="color:var(--yellow);font-weight:600;">⏳ Cota esgotada (HTTP 429)</div><div style="color:var(--fg-muted);margin-top:3px;">Aguarde 1-2 min OU crie outra chave.<br><br><span style="font-size:9.5px;">Detalhe: ${escapeHtml(msg)}</span></div>`;
+    } else {
+      resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Erro HTTP ${res.status}</div><div style="color:var(--fg-muted);margin-top:3px;font-size:9.5px;">${escapeHtml(msg)}</div>`;
+    }
+  } catch (err) {
+    resultEl.innerHTML = `<div style="color:var(--red);font-weight:600;">✕ Erro de rede</div><div style="color:var(--fg-muted);margin-top:3px;font-size:10px;">${escapeHtml(err.message || String(err))}</div>`;
+  }
 }
 
 function escapeAttr(s) { return String(s ?? '').replace(/"/g, '&quot;'); }
@@ -207,18 +250,24 @@ async function sendMessage() {
   _refs.historyEl.appendChild(thinking);
   _refs.historyEl.scrollTop = _refs.historyEl.scrollHeight;
 
+  // Modelos a tentar em ordem (fallback se o primeiro falhar com 404)
+  const MODELS_FALLBACK = ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-2.0-flash-exp', 'gemini-pro'];
+  let res, usedModel;
+  const payload = JSON.stringify({
+    contents: [{ parts: [{ text: `${buildContext()}\n\nPergunta do gestor: ${q}` }] }],
+    generationConfig: { maxOutputTokens: 400, temperature: 0.65 },
+  });
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(key)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${buildContext()}\n\nPergunta do gestor: ${q}` }] }],
-          generationConfig: { maxOutputTokens: 400, temperature: 0.65 },
-        }),
-      }
-    );
+    for (const model of MODELS_FALLBACK) {
+      res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload }
+      );
+      usedModel = model;
+      // Se 404 (modelo não disponível pra essa chave/região), tenta o próximo
+      if (res.status === 404) { console.warn(`[ai-chat] ${model} retornou 404, tentando próximo...`); continue; }
+      break;
+    }
     if (!res.ok) {
       const errTxt = await res.text();
       // Parse mensagem de erro estruturada (Google retorna JSON)
