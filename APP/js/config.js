@@ -1,8 +1,26 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.2';
+export const APP_VERSION = '1.0.3';
 export const APP_BUILD_DATE = '2026-05-19';
 
 export const CHANGELOG = [
+  {
+    version: '1.0.3',
+    date: '19/05/2026',
+    changes: [
+      'SEGURANÇA: hierarquia rígida em /usuarios — cada nível só edita quem está abaixo: Master > {Gestor, Superintendente, Gestor Regional} > Gerente > Supervisor',
+      'Gestor Regional não vê mais usuários Master/Gestor/Superintendente na lista',
+      'Dashboard: acesso liberado para TODOS os roles, mas com filtragem automática por perfil',
+      'Dashboard: Superintendente vê apenas dados nos seus estados_acesso',
+      'Dashboard: Gestor Regional vê apenas dados nas suas cidades_acesso',
+      'Dashboard: Gerente vê apenas seus dados + supervisores subordinados',
+      'Dashboard: Supervisor vê apenas seus próprios dados (filtro travado)',
+      'Dashboard: sidebar agora navega entre páginas (uma por vez) em vez de scroll',
+      'Dashboard: Chat IA virou painel flutuante (FAB) — visível em todas as páginas',
+      'Dashboard: Histórico de atualizações virou chip clicável "Última atualização: HH:MM" no topbar',
+      'Dashboard: clicar em snapshot do histórico restaura os KPIs daquele momento (modo somente leitura)',
+      'Dashboard: chave Gemini agora é COMPARTILHADA via tabela app_settings (migration v18 — Master cadastra uma vez, todos admins usam)',
+    ],
+  },
   {
     version: '1.0.2',
     date: '19/05/2026',

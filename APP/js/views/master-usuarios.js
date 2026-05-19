@@ -28,10 +28,32 @@ export async function masterUsuariosView(_params, app) {
   await reload();
 }
 
+// Hierarquia rigida (user explicito):
+//   Master > {Gestor, Superintendente, Gestor Regional} > Gerente > Supervisor
+// Quem pode VER e EDITAR o profile alvo?
+//   - Master: todos
+//   - Gestor/Superint/GestReg: a si mesmo + Gerentes + Supervisores
+//   - Gerente: a si mesmo + Supervisores
+//   - Supervisor: apenas a si mesmo
+export function canManageProfile(target) {
+  const myRole = state.profile?.role;
+  const myId = state.profile?.id;
+  if (!myRole) return false;
+  if (target.id === myId) return true;
+  if (myRole === 'master') return true;
+  if (['gestor', 'superintendente', 'gestor_regional'].includes(myRole)) {
+    return ['gerente', 'supervisor'].includes(target.role);
+  }
+  if (myRole === 'gerente') return target.role === 'supervisor';
+  return false;
+}
+
 async function reload() {
   if (!listEl) return;
   if (!listEl.children.length) listEl.innerHTML = '<div class="skeleton h-20"></div>';
-  const profiles = await loadAllProfiles();
+  const allProfiles = await loadAllProfiles();
+  // Filtra a lista: usuario so ve quem pode gerenciar
+  const profiles = allProfiles.filter(p => canManageProfile(p));
   listEl.innerHTML = '';
   if (!profiles.length) {
     listEl.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' }, 'Nenhum usuário cadastrado.'));
@@ -74,15 +96,10 @@ function userRow(p) {
           p.telefone || 'sem telefone',
         ),
       ),
-      // Quem pode editar este profile?
-      // - Master/Gestor: tudo (RLS valida)
-      // - Superintendente: gerentes/supervisores/gestor_regional do seu estado
-      // - Gestor Regional: gerentes/supervisores da sua cidade
-      // - O próprio user: ele mesmo
-      // Como a RLS no banco já garante segurança, mostramos o botão sempre que faz
-      // sentido na UI - se a edição falhar por permissão, o user vê o erro.
-      (isMaster() || ['gestor','superintendente','gestor_regional'].includes(state.profile?.role)
-        || p.id === state.profile?.id) && el('button', {
+      // Botao editar: respeita HIERARQUIA RIGIDA
+      // Master > {Gestor, Superintendente, Gestor Regional} > Gerente > Supervisor
+      // Cada nivel so edita quem esta ABAIXO + a si mesmo
+      canManageProfile(p) && el('button', {
         class: 'p-2 rounded-lg hover:bg-bg-elev transition flex-shrink-0',
         onclick: () => openEditModal(p)
       }, icon('edit', 18, 'text-fg-muted')),

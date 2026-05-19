@@ -1,14 +1,19 @@
 // ═════════════════════════════════════════════════════════════════════════
-// Imob Rottas · Dashboard · ai-chat.js
-// Chat IA com Google Gemini 2.0 Flash (grátis), rate-limit local 20/hora
+// Imob Rottas · Dashboard · ai-chat.js v2
+// Chat IA com Google Gemini 2.0 Flash (grátis)
+// CHAVE COMPARTILHADA via tabela app_settings (todos admins usam a mesma)
+// Fallback para localStorage caso a tabela não exista ainda
 // ═════════════════════════════════════════════════════════════════════════
 
-const GEMINI_KEY_STORAGE = 'rottas-dash-gemini-key';
+const GEMINI_LOCAL_KEY   = 'rottas-dash-gemini-key';     // fallback local
 const RATE_STORAGE       = 'rottas-dash-ai-rate';
 const RATE_LIMIT_PER_HR  = 20;
+const APP_SETTINGS_KEY   = 'gemini_api_key';             // key na tabela app_settings
 
 let _ctx = { kpis: null, filters: null, periodLabel: '—' };
 let _refs = null;
+let _cachedSharedKey = null;       // cache da chave compartilhada
+let _sharedKeyAvailable = null;    // true se app_settings funcionou (table existe + permissão)
 
 const SUGGESTIONS = [
   'Por que as conversões caíram?',
@@ -28,54 +33,107 @@ function readRate() {
   } catch { return { count: 0, resetAt: Date.now() + 3600_000 }; }
 }
 function writeRate(r) { try { localStorage.setItem(RATE_STORAGE, JSON.stringify(r)); } catch {} }
-function bumpRate() {
-  const r = readRate();
-  r.count = (r.count || 0) + 1;
-  writeRate(r);
-  return r;
-}
+function bumpRate() { const r = readRate(); r.count = (r.count || 0) + 1; writeRate(r); return r; }
 function updateRateLabel() {
   if (!_refs?.rateEl) return;
   const r = readRate();
   const remaining = Math.max(0, RATE_LIMIT_PER_HR - r.count);
-  _refs.rateEl.textContent = `${RATE_LIMIT_PER_HR} perguntas/hora · ${r.count} usadas · ${remaining} restantes`;
+  _refs.rateEl.textContent = `${r.count}/${RATE_LIMIT_PER_HR} perguntas usadas · ${remaining} restantes na hora`;
 }
 
-// ─── KEY MANAGEMENT ──────────────────────────────────────────────────────
-function getKey() { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; }
-function setKey(k) { localStorage.setItem(GEMINI_KEY_STORAGE, (k || '').trim()); }
+// ─── KEY MANAGEMENT (compartilhada via Supabase) ─────────────────────────
+async function loadSharedKey() {
+  if (!_refs?.sb) { _sharedKeyAvailable = false; return null; }
+  try {
+    const { data, error } = await _refs.sb.from('app_settings').select('value').eq('key', APP_SETTINGS_KEY).maybeSingle();
+    if (error) { _sharedKeyAvailable = false; return null; }
+    _sharedKeyAvailable = true;
+    _cachedSharedKey = data?.value || '';
+    return _cachedSharedKey;
+  } catch (e) {
+    _sharedKeyAvailable = false;
+    return null;
+  }
+}
 
-function renderKeyBox() {
+async function saveSharedKey(newKey) {
+  if (!_refs?.sb) return false;
+  const trimmed = (newKey || '').trim();
+  try {
+    const { error } = await _refs.sb.from('app_settings').upsert({ key: APP_SETTINGS_KEY, value: trimmed }, { onConflict: 'key' });
+    if (error) throw error;
+    _cachedSharedKey = trimmed;
+    _sharedKeyAvailable = true;
+    return true;
+  } catch (e) {
+    console.warn('[ai-chat] falha ao salvar chave compartilhada:', e);
+    return false;
+  }
+}
+
+async function getEffectiveKey() {
+  if (_cachedSharedKey != null) return _cachedSharedKey;
+  const shared = await loadSharedKey();
+  if (shared) return shared;
+  // Fallback: localStorage (caso table não exista ainda)
+  return localStorage.getItem(GEMINI_LOCAL_KEY) || '';
+}
+
+function setLocalKey(k) { localStorage.setItem(GEMINI_LOCAL_KEY, (k || '').trim()); }
+
+async function renderKeyBox() {
   if (!_refs?.keyboxEl) return;
-  const key = getKey();
-  if (!_refs.canManageKey && !key) {
-    _refs.keyboxEl.innerHTML = `<div style="font-size:11px;color:var(--fg-muted);padding:8px;background:var(--bg-elev);border-radius:8px;">
-      Chat IA não configurado. Peça ao Master/Gestor para adicionar a chave Gemini.</div>`;
-    if (_refs.inputEl) _refs.inputEl.disabled = true;
-    if (_refs.sendEl)  _refs.sendEl.disabled = true;
+  const key = await getEffectiveKey();
+  const sharedOK = _sharedKeyAvailable === true;
+
+  if (!_refs.canManageKey) {
+    if (!key) {
+      _refs.keyboxEl.innerHTML = `<div style="font-size:11px;color:var(--fg-muted);padding:8px;background:var(--bg-elev);border-radius:8px;">
+        ⚠ Chat IA não configurado. Peça ao Master/Gestor para cadastrar a chave Gemini.</div>`;
+      if (_refs.inputEl) _refs.inputEl.disabled = true;
+      if (_refs.sendEl)  _refs.sendEl.disabled = true;
+    } else {
+      _refs.keyboxEl.innerHTML = '';
+      if (_refs.inputEl) _refs.inputEl.disabled = false;
+      if (_refs.sendEl)  _refs.sendEl.disabled = false;
+    }
     return;
   }
-  if (!_refs.canManageKey) { _refs.keyboxEl.innerHTML = ''; return; }
+
+  // Master/Gestor: pode gerenciar a chave
+  const statusBadge = sharedOK
+    ? '<span style="background:rgba(16,185,129,0.15);color:#10B981;padding:2px 7px;border-radius:6px;font-size:9.5px;font-weight:700;">COMPARTILHADA</span>'
+    : '<span style="background:rgba(245,158,11,0.15);color:#F59E0B;padding:2px 7px;border-radius:6px;font-size:9.5px;font-weight:700;">LOCAL</span>';
 
   _refs.keyboxEl.innerHTML = `
     <details style="font-size:11px;">
-      <summary style="cursor:pointer;color:var(--fg-muted);padding:4px 0;">
-        ⚙️ ${key ? 'Chave Gemini configurada' : '⚠ Configure a chave Gemini'} ${key ? '(clique para alterar)' : ''}
+      <summary style="cursor:pointer;color:var(--fg-muted);padding:4px 0;display:flex;align-items:center;gap:6px;">
+        ⚙️ ${key ? 'Chave Gemini cadastrada' : '⚠ Configure a chave Gemini'} ${statusBadge}
       </summary>
       <div style="display:flex;gap:6px;margin-top:6px;">
-        <input id="ai-key-input" type="password" class="ctrl" style="flex:1;" placeholder="Chave Gemini API (aistudio.google.com)" value="${escapeAttr(key)}" />
+        <input id="ai-key-input" type="password" class="ctrl" style="flex:1;" placeholder="Cole a chave da Gemini API" value="${escapeAttr(key)}" />
         <button id="ai-key-save" class="btn btn-secondary">Salvar</button>
       </div>
-      <p style="font-size:10px;color:var(--fg-muted);margin-top:6px;">
-        Obtenha grátis em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a>
+      <p style="font-size:10px;color:var(--fg-muted);margin-top:6px;line-height:1.4;">
+        ${sharedOK
+          ? 'Esta chave é COMPARTILHADA com todos os admins via Supabase. Cadastre uma vez e todos usam.'
+          : '⚠ Tabela app_settings não encontrada — chave salva apenas neste navegador. Aplique a migration v18 no Supabase para compartilhar.'}
+        <br>Obtenha grátis em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a>
       </p>
     </details>
   `;
   const inp = document.getElementById('ai-key-input');
-  document.getElementById('ai-key-save')?.addEventListener('click', () => {
-    setKey(inp.value);
-    _refs.toast?.('Chave Gemini salva', 'success');
-    renderKeyBox();
+  document.getElementById('ai-key-save')?.addEventListener('click', async () => {
+    const v = inp.value.trim();
+    setLocalKey(v); // sempre salva local como fallback
+    if (sharedOK) {
+      const ok = await saveSharedKey(v);
+      _refs.toast?.(ok ? 'Chave Gemini compartilhada salva ✓' : 'Salva localmente (falha no compartilhar)', ok ? 'success' : 'warning');
+    } else {
+      _cachedSharedKey = v;
+      _refs.toast?.('Chave salva localmente neste navegador', 'success');
+    }
+    await renderKeyBox();
   });
 }
 
@@ -109,15 +167,15 @@ PERÍODO: ${_ctx.periodLabel}
 FILTROS: estado=${f.estado}, cidade=${f.cidade}, gerente=${f.gerente === 'todos' ? 'todos' : 'individual'}, empreendimento=${f.empreend}
 
 KPIs DO PERÍODO ATUAL:
-- VGV Vendas: R$ ${k.vgvVendas.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} (${k.vendas} vendas efetivadas)
+- VGV Vendas: R$ ${k.vgvVendas.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} (${k.vendas} vendas)
 - VGV Propostas: R$ ${k.vgvPropostas.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} (${k.propostas} propostas)
-- Conv. Atendimento → Proposta: ${k.convAtendProp.toFixed(1)}%
-- Conv. Proposta → Venda: ${k.convPropVenda.toFixed(1)}%
+- Conv. Atendimento→Proposta: ${k.convAtendProp.toFixed(1)}%
+- Conv. Proposta→Venda: ${k.convPropVenda.toFixed(1)}%
 - Pace Visitas vs período anterior: ${k.paceVisitas !== null ? k.paceVisitas.toFixed(0) + '%' : 'N/D'} (${k.visitas} agora vs ${k.prevVisitas} ant.)
 - Pace Propostas vs período anterior: ${k.pacePropostas !== null ? k.pacePropostas.toFixed(0) + '%' : 'N/D'} (${k.propostas} agora vs ${k.prevPropostas} ant.)
-- Atividades totais: Check-ins=${k.checkins}, Atendimentos=${k.atendimentos}, Propostas=${k.propostas}, Vendas=${k.vendas}
+- Atividades: Check-ins=${k.checkins}, Atendimentos=${k.atendimentos}, Propostas=${k.propostas}, Vendas=${k.vendas}
 
-Interpretação de Pace: ≥100% = crescendo (saudável), 80-100% = atenção (estável), <80% = problema (queda).`;
+Pace: ≥100% = crescendo, 80-100% = atenção, <80% = problema.`;
 }
 
 // ─── SEND MESSAGE ────────────────────────────────────────────────────────
@@ -125,17 +183,16 @@ async function sendMessage() {
   const q = (_refs.inputEl.value || '').trim();
   if (!q) return;
 
-  const key = getKey();
-  if (!key) { _refs.toast?.('Configure a chave Gemini primeiro', 'warning'); return; }
+  const key = await getEffectiveKey();
+  if (!key) { _refs.toast?.('Chave Gemini não configurada', 'warning'); return; }
 
   const r = readRate();
   if (r.count >= RATE_LIMIT_PER_HR) {
     const minsLeft = Math.ceil((r.resetAt - Date.now()) / 60000);
-    _refs.toast?.(`Limite de ${RATE_LIMIT_PER_HR} perguntas/hora atingido. Reset em ${minsLeft} min.`, 'warning');
+    _refs.toast?.(`Limite de ${RATE_LIMIT_PER_HR}/hora atingido. Reset em ${minsLeft}min.`, 'warning');
     return;
   }
 
-  // UI: bolha do user
   const userBubble = document.createElement('div');
   userBubble.className = 'chat-bubble-user';
   userBubble.textContent = q;
@@ -168,7 +225,6 @@ async function sendMessage() {
     }
     const json = await res.json();
     const answer = json?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da IA.';
-
     thinking.innerHTML = formatMarkdownLite(answer);
     bumpRate();
     updateRateLabel();
@@ -181,7 +237,6 @@ async function sendMessage() {
   }
 }
 
-// Markdown leve: **bold**, *italic*, `code`, line breaks
 function formatMarkdownLite(text) {
   let s = escapeHtml(text);
   s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
@@ -192,9 +247,10 @@ function formatMarkdownLite(text) {
 }
 
 // ─── PUBLIC API ──────────────────────────────────────────────────────────
-export function initAiChat(refs) {
+export async function initAiChat(refs) {
   _refs = refs;
-  renderKeyBox();
+  await loadSharedKey();
+  await renderKeyBox();
   renderSuggestions();
   updateRateLabel();
 
@@ -203,10 +259,9 @@ export function initAiChat(refs) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  // Mensagem inicial
   const welcome = document.createElement('div');
   welcome.className = 'chat-bubble-ai';
-  welcome.innerHTML = '👋 Olá! Posso analisar os KPIs atuais e sugerir ações. Os filtros aplicados na tela definem o contexto da minha resposta.';
+  welcome.innerHTML = '👋 Olá! Posso analisar os KPIs atuais e sugerir ações. Os filtros aplicados na tela definem o contexto.';
   _refs.historyEl.appendChild(welcome);
 }
 
