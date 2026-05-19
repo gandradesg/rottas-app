@@ -221,6 +221,15 @@ async function sendMessage() {
     );
     if (!res.ok) {
       const errTxt = await res.text();
+      // 429 = cota gratuita do Gemini esgotada — mensagem amigável
+      if (res.status === 429) {
+        thinking.innerHTML = `<div style="color:var(--yellow);font-weight:600;margin-bottom:6px;">⏳ Cota gratuita do Gemini esgotada</div>
+          <div style="font-size:11.5px;color:var(--fg-muted);line-height:1.5;">A chave em uso atingiu o limite gratuito do dia. Opções:<br>
+          1) Aguarde o reset (geralmente 24h)<br>
+          2) Master cadastre outra chave Gemini em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a><br>
+          3) Migre para Azure OpenAI (suporte sob demanda)</div>`;
+        return;
+      }
       throw new Error(`HTTP ${res.status}: ${errTxt.slice(0, 200)}`);
     }
     const json = await res.json();

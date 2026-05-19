@@ -1,8 +1,25 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.3';
+export const APP_VERSION = '1.0.4';
 export const APP_BUILD_DATE = '2026-05-19';
 
 export const CHANGELOG = [
+  {
+    version: '1.0.4',
+    date: '19/05/2026',
+    changes: [
+      'Dashboard reestruturado em 5 páginas: Visão Geral · Check-ins · Atendimentos · Propostas & Vendas · Curvas & Funil · Rankings',
+      'Visão Geral: ticker rolando com últimas vendas no topo (R$ + gerente + empreendimento + cliente)',
+      'Visão Geral: feed de últimos 30 registros com tipo, gerente e tempo relativo',
+      'Visão Geral: Top 5 inline (clique para drill-down)',
+      'Check-ins: tabs por motivo de visita (Atendimento/Plantão/Ativação/Treinamento etc) + tabela detalhada',
+      'Atendimentos: KPIs (clientes únicos, corretores, conversão) + tabela cliente/corretor/imob',
+      'Propostas & Vendas: 3 tabs (Todas/Pendentes/Vendas) + ticket médio + tabela com status',
+      'Rankings: clique em qualquer linha aplica filtro DRILL-DOWN e volta pra Visão Geral',
+      'Drill-down pills no topbar mostram filtros ativos com ✕ pra remover',
+      'Sidebar com badges mostrando contagem por categoria',
+      'Chat IA: erro 429 (cota Gemini esgotada) agora exibe mensagem amigável com alternativas',
+    ],
+  },
   {
     version: '1.0.3',
     date: '19/05/2026',

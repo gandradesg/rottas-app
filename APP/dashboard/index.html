@@ -6,12 +6,11 @@
   <meta name="theme-color" content="#0F1525" />
   <title>Dashboard Analítico · Imob Rottas</title>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png?v=imob1" />
-  <link rel="apple-touch-icon" href="/assets/app-icon-512.png?v=080" />
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { darkMode: 'class', theme: { extend: {
-      colors: { rottas: { 50:'#fff4ed',100:'#ffe6d5',200:'#ffc7a4',300:'#ffa76b',400:'#ff8633',500:'#F26B22',600:'#D5530F',700:'#b14010',800:'#8e3514',900:'#742e15' } },
+      colors: { rottas: { 50:'#fff4ed',100:'#ffe6d5',200:'#ffc7a4',300:'#ffa76b',400:'#ff8633',500:'#F26B22',600:'#D5530F',700:'#b14010' } },
       fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
     } } };
   </script>
@@ -20,20 +19,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <style>
-    :root { --bg:#0F1525;--bg-card:#161e33;--bg-elev:#1d2640;--border:rgba(255,255,255,0.07);--fg:#e2e8f0;--fg-muted:#94a3b8;--accent:#F26B22;--green:#10B981;--yellow:#F59E0B;--red:#EF4444;--sb-width:230px; }
+    :root { --bg:#0F1525;--bg-card:#161e33;--bg-elev:#1d2640;--border:rgba(255,255,255,0.07);--fg:#e2e8f0;--fg-muted:#94a3b8;--accent:#F26B22;--green:#10B981;--yellow:#F59E0B;--red:#EF4444;--blue:#3B82F6;--purple:#A855F7;--sb-width:240px; }
     html.light { --bg:#f7f8fb;--bg-card:#ffffff;--bg-elev:#f1f3f8;--border:rgba(15,21,37,0.08);--fg:#0f172a;--fg-muted:#64748b; }
     * { box-sizing: border-box; }
     html, body { background: var(--bg); color: var(--fg); font-family: 'Inter', system-ui, sans-serif; }
     body { min-height: 100vh; -webkit-font-smoothing: antialiased; }
 
     .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; }
-    .sb { width: var(--sb-width); background: var(--bg-card); border-right: 1px solid var(--border); position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; display: flex; flex-direction: column; transition: transform .25s; }
-    .sb-link { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: 9px; color: var(--fg-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; text-decoration: none; }
+
+    /* Sidebar */
+    .sb { width: var(--sb-width); background: var(--bg-card); border-right: 1px solid var(--border); position: fixed; left: 0; top: 0; bottom: 0; z-index: 40; display: flex; flex-direction: column; transition: transform .25s; overflow-y: auto; }
+    .sb-link { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; color: var(--fg-muted); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; text-decoration: none; }
     .sb-link:hover { background: var(--bg-elev); color: var(--fg); }
     .sb-link.active { background: linear-gradient(135deg, #F26B22, #D5530F); color: white; box-shadow: 0 4px 14px rgba(242,107,34,0.25); }
+    .sb-link .badge { margin-left: auto; background: var(--bg-elev); color: var(--fg-muted); font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 700; }
+    .sb-link.active .badge { background: rgba(255,255,255,0.18); color: white; }
     .sb-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-muted); padding: 14px 14px 6px; font-weight: 700; }
 
-    .topbar { height: 62px; background: var(--bg-card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 0 20px; position: sticky; top: 0; z-index: 30; }
+    .topbar { min-height: 62px; background: var(--bg-card); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; padding: 10px 20px; position: sticky; top: 0; z-index: 30; flex-wrap: wrap; }
 
     .ctrl { background: var(--bg-elev); border: 1px solid var(--border); color: var(--fg); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; outline: none; }
     .ctrl:focus { border-color: var(--accent); }
@@ -47,28 +50,68 @@
     .btn-icon { padding: 6px 8px; }
     .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
-    .kpi { padding: 18px 20px; border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 5px; position: relative; overflow: hidden; transition: transform .15s; }
+    /* KPI Cards */
+    .kpi { padding: 16px 18px; border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden; transition: transform .15s; }
     .kpi:hover { transform: translateY(-2px); border-color: rgba(242,107,34,0.3); }
     .kpi-label { font-size: 11px; color: var(--fg-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
-    .kpi-value { font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+    .kpi-value { font-size: 24px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
     .kpi-sub { font-size: 11.5px; color: var(--fg-muted); }
-    .kpi-trend-up { color: var(--green); }
-    .kpi-trend-flat { color: var(--yellow); }
-    .kpi-trend-down { color: var(--red); }
+    .kpi-trend-up { color: var(--green); } .kpi-trend-flat { color: var(--yellow); } .kpi-trend-down { color: var(--red); }
     .kpi-accent::before { content:''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
     .pace-green::before { background: var(--green); width:3px; content:''; position:absolute; left:0; top:0; bottom:0; }
     .pace-yellow::before { background: var(--yellow); width:3px; content:''; position:absolute; left:0; top:0; bottom:0; }
     .pace-red::before { background: var(--red); width:3px; content:''; position:absolute; left:0; top:0; bottom:0; }
 
+    /* Tabs */
     .tab { background: var(--bg-elev); color: var(--fg-muted); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; white-space: nowrap; }
     .tab:hover { color: var(--fg); }
     .tab.active { background: var(--accent); color: white; box-shadow: 0 3px 10px rgba(242,107,34,0.3); }
+    .tab.sub-tab { font-size: 11.5px; padding: 5px 11px; border-radius: 7px; }
 
+    /* Tables */
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     thead th { text-align: left; color: var(--fg-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; padding: 9px 10px; border-bottom: 1px solid var(--border); }
-    tbody td { padding: 10px; border-bottom: 1px solid var(--border); }
-    tbody tr:hover td { background: var(--bg-elev); }
+    tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+    tbody tr { transition: background .15s; }
+    tbody tr.clickable { cursor: pointer; }
+    tbody tr.clickable:hover td { background: var(--bg-elev); }
     .num { font-variant-numeric: tabular-nums; text-align: right; }
+
+    /* Activity Type Icons */
+    .act-icon { width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; font-weight: 700; }
+    .act-checkin { background: rgba(59,130,246,0.18); color: var(--blue); }
+    .act-atendimento { background: rgba(168,85,247,0.18); color: var(--purple); }
+    .act-proposta { background: rgba(242,107,34,0.18); color: var(--accent); }
+    .act-venda { background: rgba(16,185,129,0.18); color: var(--green); }
+    .act-orulo { background: rgba(245,158,11,0.18); color: var(--yellow); }
+
+    /* TICKER (rolling sales feed at top) */
+    .ticker-wrap { background: linear-gradient(90deg, rgba(242,107,34,0.08), rgba(168,85,247,0.06), rgba(16,185,129,0.08)); border-bottom: 1px solid var(--border); overflow: hidden; padding: 10px 0; position: relative; }
+    .ticker-wrap::before { content: '🔥 ÚLTIMAS VENDAS'; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); z-index: 2; background: var(--bg-card); padding: 4px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; color: var(--accent); border: 1px solid rgba(242,107,34,0.4); }
+    .ticker-track { display: inline-flex; gap: 40px; padding-left: 200px; white-space: nowrap; animation: tickerMove 60s linear infinite; }
+    .ticker-track:hover { animation-play-state: paused; }
+    @keyframes tickerMove { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+    .ticker-item { font-size: 13px; display: inline-flex; align-items: center; gap: 8px; color: var(--fg); }
+    .ticker-item b { color: var(--green); font-weight: 800; }
+    .ticker-item .muted { color: var(--fg-muted); font-size: 11px; }
+
+    /* Activity list rows */
+    .act-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--border); transition: background .15s; }
+    .act-row:hover { background: var(--bg-elev); }
+    .act-row:last-child { border-bottom: none; }
+    .act-meta { font-size: 11px; color: var(--fg-muted); }
+
+    /* Chip */
+    .chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+    .chip-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .chip-purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+    .chip-orange { background: rgba(242,107,34,0.18); color: var(--accent); }
+    .chip-green { background: rgba(16,185,129,0.15); color: var(--green); }
+    .chip-yellow { background: rgba(245,158,11,0.15); color: var(--yellow); }
+
+    /* Filter pill (drill-down state) */
+    .filter-pill { display: inline-flex; align-items: center; gap: 6px; background: rgba(242,107,34,0.15); border: 1px solid rgba(242,107,34,0.4); color: var(--accent); border-radius: 999px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; }
+    .filter-pill button { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0 0 0 4px; font-size: 14px; line-height: 1; }
 
     .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
     .scroll-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -80,10 +123,10 @@
     @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
     .skeleton { background: linear-gradient(90deg, var(--bg-elev) 25%, var(--border) 50%, var(--bg-elev) 75%); background-size: 400px 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
 
-    /* Chat IA flutuante */
+    /* Chat IA FAB */
     .ai-fab { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, #F26B22, #D5530F); color: white; border: none; cursor: pointer; box-shadow: 0 8px 24px rgba(242,107,34,0.45); z-index: 50; display: flex; align-items: center; justify-content: center; font-size: 22px; transition: transform .15s; }
     .ai-fab:hover { transform: scale(1.08); }
-    .ai-panel { position: fixed; bottom: 24px; right: 24px; width: 380px; max-width: calc(100vw - 32px); height: 540px; max-height: calc(100vh - 48px); background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.35); z-index: 50; display: none; flex-direction: column; overflow: hidden; }
+    .ai-panel { position: fixed; bottom: 24px; right: 24px; width: 400px; max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 48px); background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.35); z-index: 50; display: none; flex-direction: column; overflow: hidden; }
     .ai-panel.open { display: flex; animation: aiSlideIn .25s cubic-bezier(.2,.9,.2,1); }
     @keyframes aiSlideIn { from { opacity: 0; transform: translateY(20px) scale(.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
@@ -110,37 +153,31 @@
     .toast.error   { border-left: 3px solid var(--red); }
     .toast.warning { border-left: 3px solid var(--yellow); }
 
-    .sec-title { font-size: 14px; font-weight: 700; color: var(--fg); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-    .sec-subtitle { font-size: 12px; color: var(--fg-muted); margin-top: -8px; margin-bottom: 16px; }
+    .sec-title { font-size: 16px; font-weight: 800; color: var(--fg); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+    .sec-subtitle { font-size: 12.5px; color: var(--fg-muted); margin-bottom: 16px; }
 
-    /* Última atualização chip (clicável) */
     .lu-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: var(--bg-elev); border: 1px solid var(--border); font-size: 11.5px; color: var(--fg-muted); cursor: pointer; transition: all .15s; }
     .lu-chip:hover { border-color: var(--accent); color: var(--fg); }
     .lu-chip b { color: var(--fg); font-weight: 700; }
 
-    /* Modal histórico */
     .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 60; padding: 20px; backdrop-filter: blur(2px); }
     .modal-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 22px; width: 100%; max-width: 580px; max-height: 80vh; display: flex; flex-direction: column; gap: 14px; }
 
-    /* Snapshot banner */
     .snapshot-banner { display: none; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: linear-gradient(90deg, rgba(242,107,34,0.16), rgba(213,83,15,0.08)); border: 1px solid rgba(242,107,34,0.35); border-radius: 10px; margin-bottom: 14px; font-size: 12.5px; }
   </style>
 </head>
 <body>
 
-<!-- ═══ AUTH GATE ═══════════════════════════════════════════════════════════ -->
 <div id="auth-gate" class="fixed inset-0 flex flex-col items-center justify-center gap-4" style="background:var(--bg);z-index:200;">
   <img src="/assets/logo-rottas.png" style="height:42px;opacity:.85;" onerror="this.style.display='none'" />
   <div class="spinner"></div>
   <p id="auth-msg" style="color:var(--fg-muted);font-size:13px;">Verificando sessão...</p>
 </div>
 
-<!-- ═══ APP ═════════════════════════════════════════════════════════════════ -->
 <div id="app" style="display:none;">
-
   <!-- SIDEBAR -->
-  <aside class="sb" id="sidebar">
-    <div style="padding:18px 14px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:10px;">
+  <aside class="sb scroll-thin" id="sidebar">
+    <div style="padding:16px 14px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:10px;">
       <img src="/assets/logo-icon.png" style="height:30px;object-fit:contain;" onerror="this.style.display='none'" />
       <div>
         <div style="font-weight:800;font-size:14px;line-height:1.1;">Imob Rottas</div>
@@ -148,12 +185,32 @@
       </div>
     </div>
 
-    <div class="sb-section-label">Análise</div>
+    <div class="sb-section-label">Geral</div>
     <nav style="padding: 0 10px; display: flex; flex-direction: column; gap: 2px;">
       <a class="sb-link active" data-section="overview">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
         Visão Geral
       </a>
+    </nav>
+
+    <div class="sb-section-label">Atividades</div>
+    <nav style="padding: 0 10px; display: flex; flex-direction: column; gap: 2px;">
+      <a class="sb-link" data-section="checkins">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Check-ins <span class="badge" id="badge-checkins">0</span>
+      </a>
+      <a class="sb-link" data-section="atendimentos">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Atendimentos <span class="badge" id="badge-atendimentos">0</span>
+      </a>
+      <a class="sb-link" data-section="propostas">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z M14 2v6h6"/></svg>
+        Propostas & Vendas <span class="badge" id="badge-propostas">0</span>
+      </a>
+    </nav>
+
+    <div class="sb-section-label">Análise</div>
+    <nav style="padding: 0 10px; display: flex; flex-direction: column; gap: 2px;">
       <a class="sb-link" data-section="charts">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>
         Curvas & Funil
@@ -180,27 +237,27 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
         Sair
       </button>
-      <div style="font-size:9.5px;color:var(--fg-muted);text-align:center;padding-top:4px;letter-spacing:0.05em;">v1.0.3 · Build 2026</div>
+      <div style="font-size:9.5px;color:var(--fg-muted);text-align:center;padding-top:4px;letter-spacing:0.05em;">v1.0.4 · Build 2026</div>
     </div>
   </aside>
 
-  <!-- MAIN -->
   <div class="main">
     <!-- TOPBAR -->
     <div class="topbar">
       <button class="btn btn-secondary btn-icon sb-toggle" id="sb-toggle-btn" aria-label="Menu">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
-      <h1 style="font-size:15px;font-weight:700;flex-shrink:0;margin-right:8px;">
+      <h1 style="font-size:15px;font-weight:700;flex-shrink:0;">
         <span style="color:var(--fg-muted);font-weight:500;">Dashboard</span> ›
         <span id="section-title">Visão Geral</span>
       </h1>
 
-      <!-- Last update chip (clicável → abre modal histórico) -->
-      <button id="last-update-chip" class="lu-chip" title="Ver histórico de atualizações">
+      <button id="last-update-chip" class="lu-chip" title="Ver histórico">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
         Nenhuma atualização ainda
       </button>
+
+      <div id="drill-filters-bar" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
 
       <div class="topbar-filters" style="flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
         <select id="f-periodo" class="ctrl">
@@ -208,9 +265,7 @@
           <option value="30d" selected>30 dias</option><option value="90d">90 dias</option>
           <option value="12m">12 meses</option><option value="tudo">Tudo</option>
         </select>
-        <select id="f-estado" class="ctrl">
-          <option value="todos">Todos estados</option><option value="PR">PR</option><option value="SC">SC</option>
-        </select>
+        <select id="f-estado" class="ctrl"><option value="todos">Todos estados</option><option value="PR">PR</option><option value="SC">SC</option></select>
         <select id="f-cidade" class="ctrl"><option value="todas">Todas cidades</option></select>
         <select id="f-empreend" class="ctrl"><option value="todos">Todos empreend.</option></select>
         <select id="f-imob" class="ctrl"><option value="todas">Todas imobiliárias</option></select>
@@ -225,9 +280,14 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
           <span id="btn-refresh-label">Atualizar</span>
         </button>
-        <button id="btn-theme" class="btn btn-secondary btn-icon" title="Alternar tema">
-          <span id="theme-icon">☀️</span>
-        </button>
+        <button id="btn-theme" class="btn btn-secondary btn-icon"><span id="theme-icon">☀️</span></button>
+      </div>
+    </div>
+
+    <!-- TICKER (only on overview) -->
+    <div id="ticker-wrap" class="ticker-wrap">
+      <div class="ticker-track" id="ticker-track">
+        <span class="ticker-item"><span class="muted">aguardando primeira atualização...</span></span>
       </div>
     </div>
 
@@ -238,56 +298,122 @@
       <span style="margin-left:auto;" id="status-counts"></span>
     </div>
 
-    <!-- CONTENT -->
     <main style="flex:1; padding: 22px; max-width: 1500px; width: 100%; margin: 0 auto;">
 
-      <!-- Banner modo snapshot -->
       <div id="snapshot-banner" class="snapshot-banner">
         <span>📸 <b id="snapshot-banner-label"></b></span>
         <button id="snapshot-exit-btn" class="btn btn-secondary" style="font-size:11px;">Voltar ao tempo real</button>
       </div>
 
-      <!-- ── PÁGINA: VISÃO GERAL (apenas KPIs grandes) ────────────────── -->
+      <!-- ═══ VISÃO GERAL ═══════════════════════════════════════════════ -->
       <section id="sec-overview" class="fade-in">
         <h2 class="sec-title">📊 Indicadores principais</h2>
-        <p class="sec-subtitle">Resumo de performance no período selecionado. Use a chave Gemini compartilhada para análises de IA.</p>
-        <div id="kpi-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;">
-          <div class="kpi skeleton" style="height:108px;"></div>
-          <div class="kpi skeleton" style="height:108px;"></div>
-          <div class="kpi skeleton" style="height:108px;"></div>
-          <div class="kpi skeleton" style="height:108px;"></div>
-          <div class="kpi skeleton" style="height:108px;"></div>
-          <div class="kpi skeleton" style="height:108px;"></div>
+        <p class="sec-subtitle">Panorama em tempo real do período selecionado.</p>
+
+        <div id="kpi-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 22px;">
+          <div class="kpi skeleton" style="height:100px;"></div>
+          <div class="kpi skeleton" style="height:100px;"></div>
+          <div class="kpi skeleton" style="height:100px;"></div>
+          <div class="kpi skeleton" style="height:100px;"></div>
+          <div class="kpi skeleton" style="height:100px;"></div>
+          <div class="kpi skeleton" style="height:100px;"></div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 22px;" class="grid-charts">
+          <div class="card" style="padding: 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <h3 style="font-size:13.5px;font-weight:700;">Atividades por dia</h3>
+              <span style="font-size:10.5px;color:var(--fg-muted);">Visitas · Atendimentos · Propostas</span>
+            </div>
+            <div id="chart-line-wrap" style="position:relative;height:240px;"><div class="spinner" style="margin:90px auto;"></div></div>
+          </div>
+          <div class="card" style="padding: 18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Funil de Conversão</h3>
+            <div id="chart-funnel-wrap" style="position:relative;height:240px;"><div class="spinner" style="margin:90px auto;"></div></div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px;" class="grid-bottom">
+          <div class="card" style="padding: 18px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <h3 style="font-size:13.5px;font-weight:700;">🏆 Top 5 Gerentes</h3>
+              <a class="sb-link" data-section="rankings" style="font-size:11px;padding:3px 8px;color:var(--accent);">Ver todos →</a>
+            </div>
+            <div id="overview-top5"><div class="spinner" style="margin:30px auto;"></div></div>
+          </div>
+
+          <div class="card" style="padding: 18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">📋 Últimos registros</h3>
+            <div id="overview-feed" style="max-height:300px;overflow-y:auto;" class="scroll-thin"><div class="spinner" style="margin:30px auto;"></div></div>
+          </div>
         </div>
       </section>
 
-      <!-- ── PÁGINA: CHARTS ───────────────────────────────────────────── -->
+      <!-- ═══ CHECK-INS ═══════════════════════════════════════════════ -->
+      <section id="sec-checkins" class="fade-in" style="display:none;">
+        <h2 class="sec-title">📍 Check-ins</h2>
+        <p class="sec-subtitle">Visitas registradas em imobiliárias, separadas por motivo.</p>
+
+        <div id="checkins-motivo-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;"></div>
+        <div id="checkins-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
+        <div class="card" style="padding:14px;">
+          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;">Registros</h3>
+          <div id="checkins-table-wrap" style="overflow-x:auto;max-height:520px;overflow-y:auto;" class="scroll-thin"></div>
+        </div>
+      </section>
+
+      <!-- ═══ ATENDIMENTOS ════════════════════════════════════════════ -->
+      <section id="sec-atendimentos" class="fade-in" style="display:none;">
+        <h2 class="sec-title">👥 Atendimentos</h2>
+        <p class="sec-subtitle">Atendimentos com clientes via corretores parceiros.</p>
+
+        <div id="atendimentos-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
+        <div class="card" style="padding:14px;">
+          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;">Registros</h3>
+          <div id="atendimentos-table-wrap" style="overflow-x:auto;max-height:600px;overflow-y:auto;" class="scroll-thin"></div>
+        </div>
+      </section>
+
+      <!-- ═══ PROPOSTAS & VENDAS ══════════════════════════════════════ -->
+      <section id="sec-propostas" class="fade-in" style="display:none;">
+        <h2 class="sec-title">📄 Propostas & Vendas</h2>
+        <p class="sec-subtitle">Propostas comerciais subidas e vendas efetivadas.</p>
+
+        <div id="propostas-tabs" style="display:flex;gap:6px;margin-bottom:16px;">
+          <button class="tab active" data-prop-tab="todas">Todas</button>
+          <button class="tab" data-prop-tab="pendentes">Pendentes</button>
+          <button class="tab" data-prop-tab="vendas">Vendas (com reserva)</button>
+        </div>
+        <div id="propostas-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
+        <div class="card" style="padding:14px;">
+          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;">Registros</h3>
+          <div id="propostas-table-wrap" style="overflow-x:auto;max-height:600px;overflow-y:auto;" class="scroll-thin"></div>
+        </div>
+      </section>
+
+      <!-- ═══ CHARTS (full) ═══════════════════════════════════════════ -->
       <section id="sec-charts" class="fade-in" style="display:none;">
         <h2 class="sec-title">📈 Curvas & Funil de Conversão</h2>
-        <p class="sec-subtitle">Acompanhe a evolução temporal e a conversão entre estágios do funil comercial.</p>
+        <p class="sec-subtitle">Evolução temporal e conversão entre estágios.</p>
         <div style="display:grid; grid-template-columns: 1fr; gap: 16px;">
           <div class="card" style="padding: 20px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
               <h3 style="font-size:14px;font-weight:700;">Atividades por dia</h3>
-              <div style="font-size:11px;color:var(--fg-muted);">Visitas · Atendimentos · Propostas</div>
+              <span style="font-size:11px;color:var(--fg-muted);">Visitas · Atendimentos · Propostas</span>
             </div>
-            <div id="chart-line-wrap" style="position:relative;height:340px;">
-              <div class="spinner" style="margin:140px auto;"></div>
-            </div>
+            <div id="chart-line-wrap-full" style="position:relative;height:380px;"><div class="spinner" style="margin:160px auto;"></div></div>
           </div>
           <div class="card" style="padding: 20px;">
             <h3 style="font-size:14px;font-weight:700;margin-bottom:14px;">Funil de Conversão</h3>
-            <div id="chart-funnel-wrap" style="position:relative;height:340px;">
-              <div class="spinner" style="margin:140px auto;"></div>
-            </div>
+            <div id="chart-funnel-wrap-full" style="position:relative;height:380px;"><div class="spinner" style="margin:160px auto;"></div></div>
           </div>
         </div>
       </section>
 
-      <!-- ── PÁGINA: RANKINGS ─────────────────────────────────────────── -->
+      <!-- ═══ RANKINGS (full) ═════════════════════════════════════════ -->
       <section id="sec-rankings" class="fade-in" style="display:none;">
-        <h2 class="sec-title">🏆 Rankings</h2>
-        <p class="sec-subtitle">Compare desempenho entre dimensões: gerentes, regionais, cidades, empreendimentos e imobiliárias.</p>
+        <h2 class="sec-title">🏆 Rankings Completos</h2>
+        <p class="sec-subtitle">Clique em qualquer linha para filtrar o dashboard inteiro por aquela dimensão.</p>
         <div class="card" style="padding: 18px;">
           <div id="rank-tabs" style="display:flex; gap:6px; margin-bottom: 16px; overflow-x:auto;" class="no-scrollbar">
             <button class="tab active" data-rank="gerente">Gerente</button>
@@ -296,9 +422,7 @@
             <button class="tab" data-rank="empreendimento">Empreendimento</button>
             <button class="tab" data-rank="imobiliaria">Imobiliária</button>
           </div>
-          <div id="rank-table-wrap" style="overflow-x:auto;">
-            <div class="spinner" style="margin:40px auto;"></div>
-          </div>
+          <div id="rank-table-wrap" style="overflow-x:auto;"><div class="spinner" style="margin:40px auto;"></div></div>
         </div>
       </section>
 
@@ -306,7 +430,7 @@
   </div>
 </div>
 
-<!-- ═══ CHAT IA FLUTUANTE (visível em TODAS as páginas) ═════════════════════ -->
+<!-- Chat IA flutuante -->
 <button id="ai-fab" class="ai-fab" title="Abrir Chat IA">🤖</button>
 <div id="ai-panel" class="ai-panel">
   <div style="padding:14px 16px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px;">
@@ -329,22 +453,20 @@
       <input id="ai-input" type="text" class="ctrl" style="flex:1;" placeholder="Pergunte sobre os KPIs..." />
       <button id="ai-send" class="btn btn-primary">↑</button>
     </div>
-    <div style="font-size:10px;color:var(--fg-muted);margin-top:6px;text-align:right;">
-      <span id="ai-rate">—</span>
-    </div>
+    <div style="font-size:10px;color:var(--fg-muted);margin-top:6px;text-align:right;"><span id="ai-rate">—</span></div>
   </div>
 </div>
 
-<!-- ═══ MODAL HISTÓRICO ════════════════════════════════════════════════════ -->
+<!-- Modal Histórico -->
 <div id="history-modal" class="modal-bg">
   <div id="history-modal-bg" style="position:absolute;inset:0;"></div>
   <div class="modal-card" style="position:relative;">
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <div>
         <h2 style="font-size:16px;font-weight:700;">📅 Histórico de atualizações</h2>
-        <p style="font-size:11.5px;color:var(--fg-muted);margin-top:2px;">Clique em uma versão para restaurar a visão dos KPIs daquele momento</p>
+        <p style="font-size:11.5px;color:var(--fg-muted);margin-top:2px;">Clique em uma versão para restaurar os KPIs daquele momento.</p>
       </div>
-      <button id="history-modal-close" class="btn btn-secondary btn-icon" aria-label="Fechar">
+      <button id="history-modal-close" class="btn btn-secondary btn-icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
       </button>
     </div>
@@ -352,9 +474,15 @@
   </div>
 </div>
 
-<!-- Toast container -->
 <div id="toast-root"></div>
 
-<script type="module" src="/dashboard/app.js?v=102"></script>
+<style>
+  @media (max-width: 1100px) {
+    .grid-charts { grid-template-columns: 1fr !important; }
+    .grid-bottom { grid-template-columns: 1fr !important; }
+  }
+</style>
+
+<script type="module" src="/dashboard/app.js?v=104"></script>
 </body>
 </html>
