@@ -209,7 +209,7 @@ async function sendMessage() {
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${encodeURIComponent(key)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -221,16 +221,38 @@ async function sendMessage() {
     );
     if (!res.ok) {
       const errTxt = await res.text();
-      // 429 = cota gratuita do Gemini esgotada — mensagem amigável
-      if (res.status === 429) {
-        thinking.innerHTML = `<div style="color:var(--yellow);font-weight:600;margin-bottom:6px;">⏳ Cota gratuita do Gemini esgotada</div>
-          <div style="font-size:11.5px;color:var(--fg-muted);line-height:1.5;">A chave em uso atingiu o limite gratuito do dia. Opções:<br>
-          1) Aguarde o reset (geralmente 24h)<br>
-          2) Master cadastre outra chave Gemini em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a><br>
-          3) Migre para Azure OpenAI (suporte sob demanda)</div>`;
+      // Parse mensagem de erro estruturada (Google retorna JSON)
+      let parsedMsg = '';
+      try { const j = JSON.parse(errTxt); parsedMsg = j?.error?.message || ''; } catch {}
+
+      if (res.status === 400) {
+        thinking.innerHTML = `<div style="color:var(--red);font-weight:600;margin-bottom:6px;">⚠ Chave inválida ou requisição malformada</div>
+          <div style="font-size:11.5px;color:var(--fg-muted);line-height:1.5;">A chave Gemini parece ser inválida. Confira em
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com/app/apikey</a>
+          e cole novamente em ⚙️ Configure a chave.<br><br><span style="font-size:10px;">Detalhe: ${escapeHtml(parsedMsg || 'sem detalhes')}</span></div>`;
         return;
       }
-      throw new Error(`HTTP ${res.status}: ${errTxt.slice(0, 200)}`);
+      if (res.status === 403) {
+        thinking.innerHTML = `<div style="color:var(--red);font-weight:600;margin-bottom:6px;">🚫 Acesso negado pela Google</div>
+          <div style="font-size:11.5px;color:var(--fg-muted);line-height:1.5;">A chave pode estar restrita por IP/domínio, ou a Generative Language API não está habilitada no projeto Google Cloud associado.<br><br>Verifique em <a href="https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com" target="_blank" style="color:var(--accent);">console.cloud.google.com</a>.<br><br><span style="font-size:10px;">Detalhe: ${escapeHtml(parsedMsg || 'sem detalhes')}</span></div>`;
+        return;
+      }
+      if (res.status === 429) {
+        thinking.innerHTML = `<div style="color:var(--yellow);font-weight:600;margin-bottom:6px;">⏳ Cota gratuita do Gemini esgotada</div>
+          <div style="font-size:11.5px;color:var(--fg-muted);line-height:1.5;">
+          A chave em uso bateu o limite por minuto (15 RPM) ou por dia (1500 RPD).<br><br>
+          <b>Por que aconteceu?</b> Mesmo sem ter perguntado aqui, sua chave pode estar:<br>
+          • Sendo usada em outros projetos<br>
+          • Em um projeto sem billing habilitado (limite mais baixo)<br>
+          • Acabou de ser criada e o limite ainda não estabilizou<br><br>
+          <b>Soluções:</b><br>
+          1) Aguarde 1-2 minutos e tente de novo<br>
+          2) Crie outra chave em <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--accent);">aistudio.google.com</a><br>
+          3) Master pode trocar a chave compartilhada no ⚙️ acima<br><br>
+          <span style="font-size:10px;">Detalhe: ${escapeHtml(parsedMsg || 'sem detalhes')}</span></div>`;
+        return;
+      }
+      throw new Error(`HTTP ${res.status}: ${parsedMsg || errTxt.slice(0, 200)}`);
     }
     const json = await res.json();
     const answer = json?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sem resposta da IA.';

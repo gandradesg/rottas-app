@@ -151,7 +151,7 @@ const PERIODO_LABEL = { hoje:'Hoje', '7d':'Últimos 7 dias', '30d':'Últimos 30 
 // ─── DATA FETCH ──────────────────────────────────────────────────────────
 async function fetchAtividades(start, end) {
   let q = sb.from('atividades')
-    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_atividade, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
+    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
     .eq('cancelada', false).order('created_at', { ascending: false }).limit(5000);
   if (start) q = q.gte('created_at', start.toISOString());
   if (end)   q = q.lte('created_at', end.toISOString());
@@ -423,7 +423,7 @@ function renderCheckinsPage(curr) {
       <td>${escapeHtml(r.imobiliaria || '—')}</td>
       <td><span class="chip chip-blue">${escapeHtml(r.motivo_visita || '—')}</span></td>
       <td>${escapeHtml(r.local_treinamento || '—')}${r.qtd_pessoas ? ` · ${r.qtd_pessoas}p` : ''}</td>
-      <td class="num"><span style="color:var(--fg-muted);font-size:11px;">${r.numero_atividade || '—'}</span></td>
+      <td class="num"><span style="color:var(--fg-muted);font-size:11px;">${r.numero_sequencial || '—'}</span></td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -456,7 +456,7 @@ function renderAtendimentosPage(curr) {
       <td>${escapeHtml(r.corretor || '—')}</td>
       <td>${escapeHtml(r.imobiliaria || '—')}</td>
       <td>${escapeHtml(r.empreendimento || r.produto || '—')}</td>
-      <td class="num"><span style="color:var(--fg-muted);font-size:11px;">${r.numero_atividade || '—'}</span></td>
+      <td class="num"><span style="color:var(--fg-muted);font-size:11px;">${r.numero_sequencial || '—'}</span></td>
     </tr>`;
   });
   html += '</tbody></table>'; tw.innerHTML = html;
