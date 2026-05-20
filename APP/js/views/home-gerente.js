@@ -1,6 +1,6 @@
 // Home do Gerente - KPIs e feed com filtro de período
 import { el, icon, fmt } from '../ui.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias, getScopedGerenteIds } from '../supabase.js';
 import { shell } from './shell.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -112,24 +112,41 @@ export async function homeGerenteView(_params, app) {
 
   app.appendChild(shell(content));
 
-  // Busca última visita por imobiliária para o alerta
+  // Busca última visita por imobiliária para o alerta — SCOPED por hierarquia
+  // - Gerente: imobs da cidade dele + visitas dele e dos supervisores subordinados
+  // - Supervisor: imobs da cidade + suas próprias visitas
+  // - Gestor Regional / Superintendente: imobs nas cidades_acesso / estados_acesso
+  // - Master / Gestor: tudo
   async function loadStaleAlert() {
     staleAlertEl.innerHTML = '';
-    if (!state.imobiliarias?.length) return;
-    const { data } = await supabase
-      .from('atividades')
+    const scopedImobs = getScopedImobiliarias();
+    if (!scopedImobs.length) return;
+
+    // IDs de gerentes que esse user pode "ver" (gerente vê dele + supervisores subordinados)
+    const allowedIds = await getScopedGerenteIds();
+
+    let q = supabase.from('atividades')
       .select('imobiliaria, created_at')
-      .eq('gerente_id', state.user.id)
       .eq('cancelada', false)
       .in('tipo', ['checkin', 'atendimento'])
       .not('imobiliaria', 'is', null)
       .order('created_at', { ascending: false });
+    // Se allowedIds é null (master/gestor), não filtra; senão usa IN
+    if (allowedIds && allowedIds.size > 0) {
+      q = q.in('gerente_id', [...allowedIds]);
+    } else if (allowedIds && allowedIds.size === 0) {
+      // Sem ninguém no escopo: aborta
+      return;
+    }
+    const { data } = await q;
     if (!data) return;
+
     const lastByImob = {};
     data.forEach(a => {
       if (!lastByImob[a.imobiliaria]) lastByImob[a.imobiliaria] = new Date(a.created_at);
     });
-    const stale = state.imobiliarias.filter(im => {
+    // Compara contra a LISTA SCOPED de imobs (não a global)
+    const stale = scopedImobs.filter(im => {
       const last = lastByImob[im.nome];
       if (!last) return true; // nunca visitou
       const days = Math.floor((Date.now() - last.getTime()) / 86400000);

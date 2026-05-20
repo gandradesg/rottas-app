@@ -1,8 +1,27 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.4';
+export const APP_VERSION = '1.0.5';
 export const APP_BUILD_DATE = '2026-05-19';
 
 export const CHANGELOG = [
+  {
+    version: '1.0.5',
+    date: '19/05/2026',
+    changes: [
+      'Alerta de "imobiliárias sem visita" agora respeita HIERARQUIA de visibilidade:',
+      '  → Master/Gestor: todas as imobiliárias',
+      '  → Superintendente: apenas imobiliárias nos seus estados_acesso',
+      '  → Gestor Regional: apenas imobiliárias nas suas cidades_acesso',
+      '  → Gerente/Supervisor: apenas imobiliárias da sua cidade',
+      'Atividades consideradas no alerta agora incluem subordinados:',
+      '  → Gerente vê visitas dele + dos supervisores subordinados',
+      'Form de check-in/atendimento/proposta/órulo: listas suspensas de imobiliárias',
+      '  e empreendimentos agora filtradas por escopo (não mostra opções fora da região)',
+      'Novos helpers em supabase.js: getScopedImobiliarias(), getScopedEmpreendimentos(),',
+      '  getScopedGerenteIds() — reutilizáveis em qualquer view',
+      'Gemini Chat: adiciona modelos 2.5-* no fallback (lançados Set/2025) + cache do modelo',
+      '  descoberto via Testar pra evitar 404 nas próximas perguntas',
+    ],
+  },
   {
     version: '1.0.4',
     date: '19/05/2026',

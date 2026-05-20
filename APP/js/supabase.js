@@ -76,6 +76,85 @@ export async function loadLists() {
   emitStateChange();
 }
 
+// ─── SCOPE HELPERS (filtro hierárquico de visibilidade) ─────────────────
+// Hierarquia de visibilidade:
+//   Master/Gestor    → tudo
+//   Superintendente  → tudo nos estados_acesso (jsonb array)
+//   Gestor Regional  → tudo nas cidades_acesso (jsonb array)
+//   Gerente          → sua cidade (e supervisores subordinados, via outro helper)
+//   Supervisor       → sua cidade (acompanha o gerente)
+
+// Retorna imobiliárias visíveis ao usuário atual (scope geográfico)
+export function getScopedImobiliarias() {
+  const all = state.imobiliarias || [];
+  const p = state.profile;
+  if (!p) return [];
+  if (['master', 'gestor'].includes(p.role)) return all;
+  if (p.role === 'superintendente') {
+    const estados = Array.isArray(p.estados_acesso) ? p.estados_acesso : [];
+    return all.filter(im => estados.includes(im.estado));
+  }
+  if (p.role === 'gestor_regional') {
+    const cidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
+    return all.filter(im => cidades.includes(im.cidade));
+  }
+  if (['gerente', 'supervisor'].includes(p.role)) {
+    if (!p.cidade) return [];
+    return all.filter(im => im.cidade === p.cidade);
+  }
+  return all;
+}
+
+// Retorna empreendimentos visíveis ao usuário atual (mesma lógica)
+export function getScopedEmpreendimentos() {
+  const all = state.empreendimentos || [];
+  const p = state.profile;
+  if (!p) return [];
+  if (['master', 'gestor'].includes(p.role)) return all;
+  if (p.role === 'superintendente') {
+    const estados = Array.isArray(p.estados_acesso) ? p.estados_acesso : [];
+    return all.filter(e => estados.includes(e.estado));
+  }
+  if (p.role === 'gestor_regional') {
+    const cidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
+    return all.filter(e => cidades.includes(e.cidade));
+  }
+  if (['gerente', 'supervisor'].includes(p.role)) {
+    if (!p.cidade) return [];
+    return all.filter(e => e.cidade === p.cidade);
+  }
+  return all;
+}
+
+// Retorna IDs de gerentes/supervisores visíveis ao user (async — consulta DB)
+// Master/Gestor: null (sem restrição)
+// Superintendente: gerentes/supervisores nos estados_acesso
+// Gestor Regional: gerentes/supervisores nas cidades_acesso
+// Gerente: ele + supervisores subordinados (gerente_supervisor_id = self)
+// Supervisor: só ele
+export async function getScopedGerenteIds() {
+  const p = state.profile;
+  if (!p) return new Set();
+  if (['master', 'gestor'].includes(p.role)) return null;
+  const { data } = await supabase.from('profiles')
+    .select('id, role, estado, cidade, gerente_supervisor_id').eq('ativo', true);
+  const profiles = data || [];
+  const allowed = new Set();
+  if (p.role === 'superintendente') {
+    const estados = p.estados_acesso || [];
+    profiles.forEach(x => { if (['gerente','supervisor'].includes(x.role) && estados.includes(x.estado)) allowed.add(x.id); });
+  } else if (p.role === 'gestor_regional') {
+    const cidades = p.cidades_acesso || [];
+    profiles.forEach(x => { if (['gerente','supervisor'].includes(x.role) && cidades.includes(x.cidade)) allowed.add(x.id); });
+  } else if (p.role === 'gerente') {
+    allowed.add(p.id);
+    profiles.forEach(x => { if (x.role === 'supervisor' && x.gerente_supervisor_id === p.id) allowed.add(x.id); });
+  } else if (p.role === 'supervisor') {
+    allowed.add(p.id);
+  }
+  return allowed;
+}
+
 // Helper: carrega todos os profiles (apenas master)
 export async function loadAllProfiles() {
   const { data, error } = await supabase

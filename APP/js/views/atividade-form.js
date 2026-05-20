@@ -1,7 +1,7 @@
 // Formulário unificado de atividade - discriminado por tipo
 import { el, icon, toast, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
@@ -192,7 +192,9 @@ export async function atividadeFormView(params, app) {
     const initialImobsExtras = Array.isArray(initial?.imobiliarias_participantes)
       ? initial.imobiliarias_participantes : [];
     const imobsCheck = {};
-    state.imobiliarias.forEach(im => { imobsCheck[im.nome] = initialImobsExtras.includes(im.nome); });
+    // SCOPED: só mostra imobiliárias relevantes pra hierarquia do usuário
+    const scopedImobs = getScopedImobiliarias();
+    scopedImobs.forEach(im => { imobsCheck[im.nome] = initialImobsExtras.includes(im.nome); });
 
     const imobsSearchInput = el('input', {
       type: 'text',
@@ -204,10 +206,10 @@ export async function atividadeFormView(params, app) {
     function renderImobsList() {
       const f = (imobsSearchInput.value || '').trim().toLowerCase();
       imobsListEl.innerHTML = '';
-      const filtered = state.imobiliarias.filter(im =>
+      const filtered = scopedImobs.filter(im =>
         !f || im.nome.toLowerCase().includes(f)
       );
-      if (state.imobiliarias.length === 0) {
+      if (scopedImobs.length === 0) {
         imobsListEl.appendChild(el('span', { class: 'text-sm text-fg-muted px-2 py-1' }, 'Nenhuma imobiliária cadastrada.'));
         return;
       }
@@ -263,7 +265,7 @@ export async function atividadeFormView(params, app) {
       locationFieldEl ? field('Localização', locationFieldEl, { required: true }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
       field('Imobiliária', creatableSelect({
-        name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+        name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       }), { required: true }),
       field('Motivo da visita', motivoSel, { required: true }),
@@ -281,7 +283,7 @@ export async function atividadeFormView(params, app) {
       return {
         local_treinamento: ltHidden?.value || null,
         qtd_pessoas: qtdPessoasInput.value ? parseInt(qtdPessoasInput.value, 10) : null,
-        imobiliarias_participantes: state.imobiliarias
+        imobiliarias_participantes: scopedImobs
           .filter(im => imobsCheck[im.nome])
           .map(im => im.nome),
       };
@@ -300,12 +302,12 @@ export async function atividadeFormView(params, app) {
         required: true, allowAdd: true, onAdd: addLocalVisita,
       }), { required: true, help: 'Você pode adicionar um novo local se não estiver na lista' }),
       field('Imobiliária', creatableSelect({
-        name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+        name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       }), { required: true }),
       field('Corretor', el('input', { class: 'input', name: 'corretor', required: true, value: initial?.corretor || '' }), { required: true }),
       field('Empreendimento', creatableSelect({
-        name: 'produto', items: state.empreendimentos, value: initial?.produto, required: true,
+        name: 'produto', items: getScopedEmpreendimentos(), value: initial?.produto, required: true,
       }), { required: true }),
       field('Cliente', el('input', { class: 'input', name: 'cliente', required: true, value: initial?.cliente || '' }), { required: true }),
       field('Termômetro', termometroField({ value: initial?.termometro }), { required: true }),
@@ -334,12 +336,12 @@ export async function atividadeFormView(params, app) {
     form.append(
       field('Cliente', el('input', { class: 'input', name: 'cliente', required: true, value: initial?.cliente || '' }), { required: true }),
       field('Imobiliária', creatableSelect({
-        name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+        name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       }), { required: true }),
       field('Corretor', el('input', { class: 'input', name: 'corretor', required: true, value: initial?.corretor || '' }), { required: true }),
       field('Empreendimento', creatableSelect({
-        name: 'empreendimento', items: state.empreendimentos, value: initial?.empreendimento, required: true,
+        name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
       }), { required: true }),
       field('Unidade', el('input', { class: 'input', name: 'unidade', required: true, value: initial?.unidade || '' }), { required: true }),
       field('Valor', valorInput, { required: true, help: 'Digite só os números - formata automaticamente' }),
@@ -366,12 +368,12 @@ export async function atividadeFormView(params, app) {
     form.append(
       field('Plataforma', plataformaSel, { required: true, help: 'Por qual plataforma o contato veio' }),
       field('Imobiliária', creatableSelect({
-        name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+        name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       }), { required: true }),
       field('Corretor', el('input', { class: 'input', name: 'corretor', required: true, value: initial?.corretor || '' }), { required: true }),
       field('Empreendimento', creatableSelect({
-        name: 'empreendimento', items: state.empreendimentos, value: initial?.empreendimento, required: true,
+        name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
       }), { required: true }),
       field('Motivo do contato', creatableSelect({
         name: 'motivo_contato', items: state.motivosOrulo, value: initial?.motivo_contato, required: true,
