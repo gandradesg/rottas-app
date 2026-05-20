@@ -111,8 +111,10 @@ export function buildGoogleCalendarUrl(ag) {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-// URL pra Outlook web (Office 365)
-export function buildOutlookCalendarUrl(ag) {
+// URL para Outlook (suporta corporativo Office 365 E pessoal Outlook.com)
+// outlook.office.com = corporativo (Microsoft 365 da empresa, ex: rottasconstrutora.com.br)
+// outlook.live.com   = pessoal (Hotmail/Outlook.com)
+export function buildOutlookCalendarUrl(ag, edition = 'office') {
   const tipo = TIPO_ATIVIDADE[ag.tipo];
   const start = new Date(ag.data_prevista);
   const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -134,28 +136,39 @@ export function buildOutlookCalendarUrl(ag) {
     body: body,
     location: location,
   });
-  return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+  const domain = edition === 'live' ? 'outlook.live.com' : 'outlook.office.com';
+  return `https://${domain}/calendar/0/deeplink/compose?${params.toString()}`;
 }
 
 // Helper UI: cria um botão "Adicionar ao calendário" com menu de escolha
-export function calendarButton(ag, { el, icon }) {
+export function calendarButton(ag, { el, icon, toast }) {
+  const showInfo = (msg) => {
+    if (toast) toast(msg, 'info', 5000);
+  };
   const dropdown = el('div', {
-    class: 'absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-1 z-20 hidden flex-col gap-0.5 min-w-[180px]',
+    class: 'absolute right-0 top-full mt-1 bg-bg-card border border-border rounded-lg shadow-lg p-1 z-20 hidden flex-col gap-0.5 min-w-[230px]',
   },
-    el('button', {
-      class: 'text-left text-sm px-3 py-2 rounded hover:bg-gray-50',
-      onclick: (e) => { e.stopPropagation(); downloadIcs(ag); dropdown.classList.add('hidden'); }
-    }, '📥 Baixar .ics (qualquer)'),
+    el('div', { class: 'text-[10px] text-fg-muted uppercase tracking-wider font-bold px-3 pt-2 pb-1' }, 'Corporativo (Microsoft 365)'),
     el('a', {
-      class: 'text-sm px-3 py-2 rounded hover:bg-gray-50 block',
+      class: 'text-sm px-3 py-2 rounded hover:bg-bg-elev block transition',
+      href: buildOutlookCalendarUrl(ag, 'office'), target: '_blank',
+      onclick: () => { dropdown.classList.add('hidden'); showInfo('⚠ Clique SALVAR na aba do Outlook que abriu para confirmar o evento na sua agenda.'); },
+    }, '📨 Outlook 365 (corporativo)'),
+    el('div', { class: 'text-[10px] text-fg-muted uppercase tracking-wider font-bold px-3 pt-2 pb-1' }, 'Outras opções'),
+    el('button', {
+      class: 'text-left text-sm px-3 py-2 rounded hover:bg-bg-elev w-full transition',
+      onclick: (e) => { e.stopPropagation(); downloadIcs(ag); dropdown.classList.add('hidden'); showInfo('📥 Arquivo .ics baixado. Abra-o para importar para qualquer calendário (Outlook desktop, Apple Calendar, etc).'); }
+    }, '📥 Baixar arquivo .ics'),
+    el('a', {
+      class: 'text-sm px-3 py-2 rounded hover:bg-bg-elev block transition',
       href: buildGoogleCalendarUrl(ag), target: '_blank',
-      onclick: () => dropdown.classList.add('hidden'),
+      onclick: () => { dropdown.classList.add('hidden'); showInfo('Clique SALVAR no Google Calendar que abriu para confirmar.'); },
     }, '📅 Google Calendar'),
     el('a', {
-      class: 'text-sm px-3 py-2 rounded hover:bg-gray-50 block',
-      href: buildOutlookCalendarUrl(ag), target: '_blank',
-      onclick: () => dropdown.classList.add('hidden'),
-    }, '📨 Outlook'),
+      class: 'text-sm px-3 py-2 rounded hover:bg-bg-elev block transition',
+      href: buildOutlookCalendarUrl(ag, 'live'), target: '_blank',
+      onclick: () => { dropdown.classList.add('hidden'); showInfo('Clique SALVAR na aba do Outlook.com.'); },
+    }, '👤 Outlook.com (pessoal)'),
   );
   const wrapper = el('div', { class: 'relative inline-block' },
     el('button', {
@@ -168,7 +181,6 @@ export function calendarButton(ag, { el, icon }) {
     }, icon('calendar', 14), 'Sync calendário'),
     dropdown,
   );
-  // Fecha ao clicar fora
   document.addEventListener('click', () => {
     dropdown.classList.add('hidden');
     dropdown.classList.remove('flex');

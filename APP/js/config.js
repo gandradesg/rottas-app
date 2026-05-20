@@ -1,8 +1,20 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.5';
+export const APP_VERSION = '1.0.6';
 export const APP_BUILD_DATE = '2026-05-19';
 
 export const CHANGELOG = [
+  {
+    version: '1.0.6',
+    date: '19/05/2026',
+    changes: [
+      'Botão Dashboard agora aparece no header para TODOS os roles (não só admin)',
+      'Cada role vê o dashboard com escopo aplicado: Gerente vê próprios dados + supervisores, etc',
+      'Sync calendário: corrigido para usar outlook.office.com (corporativo Microsoft 365)',
+      '  em vez de outlook.live.com (pessoal Hotmail) — funcionava antes só pra email pessoal',
+      'Sync calendário: dropdown agora separa "Corporativo (Microsoft 365)" de "Outras opções"',
+      'Sync calendário: toast explicativo após clique — lembra de clicar SALVAR na aba aberta',
+    ],
+  },
   {
     version: '1.0.5',
     date: '19/05/2026',

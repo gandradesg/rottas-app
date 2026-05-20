@@ -32,11 +32,11 @@ export function shell(content, opts = {}) {
     );
   }
 
-  // Botão Dashboard (pagina externa /dashboard) - aparece pra roles admin
-  // Master, Gestor, Superintendente, Gestor Regional veem; demais nao tem acesso
+  // Botão Dashboard (pagina externa /dashboard) — disponível para TODOS os roles
+  // O dashboard aplica scope automaticamente: Gerente vê só seus dados +
+  // supervisores, GestReg vê suas cidades, Superint seus estados, Master tudo.
   let dashboardBtn = null;
-  const adminRoles = ['master', 'gestor', 'superintendente', 'gestor_regional'];
-  if (adminRoles.includes(state.profile?.role) && !back) {
+  if (state.profile?.role && !back) {
     dashboardBtn = el('button', {
       class: 'btn-sm flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition',
       style: {

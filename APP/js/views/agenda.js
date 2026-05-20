@@ -402,7 +402,7 @@ async function agendaGerenteView(app) {
         onclick: () => navigate(`/agenda/${item.id}/realizar`)
       }, icon('mapPin', 14), 'Realizar agora'));
       // Botão sync de calendário (Google/Outlook/.ics)
-      actions.appendChild(calendarButton(item, { el, icon }));
+      actions.appendChild(calendarButton(item, { el, icon, toast }));
       actions.appendChild(el('button', {
         class: 'btn btn-ghost btn-sm',
         onclick: () => navigate(`/agenda/${item.id}/editar`)
