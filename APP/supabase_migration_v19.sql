@@ -7,6 +7,16 @@
 -- 5. Policies RLS para o novo role 'recepcao_rottas'
 -- ============================================================================
 
+-- ─── 0. PROFILES.ROLE CHECK — adiciona 'recepcao_rottas' ──────────────────
+-- O CHECK constraint atual rejeita roles desconhecidos. Atualizamos para
+-- incluir todos os 7 perfis suportados pelo app.
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check
+  check (role in (
+    'master', 'gestor', 'superintendente', 'gestor_regional',
+    'gerente', 'supervisor', 'recepcao_rottas'
+  ));
+
 -- ─── 1. LISTA MESTRA: GERENTES HOUSE ──────────────────────────────────────
 create table if not exists public.gerentes_house (
   id uuid primary key default gen_random_uuid(),

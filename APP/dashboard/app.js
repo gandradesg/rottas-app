@@ -150,12 +150,12 @@ const PERIODO_LABEL = { hoje:'Hoje', '7d':'Últimos 7 dias', '30d':'Últimos 30 
 
 // ─── DATA FETCH ──────────────────────────────────────────────────────────
 async function fetchAtividades(start, end) {
-  // Master vê tudo INCLUINDO visitas (em uma seção própria). Outros perfis NÃO veem visitas.
-  const includeVisita = state.profile?.role === 'master';
+  // SELECT só com colunas estáveis (sem visita_*) — essas são lidas em fetchVisitas separado
   let q = sb.from('atividades')
-    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
-    .eq('cancelada', false).order('created_at', { ascending: false }).limit(5000);
-  if (!includeVisita) q = q.neq('tipo', 'visita');
+    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
+    .eq('cancelada', false)
+    .neq('tipo', 'visita') // visitas SEMPRE fora das outras seções do dashboard
+    .order('created_at', { ascending: false }).limit(5000);
   if (start) q = q.gte('created_at', start.toISOString());
   if (end)   q = q.lte('created_at', end.toISOString());
   const F = state.filters;
@@ -226,15 +226,21 @@ function refreshCidadesSelect() {
 
 // ─── VISITAS (Master only — atividade exclusiva Recepção Rottas) ────────
 async function fetchVisitas(start, end) {
-  let q = sb.from('atividades')
-    .select('id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, observacoes, profiles!atividades_gerente_id_fkey(nome)')
-    .eq('tipo', 'visita').eq('cancelada', false)
-    .order('created_at', { ascending: false }).limit(5000);
-  if (start) q = q.gte('created_at', start.toISOString());
-  if (end)   q = q.lte('created_at', end.toISOString());
-  const { data, error } = await q;
-  if (error) { console.warn('[visitas] fetch:', error); return []; }
-  return data || [];
+  // Tenta SELECT completo (com colunas visita_*); se falhar (migration v19 não aplicada),
+  // faz fallback para SELECT mínimo sem quebrar a página
+  const fullCols = 'id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, observacoes, profiles!atividades_gerente_id_fkey(nome)';
+  const safeCols = 'id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, observacoes, profiles!atividades_gerente_id_fkey(nome)';
+  for (const cols of [fullCols, safeCols]) {
+    let q = sb.from('atividades').select(cols)
+      .eq('tipo', 'visita').eq('cancelada', false)
+      .order('created_at', { ascending: false }).limit(5000);
+    if (start) q = q.gte('created_at', start.toISOString());
+    if (end)   q = q.lte('created_at', end.toISOString());
+    const { data, error } = await q;
+    if (!error) return data || [];
+    console.warn('[visitas] retry com colunas básicas:', error.message);
+  }
+  return [];
 }
 
 function renderVisitasPage(visitas) {
