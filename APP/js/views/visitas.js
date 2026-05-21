@@ -13,7 +13,7 @@ import { field, locationField, creatableSelect } from '../components/form-fields
 import { VISITA_PERIODOS, VISITA_FORMAS, VISITA_CANAIS } from '../config.js';
 import { isRecepcao } from '../auth.js';
 
-// ─── SHEETJS LOADER (lazy CDN) ──────────────────────────────────────────
+// ─── SHEETJS (apenas LEITURA do upload) + ExcelJS (ESCRITA com validation) ──
 let _xlsxPromise = null;
 async function loadXLSX() {
   if (window.XLSX) return window.XLSX;
@@ -26,6 +26,20 @@ async function loadXLSX() {
     document.head.appendChild(s);
   });
   return _xlsxPromise;
+}
+
+let _exceljsPromise = null;
+async function loadExcelJS() {
+  if (window.ExcelJS) return window.ExcelJS;
+  if (_exceljsPromise) return _exceljsPromise;
+  _exceljsPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = () => resolve(window.ExcelJS);
+    s.onerror = () => { _exceljsPromise = null; reject(new Error('ExcelJS CDN falhou')); };
+    document.head.appendChild(s);
+  });
+  return _exceljsPromise;
 }
 
 // ─── SANITIZAÇÃO ─────────────────────────────────────────────────────────
@@ -334,164 +348,219 @@ function selectFromValues(name, values, placeholder, required = false) {
   return sel;
 }
 
-// ─── XLSX TEMPLATE com data validation, comentários e listas suspensas ──
+// ─── XLSX TEMPLATE com data validation REAL (ExcelJS) ───────────────────
 async function downloadTemplate() {
   try {
-    const XLSX = await loadXLSX();
-    const wb = XLSX.utils.book_new();
+    const ExcelJS = await loadExcelJS();
 
-    // ── Aba "Listas" (oculta) — fonte das validações ──
     const locais   = state.locaisVisita.map(x => x.nome);
     const emps     = state.empreendimentos.map(x => x.nome);
     const gerentes = state.gerentesHouse.map(x => x.nome);
     const imobs    = state.imobiliarias.map(x => x.nome);
+    const N = 5001; // linhas com validação (2..5001)
 
-    // ── Aba "Dados" (cabeçalhos + 1 linha exemplo) ──
-    const dataHeaders = [
-      'Data de Importação',     // A — preenchida pelo sistema, ignorada no parse
-      'Nome e Sobrenome',       // B
-      'Local da Visita',        // C
-      'Empreendimento',         // D
-      'Período',                // E (Manhã/Tarde/Noite)
-      'Forma de Atendimento',   // F (Espontânea/Agendado)
-      'Canal',                  // G (House/Imob) — só se Agendado
-      'Gerente House',          // H — só se Canal=House
-      'Corretor',               // I — só se Canal=House
-      'Imobiliária',            // J — só se Canal=Imob
-      'Observações',            // K
-    ];
-    const exemploRow = [
-      new Date().toLocaleDateString('pt-BR'),
-      'João da Silva',
-      locais[0] || '<preencher>',
-      emps[0] || '<preencher>',
-      'Manhã', 'Espontânea',
-      '', '', '', '', 'Visita exemplo (apague esta linha)'
-    ];
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Imob Rottas';
+    wb.created = new Date();
 
-    const dataAA = [dataHeaders, exemploRow];
-    const wsDados = XLSX.utils.aoa_to_sheet(dataAA);
-    wsDados['!cols'] = [
-      { wch: 18 }, { wch: 28 }, { wch: 22 }, { wch: 24 },
-      { wch: 14 }, { wch: 20 }, { wch: 16 }, { wch: 22 },
-      { wch: 20 }, { wch: 26 }, { wch: 40 },
+    // ════════════════════════════════════════════════════════════
+    // Aba "Listas" — fonte das listas suspensas (renderizada antes pra existir
+    // quando "Dados" referenciá-la)
+    // ════════════════════════════════════════════════════════════
+    const wsListas = wb.addWorksheet('Listas', { state: 'hidden' });
+    wsListas.columns = [
+      { header: 'Locais de Visita',  key: 'locais',   width: 28 },
+      { header: 'Empreendimentos',    key: 'emps',     width: 30 },
+      { header: 'Gerentes House',     key: 'gerentes', width: 26 },
+      { header: 'Imobiliárias',       key: 'imobs',    width: 32 },
     ];
+    const maxLen = Math.max(locais.length, emps.length, gerentes.length, imobs.length, 1);
+    for (let i = 0; i < maxLen; i++) {
+      wsListas.addRow({
+        locais: locais[i] || null,
+        emps: emps[i] || null,
+        gerentes: gerentes[i] || null,
+        imobs: imobs[i] || null,
+      });
+    }
+    wsListas.getRow(1).font = { bold: true };
 
-    // Comentários (pop-ups) nos cabeçalhos
-    const headerComments = {
-      A1: 'Data registrada automaticamente no momento da importação. Coluna apenas informativa — não precisa preencher.',
-      B1: 'OBRIGATÓRIO. Nome completo do visitante (Nome + Sobrenome).',
-      C1: 'OBRIGATÓRIO. Selecione um Local da Visita cadastrado. Use a lista suspensa.',
-      D1: 'OBRIGATÓRIO. Selecione um Empreendimento cadastrado. Use a lista suspensa.',
-      E1: 'OBRIGATÓRIO. Manhã, Tarde ou Noite. Use a lista suspensa.',
-      F1: 'OBRIGATÓRIO. Espontânea = sem agendamento prévio. Agendado = exige Canal preenchido.',
-      G1: 'OBRIGATÓRIO se Forma=Agendado. House = atendimento próprio. Imob = via imobiliária parceira.',
-      H1: 'OBRIGATÓRIO se Canal=House. Selecione o Gerente House responsável.',
-      I1: 'OBRIGATÓRIO se Canal=House. Nome do corretor que conduziu a visita.',
-      J1: 'OBRIGATÓRIO se Canal=Imob. Selecione a Imobiliária responsável.',
-      K1: 'Opcional. Notas adicionais sobre a visita (máx 2000 caracteres).',
-    };
-    Object.entries(headerComments).forEach(([cell, text]) => {
-      if (!wsDados[cell]) wsDados[cell] = {};
-      wsDados[cell].c = [{ a: 'Imob Rottas', t: text, T: true }];
+    // ════════════════════════════════════════════════════════════
+    // Aba "Dados" — cabeçalhos + 1 linha exemplo + DATA VALIDATIONS
+    // ════════════════════════════════════════════════════════════
+    const wsDados = wb.addWorksheet('Dados');
+    wsDados.columns = [
+      { header: 'DATA DE IMPORTAÇÃO',    key: 'data',     width: 22 },
+      { header: 'NOME DO CLIENTE',       key: 'nome',     width: 28 },
+      { header: 'LOCAL DA VISITA',       key: 'local',    width: 22 },
+      { header: 'EMPREENDIMENTO',        key: 'emp',      width: 24 },
+      { header: 'PERÍODO DA VISITA',     key: 'periodo',  width: 18 },
+      { header: 'FORMA DE ATENDIMENTO',  key: 'forma',    width: 22 },
+      { header: 'CANAL PARCEIRO',        key: 'canal',    width: 18 },
+      { header: 'GERENTE HOUSE',         key: 'gerente',  width: 24 },
+      { header: 'CORRETOR',              key: 'corretor', width: 22 },
+      { header: 'IMOBILIÁRIA',           key: 'imob',     width: 28 },
+      { header: 'OBSERVAÇÕES',           key: 'obs',      width: 42 },
+    ];
+    // Cabeçalho com estilo
+    wsDados.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    wsDados.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF26B22' } };
+    wsDados.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    wsDados.getRow(1).height = 22;
+    wsDados.autoFilter = { from: 'A1', to: 'K1' };
+    wsDados.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Linha exemplo
+    wsDados.addRow({
+      data: new Date().toLocaleDateString('pt-BR'),
+      nome: 'João da Silva',
+      local: locais[0] || '<preencher>',
+      emp: emps[0] || '<preencher>',
+      periodo: 'Manhã',
+      forma: 'Espontânea',
+      obs: 'Visita exemplo (apague esta linha)',
     });
 
-    // ── Data validation (lista suspensa) — usa intervalos da aba "Listas" ──
-    // Cobre as linhas 2 a 5001 (acima do header)
-    const N = 5001;
-    const setListValidation = (col, sourceRange) => {
-      if (!wsDados['!dataValidation']) wsDados['!dataValidation'] = [];
-      wsDados['!dataValidation'].push({
-        type: 'list',
-        sqref: `${col}2:${col}${N}`,
-        formula1: sourceRange,
-        showDropDown: false, // false = mostra a setinha
-      });
-    };
+    // ── PROMPTS (input message ao clicar na célula) e VALIDATIONS ──
+    // Usa exatamente os títulos e textos que você ajustou no arquivo de referência.
 
-    // Listas inline (cabe em formula1 do SheetJS quando curtas)
-    const setInlineValidation = (col, values) => {
-      if (!wsDados['!dataValidation']) wsDados['!dataValidation'] = [];
-      // Excel exige aspas duplas em torno do conteúdo
-      const formula = `"${values.join(',')}"`;
-      wsDados['!dataValidation'].push({
-        type: 'list',
-        sqref: `${col}2:${col}${N}`,
-        formula1: formula,
-      });
-    };
+    // A — DATA DE IMPORTAÇÃO (apenas prompt, sem lista)
+    addPromptRange(wsDados, 'A2:A' + N, 'DATA DE IMPORTAÇÃO', 'OBRIGATÓRIO: Preencha aqui a data da visita.');
 
-    // Inline (poucos valores): Período, Forma, Canal
-    setInlineValidation('E', VISITA_PERIODOS);  // Manhã, Tarde, Noite
-    setInlineValidation('F', VISITA_FORMAS);    // Espontânea, Agendado
-    setInlineValidation('G', VISITA_CANAIS);    // House, Imob
+    // B — NOME DO CLIENTE
+    addPromptRange(wsDados, 'B2:B' + N, 'NOME DO CLIENTE', 'OBRIGATÓRIO: Nome completo do visitante (Nome + Sobrenome).');
 
-    // Range (muitos valores): Local, Empreendimento, Gerente House, Imobiliária
-    setListValidation('C', `Listas!$A$2:$A$${locais.length + 1}`);
-    setListValidation('D', `Listas!$B$2:$B$${emps.length + 1}`);
-    setListValidation('H', `Listas!$C$2:$C$${gerentes.length + 1}`);
-    setListValidation('J', `Listas!$D$2:$D$${imobs.length + 1}`);
+    // C — LOCAL DA VISITA  (lista suspensa)
+    addListRange(wsDados, 'C2:C' + N, `Listas!$A$2:$A$${locais.length + 1}`,
+      'LOCAL DA VISITA', 'OBRIGATÓRIO. Selecione um Local da Visita cadastrado. Use a lista suspensa.');
 
-    XLSX.utils.book_append_sheet(wb, wsDados, 'Dados');
+    // D — EMPREENDIMENTO  (lista suspensa)
+    addListRange(wsDados, 'D2:D' + N, `Listas!$B$2:$B$${emps.length + 1}`,
+      'EMPREENDIMENTO', 'OBRIGATÓRIO: Selecione um Empreendimento cadastrado. Use a lista suspensa.');
 
-    // ── Aba "Listas" — fonte das listas suspensas (oculta) ──
-    const maxLen = Math.max(locais.length, emps.length, gerentes.length, imobs.length);
-    const listsAA = [['Locais de Visita', 'Empreendimentos', 'Gerentes House', 'Imobiliárias']];
-    for (let i = 0; i < maxLen; i++) {
-      listsAA.push([
-        locais[i] || '',
-        emps[i] || '',
-        gerentes[i] || '',
-        imobs[i] || '',
-      ]);
-    }
-    const wsListas = XLSX.utils.aoa_to_sheet(listsAA);
-    wsListas['!cols'] = [{ wch: 28 }, { wch: 30 }, { wch: 26 }, { wch: 32 }];
-    XLSX.utils.book_append_sheet(wb, wsListas, 'Listas');
-    // Oculta a aba (Excel respeita)
-    if (!wb.Workbook) wb.Workbook = {};
-    if (!wb.Workbook.Sheets) wb.Workbook.Sheets = [];
-    wb.Workbook.Sheets = wb.SheetNames.map(n => ({
-      name: n, Hidden: n === 'Listas' ? 1 : 0,
-    }));
+    // E — PERÍODO DA VISITA  (lista inline)
+    addListInline(wsDados, 'E2:E' + N, VISITA_PERIODOS,
+      'PERÍODO DA VISITA', 'OBRIGATÓRIO: Manhã, Tarde ou Noite. Use a lista suspensa.');
 
-    // ── Aba "Instruções" ──
-    const instrucoes = [
-      ['INSTRUÇÕES DE IMPORTAÇÃO DE VISITAS'],
+    // F — FORMA DE ATENDIMENTO  (lista inline)
+    addListInline(wsDados, 'F2:F' + N, VISITA_FORMAS,
+      'FORMA DE ATENDIMENTO', 'OBRIGATÓRIO: Espontânea (sem agendamento prévio). Agendado (exige Canal preenchido).');
+
+    // G — CANAL PARCEIRO  (lista inline)
+    addListInline(wsDados, 'G2:G' + N, VISITA_CANAIS,
+      'CANAL PARCEIRO', 'OBRIGATÓRIO se FORMA DE ATENDIMENTO = Agendado: House (atendimento próprio). Imob (via imobiliária parceira).');
+
+    // H — GERENTE HOUSE  (lista suspensa)
+    addListRange(wsDados, 'H2:H' + N, `Listas!$C$2:$C$${Math.max(gerentes.length + 1, 2)}`,
+      'GERENTE HOUSE', 'OBRIGATÓRIO se CANAL PARCEIRO = House: Selecione o Gerente House responsável.');
+
+    // I — CORRETOR
+    addPromptRange(wsDados, 'I2:I' + N, 'CORRETOR', 'OBRIGATÓRIO se CANAL PARCEIRO = House: Nome do corretor que conduziu a visita.');
+
+    // J — IMOBILIÁRIA  (lista suspensa)
+    addListRange(wsDados, 'J2:J' + N, `Listas!$D$2:$D$${imobs.length + 1}`,
+      'IMOBILIÁRIA', 'OBRIGATÓRIO se CANAL PARCEIRO = Imob: Selecione a Imobiliária responsável.');
+
+    // K — OBSERVAÇÕES (textLength ≤ 2000)
+    addLengthValidation(wsDados, 'K2:K' + N, 2000,
+      'OBSERVAÇÕES', 'Opcional: Notas adicionais sobre a visita (máx 2000 caracteres).');
+
+    // ════════════════════════════════════════════════════════════
+    // Aba "Instruções"
+    // ════════════════════════════════════════════════════════════
+    const wsInstr = wb.addWorksheet('Instruções');
+    wsInstr.columns = [{ width: 92 }];
+    [
+      ['INSTRUÇÕES DE IMPORTAÇÃO DE VISITAS', true],
       [''],
       ['Esta planilha permite registrar várias Visitas de uma só vez.'],
       ['Preencha a aba "Dados" e faça o upload no app pelo botão "Importar XLSX".'],
       [''],
-      ['REGRAS:'],
-      ['1. A coluna A (Data de Importação) é apenas informativa — preenchida automaticamente.'],
-      ['2. Localização é capturada do dispositivo no momento do upload (não preencha).'],
-      ['3. Use APENAS valores das listas suspensas — escrita diferente gera rejeição.'],
-      ['4. Linhas com erro REJEITAM o arquivo INTEIRO (nada é salvo).'],
+      ['REGRAS:', true],
+      ['1. A coluna A (Data de Importação) é informativa — pode preencher ou deixar vazio.'],
+      ['2. Localização é capturada do seu dispositivo no momento do upload (não preencha).'],
+      ['3. Use APENAS valores das listas suspensas (▼) — qualquer escrita diferente é rejeitada.'],
+      ['4. Linhas com erro REJEITAM o arquivo INTEIRO (nada é salvo até estar 100% válido).'],
       ['5. Limite: 5.000 linhas por importação.'],
       [''],
-      ['CAMPOS OBRIGATÓRIOS sempre:'],
-      ['  Nome e Sobrenome, Local da Visita, Empreendimento, Período, Forma de Atendimento'],
+      ['CAMPOS OBRIGATÓRIOS sempre:', true],
+      ['  • Nome do Cliente'],
+      ['  • Local da Visita (lista suspensa)'],
+      ['  • Empreendimento (lista suspensa)'],
+      ['  • Período da Visita (Manhã/Tarde/Noite)'],
+      ['  • Forma de Atendimento (Espontânea/Agendado)'],
       [''],
-      ['REGRAS CONDICIONAIS:'],
-      ['  Forma = Espontânea → Canal/Gerente House/Corretor/Imobiliária ficam VAZIOS'],
-      ['  Forma = Agendado   → Canal é OBRIGATÓRIO. Conforme o canal:'],
-      ['     Canal = House → Gerente House e Corretor são OBRIGATÓRIOS'],
-      ['     Canal = Imob  → Imobiliária é OBRIGATÓRIA'],
+      ['REGRAS CONDICIONAIS:', true],
+      ['  • Forma = Espontânea → Canal/Gerente House/Corretor/Imobiliária VAZIOS'],
+      ['  • Forma = Agendado   → Canal é OBRIGATÓRIO. Conforme o canal:'],
+      ['        Canal = House → Gerente House (lista) E Corretor (texto) OBRIGATÓRIOS'],
+      ['        Canal = Imob  → Imobiliária (lista) OBRIGATÓRIA'],
       [''],
-      ['DICA:'],
-      ['  Passe o mouse sobre os cabeçalhos da aba "Dados" para ver o tooltip de cada coluna.'],
-      ['  As células com seta para baixo (▼) têm lista suspensa — escolha um valor cadastrado.'],
-    ];
-    const wsInstr = XLSX.utils.aoa_to_sheet(instrucoes);
-    wsInstr['!cols'] = [{ wch: 90 }];
-    XLSX.utils.book_append_sheet(wb, wsInstr, 'Instruções');
+      ['DICA:', true],
+      ['  Ao clicar em qualquer célula, aparece um balão explicando o campo.'],
+      ['  Células com setinha (▼) têm lista suspensa — escolha sempre um valor cadastrado.'],
+    ].forEach(([text, bold]) => {
+      const row = wsInstr.addRow([text]);
+      if (bold) row.font = { bold: true, color: { argb: 'FFF26B22' } };
+    });
 
-    XLSX.writeFile(wb, `modelo_visitas_${new Date().toISOString().slice(0,10)}.xlsx`);
-    toast('Modelo baixado com listas suspensas e validação', 'success');
+    // ════════════════════════════════════════════════════════════
+    // SALVA
+    // ════════════════════════════════════════════════════════════
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `modelo_visitas_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+    toast('Modelo baixado com listas suspensas reais ✓', 'success');
   } catch (e) {
     console.error('[downloadTemplate]', e);
     toast('Erro ao gerar modelo: ' + e.message, 'error');
   }
+}
+
+// Helpers ExcelJS para data validation
+function addPromptRange(ws, range, promptTitle, prompt) {
+  ws.dataValidations.add(range, {
+    type: 'any', allowBlank: true,
+    showInputMessage: true, promptTitle, prompt,
+  });
+}
+function addListRange(ws, range, formula, promptTitle, prompt) {
+  ws.dataValidations.add(range, {
+    type: 'list', allowBlank: true,
+    formulae: [formula],
+    showInputMessage: true, promptTitle, prompt,
+    showErrorMessage: true, errorStyle: 'warning',
+    errorTitle: 'Valor não cadastrado',
+    error: 'Selecione um valor da lista suspensa (▼). Valores divergentes geram rejeição no upload.',
+  });
+}
+function addListInline(ws, range, values, promptTitle, prompt) {
+  // ExcelJS: lista inline = formula com aspas duplas em volta dos valores
+  const formula = `"${values.join(',')}"`;
+  ws.dataValidations.add(range, {
+    type: 'list', allowBlank: true,
+    formulae: [formula],
+    showInputMessage: true, promptTitle, prompt,
+    showErrorMessage: true, errorStyle: 'stop',
+    errorTitle: 'Valor inválido',
+    error: 'Use APENAS um dos valores da lista suspensa.',
+  });
+}
+function addLengthValidation(ws, range, maxLen, promptTitle, prompt) {
+  ws.dataValidations.add(range, {
+    type: 'textLength', operator: 'lessThanOrEqual',
+    formulae: [maxLen], allowBlank: true,
+    showInputMessage: true, promptTitle, prompt,
+    showErrorMessage: true, errorStyle: 'stop',
+    errorTitle: 'Texto muito longo',
+    error: `O número máximo de caracteres é ${maxLen}.`,
+  });
 }
 
 // ─── IMPORTAR XLSX ───────────────────────────────────────────────────────
@@ -527,19 +596,30 @@ function openImportModal(onSuccess) {
 
       const errors = [];
       const normalized = [];
+      // Helper: lookup case-insensitive em qualquer das chaves possíveis
+      const pickRaw = (r, keys) => {
+        const lowerRow = {};
+        Object.keys(r).forEach(k => { lowerRow[k.toLowerCase().trim()] = r[k]; });
+        for (const k of keys) {
+          const v = lowerRow[k.toLowerCase().trim()];
+          if (v != null && String(v).trim() !== '') return v;
+        }
+        return null;
+      };
+
       rows.forEach((r, idx) => {
         const linha = idx + 2;
-        // Aceita tanto chaves novas quanto antigas (compat)
-        const nome    = sanitizeText(r['Nome e Sobrenome'] ?? r['Nome Sobrenome']);
-        const local   = sanitizeText(r['Local da Visita']);
-        const emp     = sanitizeText(r['Empreendimento']);
-        const periodo = sanitizeText(r['Período'] ?? r['Período (Manhã/Tarde/Noite)']);
-        const forma   = sanitizeText(r['Forma de Atendimento'] ?? r['Forma (Espontânea/Agendado)']);
-        const canal   = sanitizeText(r['Canal'] ?? r['Canal (House/Imob — só se Agendado)']);
-        const ghouse  = sanitizeText(r['Gerente House'] ?? r['Gerente House (se Canal=House)']);
-        const corretor = sanitizeText(r['Corretor'] ?? r['Corretor (se Canal=House)']);
-        const imob    = sanitizeText(r['Imobiliária'] ?? r['Imobiliária (se Canal=Imob)']);
-        const obs     = sanitizeText(r['Observações'], 2000);
+        // Aceita TODOS os nomes históricos de cabeçalho — atual + antigos
+        const nome    = sanitizeText(pickRaw(r, ['NOME DO CLIENTE', 'Nome do Cliente', 'Nome e Sobrenome', 'Nome Sobrenome']));
+        const local   = sanitizeText(pickRaw(r, ['LOCAL DA VISITA', 'Local da Visita']));
+        const emp     = sanitizeText(pickRaw(r, ['EMPREENDIMENTO', 'Empreendimento']));
+        const periodo = sanitizeText(pickRaw(r, ['PERÍODO DA VISITA', 'Período da Visita', 'Período', 'Período (Manhã/Tarde/Noite)']));
+        const forma   = sanitizeText(pickRaw(r, ['FORMA DE ATENDIMENTO', 'Forma de Atendimento', 'Forma (Espontânea/Agendado)']));
+        const canal   = sanitizeText(pickRaw(r, ['CANAL PARCEIRO', 'Canal Parceiro', 'Canal', 'Canal (House/Imob — só se Agendado)']));
+        const ghouse  = sanitizeText(pickRaw(r, ['GERENTE HOUSE', 'Gerente House', 'Gerente House (se Canal=House)']));
+        const corretor = sanitizeText(pickRaw(r, ['CORRETOR', 'Corretor', 'Corretor (se Canal=House)']));
+        const imob    = sanitizeText(pickRaw(r, ['IMOBILIÁRIA', 'Imobiliária', 'Imobiliária (se Canal=Imob)']));
+        const obs     = sanitizeText(pickRaw(r, ['OBSERVAÇÕES', 'Observações']), 2000);
 
         if (!nome)    errors.push({ linha, coluna: 'Nome e Sobrenome', motivo: 'obrigatório' });
         if (!local)   errors.push({ linha, coluna: 'Local da Visita', motivo: 'obrigatório' });
