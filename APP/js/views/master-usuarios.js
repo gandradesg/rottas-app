@@ -310,14 +310,13 @@ function userFormFields(p) {
     ...ESTADOS_BR.map(u => el('option', { value: u, selected: p.estado === u }, u)),
   );
 
-  // Seletor de role com TODOS os 6 níveis da hierarquia
-  // supervisor -> gerente -> gestor_regional -> superintendente -> gestor -> master
-  // O master pode escolher qualquer um. Os demais ficam restritos por isMaster check no UI.
+  // Seletor de role lendo TODOS os roles do config.ROLES (assim novos roles
+  // aparecem automaticamente — ex: recepcao_rottas).
+  // Hierarquia: supervisor=1, gerente=2, gestor_regional=3, superintendente=4, gestor=5, master=6
+  // recepcao_rottas: nivel 1 (peer com supervisor) MAS isolado — função especial de recepção.
   const callerLevel = roleLevel(state.profile?.role);
-  const allRoles = [
-    'supervisor', 'gerente', 'gestor_regional',
-    'superintendente', 'gestor', 'master'
-  ];
+  // Ordena por level pra UI ficar consistente
+  const allRoles = Object.keys(ROLES).sort((a, b) => (ROLES[a].level || 9) - (ROLES[b].level || 9));
   // Caller só pode atribuir roles de nível <= ao próprio (master atribui qualquer um;
   // gestor pode criar gestor_regional/superintendente/etc mas não outro master).
   // Master principal sempre pode criar tudo.
