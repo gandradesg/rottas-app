@@ -1,7 +1,7 @@
 // Shell: header + main + bottom nav. Usado por todas as telas autenticadas.
 import { el, icon, avatar } from '../ui.js';
 import { state } from '../supabase.js';
-import { signOut, isMaster, isGestor, isAdmin, activeViewRole, can, canManageAgenda, canToggleView } from '../auth.js';
+import { signOut, isMaster, isGestor, isAdmin, isRecepcao, activeViewRole, can, canManageAgenda, canToggleView } from '../auth.js';
 import { ROLES } from '../config.js';
 import { toggleTheme, getTheme } from '../theme.js';
 import { navigate, currentPath } from '../router.js';
@@ -32,11 +32,11 @@ export function shell(content, opts = {}) {
     );
   }
 
-  // Botão Dashboard (pagina externa /dashboard) — disponível para TODOS os roles
+  // Botão Dashboard (pagina externa /dashboard) — disponível para todos EXCETO Recepção Rottas
   // O dashboard aplica scope automaticamente: Gerente vê só seus dados +
   // supervisores, GestReg vê suas cidades, Superint seus estados, Master tudo.
   let dashboardBtn = null;
-  if (state.profile?.role && !back) {
+  if (state.profile?.role && !isRecepcao() && !back) {
     dashboardBtn = el('button', {
       class: 'btn-sm flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition',
       style: {
@@ -93,7 +93,13 @@ export function shell(content, opts = {}) {
   if (!hideBottomNav) {
     const view = activeViewRole();
     let items;
-    if (view === 'supervisor') {
+    if (isRecepcao()) {
+      // Recepção Rottas: SÓ vê a aba Visitas
+      items = [
+        { p: '/visitas', label: 'Visitas', ic: 'mapPin' },
+        { p: '/perfil',  label: 'Perfil',  ic: 'user'   },
+      ];
+    } else if (view === 'supervisor') {
       // Supervisor TAMBÉM tem Agenda - vê o que o Gerente atribuiu pra ele
       // (mas não pode CRIAR agendamentos - só o Gerente planeja)
       items = [

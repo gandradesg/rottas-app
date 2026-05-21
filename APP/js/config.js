@@ -1,8 +1,37 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.0.6';
-export const APP_BUILD_DATE = '2026-05-19';
+export const APP_VERSION = '1.1.0';
+export const APP_BUILD_DATE = '2026-05-21';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.0',
+    date: '21/05/2026',
+    changes: [
+      'NOVO PERFIL: "Recepção Rottas" — Gerentes de Produto e Recepcionistas',
+      '  → Acessa SOMENTE a atividade Visitas. Não vê check-ins/atendimentos/propostas/agenda',
+      '  → Bottom nav exclusivo: Visitas + Perfil',
+      'NOVA ATIVIDADE: tipo "visita" — campos: Nome, Local da Visita, Empreendimento,',
+      '  Período (Manhã/Tarde/Noite), Forma (Espontânea/Agendado), Canal (House/Imob),',
+      '  Gerente House (se House), Corretor (se House), Imobiliária (se Imob), Observações',
+      '  → Localização e Data automáticas (geo + now no submit)',
+      '  → Lógica condicional: Espontânea não exige canal; Agendado exige canal e detalhes',
+      'IMPORTAÇÃO EM MASSA via XLSX:',
+      '  → Download de modelo .xlsx (abas Dados + Instruções)',
+      '  → Validação atomicamente — qualquer linha inválida rejeita o arquivo INTEIRO',
+      '  → Relatório de erros por linha+coluna+motivo',
+      '  → Limite 5.000 linhas, sanitização anti CSV/formula injection',
+      '  → Localização derivada do dispositivo do uploader (ignora coluna no arquivo)',
+      '  → Auditoria em visitas_imports (quem, quando, quantos, geo)',
+      'NOVA LISTA MESTRA: "Gerentes House" — administrável em Listas (Master/Gestor)',
+      'DASHBOARD: nova sidebar "Visitas (Recepção)" visível APENAS para Master',
+      '  → KPIs: total, Espontâneas, Agendados, House, Imob, empreendimentos distintos',
+      '  → Bars de distribuição (Período · Forma) + tabela detalhada',
+      'Atividades visita NÃO aparecem em Painel/Histórico/Início/Dashboard normal',
+      '  (defesa em profundidade no client + policies RLS dedicadas no banco)',
+      'Migration v19: gerentes_house + visitas_imports + colunas atividades + RLS policies',
+      '  *** APLICAR MANUALMENTE no Supabase SQL Editor ***',
+    ],
+  },
   {
     version: '1.0.6',
     date: '19/05/2026',
@@ -483,12 +512,23 @@ export const TERMOMETRO_OPTIONS = [
 
 // Órulo (PR) e DWV (SC) são a mesma coisa conceitualmente - plataformas de captação.
 // Salvamos sempre tipo='orulo' no banco. A UI mostra "Órulo/DWV" pra clareza visual.
+// Visita: atividade exclusiva do perfil Recepção Rottas — NÃO visível pros demais.
 export const TIPO_ATIVIDADE = {
   checkin:      { label: 'Check-in',    icon: '📍', color: 'blue'   },
   atendimento:  { label: 'Atendimento', icon: '👥', color: 'purple' },
   proposta:     { label: 'Proposta',    icon: '📄', color: 'yellow' },
   orulo:        { label: 'Órulo/DWV',   icon: '🌐', color: 'green'  },
+  visita:       { label: 'Visita',      icon: '🚪', color: 'pink'   },
 };
+
+// Tipos visíveis para os perfis OPERACIONAIS (gerente, supervisor, gestor regional,
+// superintendente, gestor). Excluímos 'visita' que é exclusiva de Recepção Rottas + Master.
+export const TIPOS_VISIVEIS_OPERACIONAIS = ['checkin', 'atendimento', 'proposta', 'orulo'];
+
+// Períodos e formas de atendimento da Visita
+export const VISITA_PERIODOS = ['Manhã', 'Tarde', 'Noite'];
+export const VISITA_FORMAS   = ['Espontânea', 'Agendado'];
+export const VISITA_CANAIS   = ['House', 'Imob'];
 
 // Tipo de captação - sempre 'orulo' agora (DWV é o mesmo registro, apenas label visual)
 export function getTipoCaptacao(_estado) {
@@ -497,7 +537,10 @@ export function getTipoCaptacao(_estado) {
 
 // Hierarquia de roles (do mais baixo ao mais alto)
 // supervisor -> gerente -> gestor_regional -> superintendente -> gestor -> master
+// recepcao_rottas: role FORA da hierarquia operacional — função isolada de recepção
+//                  (Gerentes de Produto e Recepcionistas) que SÓ registra Visitas.
 export const ROLES = {
+  recepcao_rottas:  { label: 'Recepção Rottas',          icon: '🛎️', color: 'pink',   level: 1 },
   supervisor:       { label: 'Supervisor de Plataforma', icon: '👁️', color: 'blue',   level: 1 },
   gerente:          { label: 'Gerente de Plataforma',    icon: '🗺️', color: 'blue',   level: 2 },
   gestor_regional:  { label: 'Gestor Regional',          icon: '🌆', color: 'purple', level: 3 },

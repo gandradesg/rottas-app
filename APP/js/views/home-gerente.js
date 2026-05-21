@@ -213,6 +213,7 @@ export async function homeGerenteView(_params, app) {
       .select('*')
       .eq('gerente_id', state.user.id)
       .eq('cancelada', false)
+      .neq('tipo', 'visita')
       .order('created_at', { ascending: false });
 
     const now = new Date();

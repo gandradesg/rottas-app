@@ -209,6 +209,14 @@
       </a>
     </nav>
 
+    <div class="sb-section-label" id="sb-section-visitas-label" style="display:none;">Recepção (Master)</div>
+    <nav style="padding: 0 10px; display: flex; flex-direction: column; gap: 2px;" id="sb-visitas-nav">
+      <a class="sb-link" data-section="visitas" id="sb-visitas-link" style="display:none;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
+        Visitas <span class="badge" id="badge-visitas">0</span>
+      </a>
+    </nav>
+
     <div class="sb-section-label">Análise</div>
     <nav style="padding: 0 10px; display: flex; flex-direction: column; gap: 2px;">
       <a class="sb-link" data-section="charts">
@@ -407,6 +415,30 @@
             <h3 style="font-size:14px;font-weight:700;margin-bottom:14px;">Funil de Conversão</h3>
             <div id="chart-funnel-wrap-full" style="position:relative;height:380px;"><div class="spinner" style="margin:160px auto;"></div></div>
           </div>
+        </div>
+      </section>
+
+      <!-- ═══ VISITAS (Master only) ═══════════════════════════════════ -->
+      <section id="sec-visitas" class="fade-in" style="display:none;">
+        <h2 class="sec-title">🚪 Visitas — Recepção Rottas</h2>
+        <p class="sec-subtitle">Registros de visitas captados pelos perfis Recepção Rottas. Visível apenas para Master.</p>
+
+        <div id="visitas-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;" class="grid-charts">
+          <div class="card" style="padding:18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Distribuição por Período</h3>
+            <div id="visitas-periodo-bars" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+          <div class="card" style="padding:18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Espontânea vs Agendado</h3>
+            <div id="visitas-forma-bars" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px;">
+          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;">Últimos registros</h3>
+          <div id="visitas-table-wrap" style="overflow-x:auto;max-height:520px;overflow-y:auto;" class="scroll-thin"></div>
         </div>
       </section>
 

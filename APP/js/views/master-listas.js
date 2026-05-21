@@ -41,6 +41,7 @@ const TABS = [
   },
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
   { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo/DWV', stateKey: 'motivosOrulo' },
+  { id: 'gerentes_house',  table: 'gerentes_house',  label: 'Gerentes House',    stateKey: 'gerentesHouse' },
 ];
 
 export async function masterListasView(_params, app) {

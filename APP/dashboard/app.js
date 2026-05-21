@@ -150,9 +150,12 @@ const PERIODO_LABEL = { hoje:'Hoje', '7d':'Últimos 7 dias', '30d':'Últimos 30 
 
 // ─── DATA FETCH ──────────────────────────────────────────────────────────
 async function fetchAtividades(start, end) {
+  // Master vê tudo INCLUINDO visitas (em uma seção própria). Outros perfis NÃO veem visitas.
+  const includeVisita = state.profile?.role === 'master';
   let q = sb.from('atividades')
-    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
+    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
     .eq('cancelada', false).order('created_at', { ascending: false }).limit(5000);
+  if (!includeVisita) q = q.neq('tipo', 'visita');
   if (start) q = q.gte('created_at', start.toISOString());
   if (end)   q = q.lte('created_at', end.toISOString());
   const F = state.filters;
@@ -219,6 +222,88 @@ function refreshCidadesSelect() {
   cSel.innerHTML = '<option value="todas">Todas cidades</option>';
   [...cidades].sort().forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; if (F.cidade === c) o.selected = true; cSel.appendChild(o); });
   if (![...cidades].includes(F.cidade)) F.cidade = 'todas';
+}
+
+// ─── VISITAS (Master only — atividade exclusiva Recepção Rottas) ────────
+async function fetchVisitas(start, end) {
+  let q = sb.from('atividades')
+    .select('id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, observacoes, profiles!atividades_gerente_id_fkey(nome)')
+    .eq('tipo', 'visita').eq('cancelada', false)
+    .order('created_at', { ascending: false }).limit(5000);
+  if (start) q = q.gte('created_at', start.toISOString());
+  if (end)   q = q.lte('created_at', end.toISOString());
+  const { data, error } = await q;
+  if (error) { console.warn('[visitas] fetch:', error); return []; }
+  return data || [];
+}
+
+function renderVisitasPage(visitas) {
+  const kpis = $('visitas-kpis');
+  const total = visitas.length;
+  const espont = visitas.filter(v => v.visita_forma_atendimento === 'Espontânea').length;
+  const agend  = visitas.filter(v => v.visita_forma_atendimento === 'Agendado').length;
+  const house  = visitas.filter(v => v.visita_canal === 'House').length;
+  const imob   = visitas.filter(v => v.visita_canal === 'Imob').length;
+  const uniqEmp = new Set(visitas.map(v => v.empreendimento).filter(Boolean)).size;
+
+  kpis.innerHTML = `
+    <div class="kpi kpi-accent"><div class="kpi-label">Total Visitas</div><div class="kpi-value">${fmt.num(total)}</div><div class="kpi-sub">no período</div></div>
+    <div class="kpi"><div class="kpi-label">Espontâneas</div><div class="kpi-value" style="color:var(--yellow);">${fmt.num(espont)}</div><div class="kpi-sub">${fmt.pct(total > 0 ? espont/total*100 : 0)}</div></div>
+    <div class="kpi"><div class="kpi-label">Agendados</div><div class="kpi-value" style="color:var(--green);">${fmt.num(agend)}</div><div class="kpi-sub">${fmt.pct(total > 0 ? agend/total*100 : 0)}</div></div>
+    <div class="kpi"><div class="kpi-label">Canal House</div><div class="kpi-value" style="color:var(--purple);">${fmt.num(house)}</div><div class="kpi-sub">${fmt.pct(agend > 0 ? house/agend*100 : 0)} dos agendados</div></div>
+    <div class="kpi"><div class="kpi-label">Canal Imob</div><div class="kpi-value" style="color:var(--blue);">${fmt.num(imob)}</div><div class="kpi-sub">${fmt.pct(agend > 0 ? imob/agend*100 : 0)} dos agendados</div></div>
+    <div class="kpi"><div class="kpi-label">Empreendimentos</div><div class="kpi-value">${fmt.num(uniqEmp)}</div><div class="kpi-sub">distintos visitados</div></div>
+  `;
+
+  // Bars de período (Manhã / Tarde / Noite)
+  const periodos = ['Manhã', 'Tarde', 'Noite'];
+  const maxP = Math.max(...periodos.map(p => visitas.filter(v => v.visita_periodo === p).length), 1);
+  $('visitas-periodo-bars').innerHTML = periodos.map(p => {
+    const n = visitas.filter(v => v.visita_periodo === p).length;
+    const w = (n / maxP) * 100;
+    return `<div style="display:flex;align-items:center;gap:10px;font-size:12.5px;">
+      <span style="width:60px;font-weight:600;">${p}</span>
+      <div style="flex:1;background:var(--bg-elev);border-radius:6px;height:22px;position:relative;overflow:hidden;">
+        <div style="height:100%;width:${w}%;background:linear-gradient(90deg,#F26B22,#D5530F);border-radius:6px;transition:width .3s;"></div>
+      </div>
+      <span class="num" style="width:60px;font-weight:700;">${fmt.num(n)}</span>
+    </div>`;
+  }).join('');
+
+  // Bars Espontânea vs Agendado
+  const formas = [{ label: 'Espontânea', n: espont, color: 'var(--yellow)' }, { label: 'Agendado', n: agend, color: 'var(--green)' }];
+  const maxF = Math.max(espont, agend, 1);
+  $('visitas-forma-bars').innerHTML = formas.map(f => {
+    const w = (f.n / maxF) * 100;
+    return `<div style="display:flex;align-items:center;gap:10px;font-size:12.5px;">
+      <span style="width:80px;font-weight:600;">${f.label}</span>
+      <div style="flex:1;background:var(--bg-elev);border-radius:6px;height:22px;overflow:hidden;">
+        <div style="height:100%;width:${w}%;background:${f.color};border-radius:6px;transition:width .3s;"></div>
+      </div>
+      <span class="num" style="width:60px;font-weight:700;">${fmt.num(f.n)}</span>
+    </div>`;
+  }).join('');
+
+  // Tabela
+  const tw = $('visitas-table-wrap');
+  if (!visitas.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem visitas no período.</p>'; return; }
+  let html = '<table><thead><tr><th>Data</th><th>Visitante</th><th>Empreend.</th><th>Período</th><th>Forma</th><th>Canal</th><th>Detalhe</th><th>Recepção</th></tr></thead><tbody>';
+  visitas.slice(0, 200).forEach(v => {
+    const detalhe = v.visita_canal === 'House'
+      ? (v.corretor ? `${v.corretor}` : '—')
+      : v.visita_canal === 'Imob' ? (v.imobiliaria || '—') : '—';
+    html += `<tr>
+      <td>${fmt.dateTime(v.created_at)}</td>
+      <td style="font-weight:600;">${escapeHtml(v.cliente || '—')}</td>
+      <td>${escapeHtml(v.empreendimento || '—')}</td>
+      <td>${escapeHtml(v.visita_periodo || '—')}</td>
+      <td>${v.visita_forma_atendimento ? `<span class="chip ${v.visita_forma_atendimento === 'Agendado' ? 'chip-green' : 'chip-yellow'}">${escapeHtml(v.visita_forma_atendimento)}</span>` : '—'}</td>
+      <td>${v.visita_canal ? `<span class="chip ${v.visita_canal === 'House' ? 'chip-purple' : 'chip-blue'}">${escapeHtml(v.visita_canal)}</span>` : '—'}</td>
+      <td>${escapeHtml(detalhe)}</td>
+      <td>${escapeHtml(v.profiles?.nome || '—')}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>'; tw.innerHTML = html;
 }
 
 // ─── KPIs ────────────────────────────────────────────────────────────────
@@ -686,6 +771,14 @@ async function reload() {
     $('badge-atendimentos').textContent = fmt.num(curr.filter(r => r.tipo === 'atendimento').length);
     $('badge-propostas').textContent    = fmt.num(curr.filter(r => r.tipo === 'proposta').length);
 
+    // Master: carrega visitas separadamente (lista própria, não soma nas atividades acima)
+    if (state.profile?.role === 'master') {
+      const visitas = await fetchVisitas(start, end);
+      renderVisitasPage(visitas);
+      const badge = document.getElementById('badge-visitas');
+      if (badge) badge.textContent = fmt.num(visitas.length);
+    }
+
     // Charts (na seção overview são pequenos; em sec-charts são grandes)
     await Promise.all([
       renderLineChart($('chart-line-wrap'), curr, state.filters.periodo),
@@ -728,10 +821,10 @@ function updateLastUpdateChip() {
 function switchSection(section) {
   state.currentSection = section;
   sessionStorage.setItem('dash-section', section);
-  const all = ['overview', 'checkins', 'atendimentos', 'propostas', 'charts', 'rankings'];
+  const all = ['overview', 'checkins', 'atendimentos', 'propostas', 'visitas', 'charts', 'rankings'];
   all.forEach(s => { const el = $(`sec-${s}`); if (el) el.style.display = (s === section) ? 'block' : 'none'; });
   $$('.sb-link[data-section]').forEach(l => l.classList.toggle('active', l.dataset.section === section));
-  const titles = { overview:'Visão Geral', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', charts:'Curvas & Funil', rankings:'Rankings' };
+  const titles = { overview:'Visão Geral', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', visitas:'Visitas (Recepção)', charts:'Curvas & Funil', rankings:'Rankings' };
   $('section-title').textContent = titles[section] || section;
   // Ticker só na overview
   $('ticker-wrap').style.display = (section === 'overview') ? 'block' : 'none';
@@ -844,6 +937,14 @@ async function boot() {
 
   renderUserChip();
   wireTheme(); wireLogout(); wireFilters(); wireRankTabs(); wirePropostasTabs(); wireSidebar(); wireHistoryModal(); wireChatToggle();
+
+  // Sidebar de Visitas: apenas para Master
+  if (state.profile.role === 'master') {
+    const link = document.getElementById('sb-visitas-link');
+    const lbl  = document.getElementById('sb-section-visitas-label');
+    if (link) link.style.display = '';
+    if (lbl)  lbl.style.display  = '';
+  }
 
   initAiChat({
     keyboxEl: $('ai-keybox'), historyEl: $('ai-history'), suggestionsEl: $('ai-suggestions'),

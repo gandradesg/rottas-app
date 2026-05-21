@@ -165,10 +165,21 @@ export async function initAuth() {
 // Hierarquia (do mais baixo ao mais alto). Niveis acima de gerente sao "admin"
 // e tem visibilidade ampliada (varia por contexto - estado/cidade/equipe).
 //   supervisor (1) -> gerente (2) -> gestor_regional (3) -> superintendente (4) -> gestor (5) -> master (6)
+// recepcao_rottas: nivel 1 (peer com supervisor) MAS isolado — só registra/visualiza visitas
 const ROLE_LEVEL = {
+  recepcao_rottas: 1,
   supervisor: 1, gerente: 2, gestor_regional: 3,
   superintendente: 4, gestor: 5, master: 6,
 };
+
+// Role isolado: vê APENAS atividade "visita", nada mais do app
+export function isRecepcao() { return state.profile?.role === 'recepcao_rottas'; }
+
+// Pode VER atividades tipo='visita'? Apenas recepcao_rottas (próprias) e master (todas)
+export function canViewVisitas() {
+  const r = state.profile?.role;
+  return r === 'recepcao_rottas' || r === 'master';
+}
 
 export function roleLevel(role) { return ROLE_LEVEL[role] || 0; }
 export function isMaster() { return state.profile?.role === 'master'; }

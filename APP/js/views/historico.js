@@ -90,7 +90,8 @@ export async function historicoView(_params, app) {
     list.innerHTML = '';
     summary.textContent = 'Carregando...';
 
-    let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email)').eq('cancelada', false).order('created_at', { ascending: false });
+    // Exclui visitas do histórico operacional (visitas só aparecem em /visitas)
+    let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email)').eq('cancelada', false).neq('tipo', 'visita').order('created_at', { ascending: false });
     if (!( activeViewRole() === "gestor")) q = q.eq('gerente_id', state.user.id);
     if (( activeViewRole() === "gestor") && filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
     if (filters.tipo !== 'todos') q = q.eq('tipo', filters.tipo);

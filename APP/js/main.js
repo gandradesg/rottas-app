@@ -72,7 +72,7 @@ if ('serviceWorker' in navigator) {
 }
 
 import { initTheme } from './theme.js';
-import { initAuth, isLoggedIn, isMaster, isGestor, activeViewRole, needsPasswordSetup, can, recoveryState } from './auth.js';
+import { initAuth, isLoggedIn, isMaster, isGestor, isRecepcao, activeViewRole, needsPasswordSetup, can, recoveryState } from './auth.js';
 import { startRouter, route, navigate } from './router.js';
 import { state, onStateChange } from './supabase.js';
 import { el } from './ui.js';
@@ -91,6 +91,7 @@ import { masterUsuariosView } from './views/master-usuarios.js';
 import { masterListasView } from './views/master-listas.js';
 import { agendaView } from './views/agenda.js';
 import { agendaFormView } from './views/agenda-form.js';
+import { visitasView, visitaFormView } from './views/visitas.js';
 
 // Splash screen rápido enquanto auth carrega
 function splash() {
@@ -129,9 +130,30 @@ function publicRoute(handler) {
 }
 
 // Home - agora padrão é Agenda. Painel e Início ficam em rotas dedicadas.
+// EXCEÇÃO: Recepção Rottas é redirecionada SEMPRE para /visitas (única tela que pode acessar)
 const homeView = authGuard(async (params, app) => {
+  if (isRecepcao()) { navigate('/visitas', true); return; }
   return agendaView(params, app);
 });
+
+// Guard que SÓ permite recepcao_rottas ou master acessar (rotas de visita)
+function visitasGuard(handler) {
+  return authGuard(async (params, app) => {
+    const role = state.profile?.role;
+    if (role !== 'recepcao_rottas' && role !== 'master') {
+      navigate('/', true); return;
+    }
+    return handler(params, app);
+  });
+}
+
+// Guard que BLOQUEIA recepcao_rottas de acessar (rotas operacionais comuns)
+function blockRecepcao(handler) {
+  return authGuard(async (params, app) => {
+    if (isRecepcao()) { navigate('/visitas', true); return; }
+    return handler(params, app);
+  });
+}
 const painelHomeView = authGuard(async (params, app) => {
   return painelGestorView(params, app);
 });
@@ -173,17 +195,19 @@ route('/login',                    publicRoute(loginView));
 route('/setup-password',           setupGuard);
 route('/',                         homeView);
 route('/perfil',                   authGuard(perfilView));
-route('/registrar',                authGuard(registrarView));
-route('/atividade/novo/:tipo',     authGuard(atividadeFormView));
-route('/atividade/:id/editar/:tipo', authGuard(atividadeFormView));
+route('/registrar',                blockRecepcao(registrarView));
+route('/atividade/novo/:tipo',     blockRecepcao(atividadeFormView));
+route('/atividade/:id/editar/:tipo', blockRecepcao(atividadeFormView));
 route('/atividade/:id',            authGuard(atividadeDetailView));
-route('/agenda',                   authGuard(agendaView));
-route('/agenda/nova',              authGuard(agendaFormView));
-route('/agenda/:id/editar',        authGuard(agendaFormView));
-route('/agenda/:agendamentoId/realizar', authGuard(atividadeFormView));
+route('/agenda',                   blockRecepcao(agendaView));
+route('/agenda/nova',              blockRecepcao(agendaFormView));
+route('/agenda/:id/editar',        blockRecepcao(agendaFormView));
+route('/agenda/:agendamentoId/realizar', blockRecepcao(atividadeFormView));
 route('/painel',                   painelHomeView);
-route('/inicio',                   inicioGerenteView);
-route('/historico',                authGuard(historicoView));
+route('/inicio',                   blockRecepcao(inicioGerenteView));
+route('/historico',                blockRecepcao(historicoView));
+route('/visitas',                  visitasGuard(visitasView));
+route('/visitas/nova',             visitasGuard(visitaFormView));
 route('/usuarios',                 permGuard('gerenciar_usuarios', masterUsuariosView));
 route('/listas',                   permGuard('gerenciar_listas',   masterListasView));
 route('/sobre',                    authGuard((p, a) => import('./views/sobre.js').then(m => m.sobreView(p, a))));

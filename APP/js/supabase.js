@@ -24,6 +24,7 @@ export const state = {
   motivosDwv: [],
   locaisVisita: [],
   cidades: [],
+  gerentesHouse: [],  // lista mestra de gerentes house (para visitas)
   profiles: [],       // só populado para master
   // listeners
   _listeners: new Set(),
@@ -57,14 +58,14 @@ export async function loadProfile() {
 
 // Helper: carrega todas as listas gerenciadas pelo master
 export async function loadLists() {
-  // 5 queries em paralelo (cortou motivos_dwv unificado em motivos_orulo,
-  // e cidades que não é mais necessária)
-  const [imob, emp, mv, mo, lv] = await Promise.all([
+  // 6 queries em paralelo (inclui gerentes_house para a atividade visita)
+  const [imob, emp, mv, mo, lv, gh] = await Promise.all([
     supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome'),
     supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url').order('nome'),
     supabase.from('motivos_visita').select('id, nome').order('nome'),
     supabase.from('motivos_orulo').select('id, nome').order('nome'),
     supabase.from('locais_visita').select('id, nome').order('nome'),
+    supabase.from('gerentes_house').select('id, nome, ativo').eq('ativo', true).order('nome'),
   ]);
   state.imobiliarias    = imob.data    || [];
   state.empreendimentos = emp.data     || [];
@@ -72,6 +73,7 @@ export async function loadLists() {
   state.motivosOrulo    = mo.data      || [];
   state.motivosDwv      = mo.data      || []; // alias - unificado
   state.locaisVisita    = lv.data      || [];
+  state.gerentesHouse   = gh.data      || [];
   state.cidades         = [];          // descontinuado
   emitStateChange();
 }
