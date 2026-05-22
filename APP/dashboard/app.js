@@ -86,6 +86,64 @@ export const fmt = {
 
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
+// Helper: donut chart com CSS conic-gradient (sem dependência externa)
+function renderDonut(containerId, items, title, filterKey) {
+  const root = $(containerId); if (!root) return;
+  const total = items.reduce((s, i) => s + i.n, 0);
+  if (total === 0) { root.innerHTML = `<div style="text-align:center;color:var(--fg-muted);font-size:11px;padding:30px;">${title}<br>(sem dados)</div>`; return; }
+  let cum = 0;
+  const slices = items.map(i => { const pct = (i.n / total) * 100; const start = cum; cum += pct; return { ...i, pct, start, end: cum }; });
+  const grad = slices.map(s => `${s.color} ${s.start}% ${s.end}%`).join(', ');
+  const F = state.visitasFilter;
+  const legendItems = slices.map(s => {
+    const active = filterKey && F[filterKey] === s.label;
+    const cursor = filterKey ? 'cursor:pointer;' : '';
+    const onclick = filterKey ? `onclick="window.__toggleVisitaFilter('${filterKey}', ${JSON.stringify(s.label)})"` : '';
+    return `<div style="display:flex;align-items:center;gap:6px;font-size:11px;${cursor}padding:2px 4px;border-radius:4px;${active?'background:var(--bg-elev);font-weight:700;':''}" ${onclick}>
+      <span style="width:10px;height:10px;border-radius:2px;background:${s.color};flex-shrink:0;"></span>
+      <span style="flex:1;">${escapeHtml(s.label)}</span>
+      <span style="font-weight:700;">${fmt.num(s.n)} <span style="color:var(--fg-muted);font-weight:400;">(${s.pct.toFixed(1).replace('.',',')}%)</span></span>
+    </div>`;
+  }).join('');
+  root.innerHTML = `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--fg-muted);text-align:center;margin-bottom:8px;">${title}</div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="width:110px;height:110px;flex-shrink:0;border-radius:50%;background:conic-gradient(${grad});position:relative;">
+        <div style="position:absolute;inset:22px;background:var(--bg-card);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <div style="font-size:18px;font-weight:800;line-height:1;">${fmt.num(total)}</div>
+          <div style="font-size:9px;color:var(--fg-muted);text-transform:uppercase;">total</div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:3px;">${legendItems}</div>
+    </div>
+  `;
+}
+
+// Helper: visitas por dia (barras verticais)
+function renderDailyBars(containerId, visitas) {
+  const root = $(containerId); if (!root) return;
+  const map = {};
+  visitas.forEach(v => {
+    const d = v.data_visita || (v.created_at && v.created_at.slice(0, 10));
+    if (!d) return;
+    map[d] = (map[d] || 0) + 1;
+  });
+  const entries = Object.entries(map).sort((a, b) => a[0].localeCompare(b[0]));
+  if (!entries.length) { root.innerHTML = '<p style="text-align:center;color:var(--fg-muted);font-size:11px;padding:20px;">Sem dados.</p>'; return; }
+  const max = Math.max(...entries.map(([,n]) => n));
+  const bars = entries.map(([d, n]) => {
+    const h = (n / max) * 100;
+    const date = new Date(d + 'T00:00:00');
+    const lbl = String(date.getDate()).padStart(2,'0') + '/' + String(date.getMonth()+1).padStart(2,'0');
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-width:16px;" title="${date.toLocaleDateString('pt-BR')}: ${n} visita(s)">
+      <div style="font-size:9px;color:var(--fg-muted);margin-bottom:2px;font-weight:600;">${n}</div>
+      <div style="width:78%;height:${h}%;min-height:2px;background:linear-gradient(180deg, #F26B22, #D5530F);border-radius:3px 3px 0 0;transition:height .3s;"></div>
+      <div style="font-size:9px;color:var(--fg-muted);margin-top:3px;white-space:nowrap;">${lbl}</div>
+    </div>`;
+  }).join('');
+  root.innerHTML = `<div style="display:flex;align-items:flex-end;gap:2px;height:160px;padding:8px 4px 0;overflow-x:auto;">${bars}</div>`;
+}
+
 // ─── AUTH ────────────────────────────────────────────────────────────────
 const ALL_ROLES = ['master', 'gestor', 'superintendente', 'gestor_regional', 'gerente', 'supervisor', 'recepcao_rottas'];
 
@@ -184,6 +242,11 @@ async function loadFilterOptions() {
   state.data.empreendimentos = emps || [];
   const { data: imobs } = await sb.from('imobiliarias').select('id, nome, cidade, estado').order('nome');
   state.data.imobiliarias = imobs || [];
+  // Carrega lista de Gerentes House (pra lookup de nome na seção Visitas)
+  try {
+    const { data: gh } = await sb.from('gerentes_house').select('id, nome').order('nome');
+    state.data.gerentesHouse = gh || [];
+  } catch { state.data.gerentesHouse = []; }
   populateFilterSelects();
 }
 
@@ -365,35 +428,65 @@ function renderVisitasPage(allVisitas) {
   const localTop = Object.entries(localCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([label, n]) => ({ label, n }));
   renderBars('visitas-local-bars', localTop.length ? localTop : [{ label: '(sem dados)', n: 0 }], 'local', 'linear-gradient(90deg,#3B82F6,#1D4ED8)');
 
+  // ── NOVO: 3 DONUTS (Share/Período/Atendimento) — estilo Power BI ──
+  renderDonut('visitas-donut-share', [
+    { label: 'House', n: house, color: '#A855F7' },
+    { label: 'Imob',  n: imob,  color: '#F26B22' },
+  ], 'SHARE', 'canal');
+  renderDonut('visitas-donut-periodo', [
+    { label: 'Manhã', n: visitas.filter(v => v.visita_periodo === 'Manhã').length, color: '#F59E0B' },
+    { label: 'Tarde', n: visitas.filter(v => v.visita_periodo === 'Tarde').length, color: '#F26B22' },
+    { label: 'Noite', n: visitas.filter(v => v.visita_periodo === 'Noite').length, color: '#7C2D12' },
+  ], 'PERÍODO', 'periodo');
+  renderDonut('visitas-donut-atendimento', [
+    { label: 'Agendado',   n: agend,  color: '#10B981' },
+    { label: 'Espontânea', n: espont, color: '#F59E0B' },
+  ], 'FORMA DE ATENDIMENTO', 'forma');
+
+  // ── NOVO: VISITAS POR DIA (barras verticais — estilo BI) ──
+  renderDailyBars('visitas-daily-bars', visitas);
+
   // Tabela
   const tw = $('visitas-table-wrap');
   if (!visitas.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem visitas no filtro/período.</p>'; return; }
   const isMaster = state.profile?.role === 'master';
-  let html = `<table><thead><tr>
-    <th>Data</th><th>#</th><th>Visitante</th><th>Empreend.</th><th>Local</th>
-    <th>Período</th><th>Forma</th><th>Canal</th><th>Detalhe</th><th>Recepção</th>
-    ${isMaster ? '<th>Exclusão</th>' : ''}
+  // Cabeçalhos sem abreviação, nomenclatura real
+  let html = `<table style="font-size:12px;"><thead><tr>
+    <th>DATA DA VISITA</th>
+    <th>Nº</th>
+    <th>NOME DO CLIENTE</th>
+    <th>RECEPÇÃO</th>
+    <th>EMPREENDIMENTO</th>
+    <th>LOCAL DA VISITA</th>
+    <th>PERÍODO</th>
+    <th>FORMA DE ATENDIMENTO</th>
+    <th>CANAL</th>
+    <th>GERENTE HOUSE</th>
+    <th>CORRETOR</th>
+    <th>IMOBILIÁRIA</th>
+    ${isMaster ? '<th>EXCLUSÃO</th>' : ''}
   </tr></thead><tbody>`;
   visitas.slice(0, 300).forEach(v => {
-    const detalhe = v.visita_canal === 'House'
-      ? (v.corretor ? v.corretor : '—')
-      : v.visita_canal === 'Imob' ? (v.imobiliaria || '—') : '—';
+    const gerenteHouseNome = state.data?.gerentesHouse?.find?.(g => g.id === v.visita_gerente_house_id)?.nome
+      || (v.visita_canal === 'House' ? '(não preenchido)' : '—');
     const delCell = isMaster ? (v.solicita_exclusao
-      ? `<td><button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;" onclick="window.__approveDelete('${v.id}')">✓ Aprovar</button>
-              <button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;margin-left:4px;" onclick="window.__rejectDelete('${v.id}')">✕ Manter</button></td>`
+      ? `<td><button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;" onclick="event.stopPropagation();window.__approveDelete('${v.id}')">✓ Aprovar</button>
+              <button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;margin-left:4px;" onclick="event.stopPropagation();window.__rejectDelete('${v.id}')">✕ Manter</button></td>`
       : '<td><span style="color:var(--fg-muted);font-size:11px;">—</span></td>'
     ) : '';
     html += `<tr style="cursor:pointer;${v.solicita_exclusao ? 'background:rgba(245,158,11,0.08);' : ''}" onclick="if(!event.target.closest('button')) window.location.href='/#/visita/${v.id}'">
       <td>${v.data_visita ? new Date(v.data_visita+'T00:00:00').toLocaleDateString('pt-BR') : fmt.dateTime(v.created_at)}</td>
       <td><span style="color:var(--fg-muted);font-weight:600;">${v.numero_sequencial ? '#'+v.numero_sequencial : '—'}</span></td>
       <td style="font-weight:600;">${escapeHtml(v.cliente || '—')}${v.solicita_exclusao ? ' <span class="chip chip-yellow" style="margin-left:4px;">⏳</span>' : ''}</td>
+      <td>${escapeHtml(v.profiles?.nome || '—')}</td>
       <td>${escapeHtml(v.empreendimento || '—')}</td>
       <td>${escapeHtml(v.local_treinamento || '—')}</td>
       <td>${escapeHtml(v.visita_periodo || '—')}</td>
       <td>${v.visita_forma_atendimento ? `<span class="chip ${v.visita_forma_atendimento === 'Agendado' ? 'chip-green' : 'chip-yellow'}">${escapeHtml(v.visita_forma_atendimento)}</span>` : '—'}</td>
       <td>${v.visita_canal ? `<span class="chip ${v.visita_canal === 'House' ? 'chip-purple' : 'chip-blue'}">${escapeHtml(v.visita_canal)}</span>` : '—'}</td>
-      <td>${escapeHtml(detalhe)}</td>
-      <td>${escapeHtml(v.profiles?.nome || '—')}</td>
+      <td>${v.visita_canal === 'House' ? escapeHtml(gerenteHouseNome) : '—'}</td>
+      <td>${v.visita_canal === 'House' ? escapeHtml(v.corretor || '—') : '—'}</td>
+      <td>${v.visita_canal === 'Imob' ? escapeHtml(v.imobiliaria || '—') : '—'}</td>
       ${delCell}
     </tr>`;
   });
@@ -1131,6 +1224,11 @@ async function reloadVisitasOnly() {
   $('status-text').textContent = 'Carregando visitas...';
   $('pulse-dot').style.background = 'var(--yellow)';
   try {
+    // Carrega Gerentes House pra lookup na tabela
+    if (!state.data.gerentesHouse) {
+      try { const { data: gh } = await sb.from('gerentes_house').select('id, nome'); state.data.gerentesHouse = gh || []; }
+      catch { state.data.gerentesHouse = []; }
+    }
     const { start, end } = periodRange(state.filters.periodo);
     const visitas = await fetchVisitas(start, end);
     state.data.visitas = visitas;

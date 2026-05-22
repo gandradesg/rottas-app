@@ -450,8 +450,24 @@
           </div>
         </div>
 
+        <!-- Linha temporal de visitas por dia (inspirado no Power BI) -->
+        <div class="card" style="padding:18px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <h3 style="font-size:13.5px;font-weight:700;">Visitas por dia</h3>
+            <span style="font-size:10.5px;color:var(--fg-muted);">Passe o mouse pra ver detalhes</span>
+          </div>
+          <div id="visitas-daily-bars"></div>
+        </div>
+
+        <!-- 3 Donuts: SHARE / PERÍODO / FORMA DE ATENDIMENTO (inspirado no Power BI) -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px;" class="grid-charts">
+          <div class="card" style="padding:18px;"><div id="visitas-donut-share"></div></div>
+          <div class="card" style="padding:18px;"><div id="visitas-donut-periodo"></div></div>
+          <div class="card" style="padding:18px;"><div id="visitas-donut-atendimento"></div></div>
+        </div>
+
         <div class="card" style="padding:14px;">
-          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;">Últimos registros</h3>
+          <h3 style="font-size:13px;font-weight:700;margin-bottom:10px;">Detalhado</h3>
           <div id="visitas-table-wrap" style="overflow-x:auto;max-height:520px;overflow-y:auto;" class="scroll-thin"></div>
         </div>
       </section>
