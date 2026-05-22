@@ -77,12 +77,18 @@ export async function visitaDetailView({ id }, app) {
   const dataBlock = el('div', { class: 'card p-4 flex flex-col gap-3' });
   dataBlock.appendChild(el('h2', { class: 'font-bold text-sm text-fg-muted uppercase tracking-wider' }, 'Dados da Visita'));
 
-  const fieldRow = (label, value, icon) => el('div', { class: 'flex items-start gap-3 py-2 border-b border-border last:border-0' },
-    el('div', { class: 'w-32 flex-shrink-0 text-sm text-fg-muted' }, label),
-    el('div', { class: 'flex-1 text-sm font-medium' }, value || '—'),
-  );
+  // fieldRow só retorna nó se value for NÃO-vazio (esconde campos null/vazios)
+  const fieldRow = (label, value) => {
+    const v = value == null ? '' : String(value).trim();
+    if (!v || v === 'null' || v === 'undefined') return null;
+    return el('div', { class: 'flex items-start gap-3 py-2 border-b border-border last:border-0' },
+      el('div', { class: 'w-32 flex-shrink-0 text-sm text-fg-muted' }, label),
+      el('div', { class: 'flex-1 text-sm font-medium' }, v),
+    );
+  };
 
-  dataBlock.append(
+  // Filtra nulls antes do append (DOM nativo converte null em string "null")
+  [
     fieldRow('Local da Visita', v.local_treinamento),
     fieldRow('Empreendimento', v.empreendimento),
     fieldRow('Período', v.visita_periodo),
@@ -91,7 +97,7 @@ export async function visitaDetailView({ id }, app) {
     v.visita_canal === 'House' ? fieldRow('Gerente House', v.gerentes_house?.nome) : null,
     v.visita_canal === 'House' ? fieldRow('Corretor', v.corretor) : null,
     v.visita_canal === 'Imob'  ? fieldRow('Imobiliária', v.imobiliaria) : null,
-  );
+  ].filter(Boolean).forEach(node => dataBlock.appendChild(node));
   content.appendChild(dataBlock);
 
   // Observações

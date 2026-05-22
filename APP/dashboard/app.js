@@ -450,21 +450,22 @@ function renderVisitasPage(allVisitas) {
   const tw = $('visitas-table-wrap');
   if (!visitas.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem visitas no filtro/período.</p>'; return; }
   const isMaster = state.profile?.role === 'master';
-  // Cabeçalhos sem abreviação, nomenclatura real
+  // Cabeçalhos sem abreviação E sem quebra de linha (white-space nowrap)
+  const th = (t) => `<th style="white-space:nowrap;">${t}</th>`;
   let html = `<table style="font-size:12px;"><thead><tr>
-    <th>DATA DA VISITA</th>
-    <th>Nº</th>
-    <th>NOME DO CLIENTE</th>
-    <th>RECEPÇÃO</th>
-    <th>EMPREENDIMENTO</th>
-    <th>LOCAL DA VISITA</th>
-    <th>PERÍODO</th>
-    <th>FORMA DE ATENDIMENTO</th>
-    <th>CANAL</th>
-    <th>GERENTE HOUSE</th>
-    <th>CORRETOR</th>
-    <th>IMOBILIÁRIA</th>
-    ${isMaster ? '<th>EXCLUSÃO</th>' : ''}
+    ${th('DATA VISITA')}
+    ${th('Nº')}
+    ${th('CLIENTE')}
+    ${th('EMPREENDIMENTO')}
+    ${th('LOCAL VISITA')}
+    ${th('PERÍODO')}
+    ${th('ATENDIMENTO')}
+    ${th('CANAL')}
+    ${th('GERENTE HOUSE')}
+    ${th('CORRETOR')}
+    ${th('IMOBILIÁRIA')}
+    ${isMaster ? th('EXCLUSÃO') : ''}
+    ${th('USUÁRIO')}
   </tr></thead><tbody>`;
   visitas.slice(0, 300).forEach(v => {
     const gerenteHouseNome = state.data?.gerentesHouse?.find?.(g => g.id === v.visita_gerente_house_id)?.nome
@@ -475,10 +476,9 @@ function renderVisitasPage(allVisitas) {
       : '<td><span style="color:var(--fg-muted);font-size:11px;">—</span></td>'
     ) : '';
     html += `<tr style="cursor:pointer;${v.solicita_exclusao ? 'background:rgba(245,158,11,0.08);' : ''}" onclick="if(!event.target.closest('button')) window.location.href='/#/visita/${v.id}'">
-      <td>${v.data_visita ? new Date(v.data_visita+'T00:00:00').toLocaleDateString('pt-BR') : fmt.dateTime(v.created_at)}</td>
+      <td style="white-space:nowrap;">${v.data_visita ? new Date(v.data_visita+'T00:00:00').toLocaleDateString('pt-BR') : fmt.dateTime(v.created_at)}</td>
       <td><span style="color:var(--fg-muted);font-weight:600;">${v.numero_sequencial ? '#'+v.numero_sequencial : '—'}</span></td>
       <td style="font-weight:600;">${escapeHtml(v.cliente || '—')}${v.solicita_exclusao ? ' <span class="chip chip-yellow" style="margin-left:4px;">⏳</span>' : ''}</td>
-      <td>${escapeHtml(v.profiles?.nome || '—')}</td>
       <td>${escapeHtml(v.empreendimento || '—')}</td>
       <td>${escapeHtml(v.local_treinamento || '—')}</td>
       <td>${escapeHtml(v.visita_periodo || '—')}</td>
@@ -488,6 +488,7 @@ function renderVisitasPage(allVisitas) {
       <td>${v.visita_canal === 'House' ? escapeHtml(v.corretor || '—') : '—'}</td>
       <td>${v.visita_canal === 'Imob' ? escapeHtml(v.imobiliaria || '—') : '—'}</td>
       ${delCell}
+      <td>${escapeHtml(v.profiles?.nome || '—')}</td>
     </tr>`;
   });
   html += '</tbody></table>'; tw.innerHTML = html;

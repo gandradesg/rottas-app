@@ -42,30 +42,48 @@ async function loadExcelJS() {
   return _exceljsPromise;
 }
 
-// ─── PARSE DE DATA (aceita "DD/MM/AAAA", "AAAA-MM-DD", Date object do Excel) ──
-// Retorna string "AAAA-MM-DD" pronta pro PostgreSQL date, ou null se inválido
+// ─── PARSE DE DATA — robusto a vários formatos do Excel ────────────────
+// Aceita: Date object, "AAAA-MM-DD", "DD/MM/AAAA", "DD/MM/AA" e (heurístico)
+// "MM/DD/AAAA" (formato US — quando o Excel do usuário usa locale en-US).
+// Retorna "AAAA-MM-DD" pronto pro PostgreSQL ou null se inválido.
 function parseDateBR(v) {
   if (v == null || v === '') return null;
-  // Date object (Excel quando célula é formatada como data)
+  // Date object (Excel quando célula é date e SheetJS converteu)
   if (v instanceof Date) {
     if (isNaN(v.getTime())) return null;
     return v.getFullYear() + '-' + String(v.getMonth()+1).padStart(2,'0') + '-' + String(v.getDate()).padStart(2,'0');
   }
+  // Número serial do Excel (dias desde 1900-01-01)
+  if (typeof v === 'number' && v > 0) {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if (!isNaN(d.getTime())) {
+      return d.getUTCFullYear() + '-' + String(d.getUTCMonth()+1).padStart(2,'0') + '-' + String(d.getUTCDate()).padStart(2,'0');
+    }
+  }
   const s = String(v).trim();
-  // ISO YYYY-MM-DD
-  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // ISO AAAA-MM-DD (sem ambiguidade)
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) {
     const [, y, mo, d] = m;
     if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
-    return `${y}-${mo}-${d}`;
+    return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   }
-  // BR DD/MM/YYYY ou DD-MM-YYYY ou DD/MM/YY
+  // Slash/hyphen: X/Y/Z — heurística para resolver BR vs US
   m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (m) {
-    let [, d, mo, y] = m;
-    if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
+    let [, a, b, y] = m;
+    a = +a; b = +b;
     if (y.length === 2) y = (+y > 50 ? '19' : '20') + y;
-    return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    let dia, mes;
+    // Se A > 12: A só pode ser dia (BR). Ex: "20/05/26" → dia=20, mes=05
+    // Se B > 12: B só pode ser dia (US M/D/Y). Ex: "5/20/26" → mes=5, dia=20
+    // Ambíguo (A<=12 E B<=12): assume BR (DD/MM)
+    if (a > 12 && b <= 12) { dia = a; mes = b; }
+    else if (b > 12 && a <= 12) { mes = a; dia = b; }
+    else if (a <= 12 && b <= 12) { dia = a; mes = b; } // assume BR
+    else return null; // ambos > 12 → inválido
+    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+    return `${y}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
   }
   return null;
 }
@@ -706,10 +724,12 @@ function openImportModal(onSuccess) {
       if (file.size > 10 * 1024 * 1024) throw new Error('Arquivo muito grande (máx 10MB)');
       const XLSX = await loadXLSX();
       const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: 'array' });
+      // cellDates: true → Excel date cells viram Date objects (parseDateBR cuida disso)
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
       const ws = wb.Sheets['Dados'] || wb.Sheets[wb.SheetNames[0]];
       if (!ws) throw new Error('Aba "Dados" não encontrada');
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+      // raw: true → preserva Date objects e números (em vez de virar string formatada)
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
       if (!rows.length) throw new Error('Planilha vazia');
       if (rows.length > MAX_IMPORT_ROWS) throw new Error(`Máximo de ${MAX_IMPORT_ROWS} linhas por importação`);
 
