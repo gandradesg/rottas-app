@@ -426,6 +426,14 @@
         <!-- Banner de filtros ativos + pendentes de exclusão -->
         <div id="visitas-banner" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
 
+        <!-- Filtro: registrado por (quem) -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <label style="font-size:11.5px;font-weight:700;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.05em;">Registrado por:</label>
+          <select id="visitas-registrador-filter" class="ctrl" style="min-width:220px;">
+            <option value="">Todos os registradores</option>
+          </select>
+        </div>
+
         <div id="visitas-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;" class="grid-charts">

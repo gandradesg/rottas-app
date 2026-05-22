@@ -119,6 +119,34 @@ function renderDonut(containerId, items, title, filterKey) {
   `;
 }
 
+// Popula dropdown "Registrado por" — extrai usuários distintos das visitas carregadas
+function renderRegistradorFilter(allVisitas) {
+  const sel = $('visitas-registrador-filter');
+  if (!sel) return;
+  // Coleta {id, nome} distintos
+  const map = new Map();
+  allVisitas.forEach(v => {
+    if (v.gerente_id && v.profiles?.nome) {
+      map.set(v.gerente_id, v.profiles.nome);
+    }
+  });
+  const opts = [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const F = state.visitasFilter;
+  // Mantém valor selecionado se ainda existe nas opções; caso contrário reseta
+  const current = F.registrador && opts.some(([id]) => id === F.registrador) ? F.registrador : '';
+  if (current !== F.registrador) F.registrador = current || null;
+  sel.innerHTML = '<option value="">Todos os registradores</option>' +
+    opts.map(([id, nome]) => `<option value="${id}" ${current===id?'selected':''}>${escapeHtml(nome)}</option>`).join('');
+  // (Re)bind change handler
+  if (!sel._bound) {
+    sel.addEventListener('change', () => {
+      state.visitasFilter.registrador = sel.value || null;
+      renderVisitasPage(state.data.visitas || []);
+    });
+    sel._bound = true;
+  }
+}
+
 // Helper: visitas por dia (barras verticais)
 function renderDailyBars(containerId, visitas) {
   const root = $(containerId); if (!root) return;
@@ -306,18 +334,22 @@ async function fetchVisitas(start, end) {
   return [];
 }
 
-// Estado do filtro local da seção Visitas (clique nos KPIs / barras)
-state.visitasFilter = state.visitasFilter || { canal: null, periodo: null, forma: null, empreend: null, local: null };
+// Estado do filtro local da seção Visitas (clique nos KPIs / barras + dropdown registrador)
+state.visitasFilter = state.visitasFilter || { canal: null, periodo: null, forma: null, empreend: null, local: null, registrador: null };
 
 function renderVisitasPage(allVisitas) {
+  // Popula dropdown "Registrado por" (gerente_id distintos)
+  renderRegistradorFilter(allVisitas);
+
   // Aplica filtros LOCAIS dessa seção
   const F = state.visitasFilter;
   const visitas = allVisitas.filter(v =>
-    (!F.canal    || v.visita_canal === F.canal) &&
-    (!F.periodo  || v.visita_periodo === F.periodo) &&
-    (!F.forma    || v.visita_forma_atendimento === F.forma) &&
-    (!F.empreend || v.empreendimento === F.empreend) &&
-    (!F.local    || v.local_treinamento === F.local)
+    (!F.canal       || v.visita_canal === F.canal) &&
+    (!F.periodo     || v.visita_periodo === F.periodo) &&
+    (!F.forma       || v.visita_forma_atendimento === F.forma) &&
+    (!F.empreend    || v.empreendimento === F.empreend) &&
+    (!F.local       || v.local_treinamento === F.local) &&
+    (!F.registrador || v.gerente_id === F.registrador)
   );
 
   const kpis = $('visitas-kpis');
@@ -378,7 +410,7 @@ function renderVisitasPage(allVisitas) {
     banner.innerHTML = html;
   }
   window.__clearVisitaFilters = () => {
-    state.visitasFilter = { canal: null, periodo: null, forma: null, empreend: null, local: null };
+    state.visitasFilter = { canal: null, periodo: null, forma: null, empreend: null, local: null, registrador: null };
     renderVisitasPage(allVisitas);
   };
 
@@ -984,6 +1016,7 @@ async function reload() {
     // Master: carrega visitas separadamente (lista própria, não soma nas atividades acima)
     if (state.profile?.role === 'master') {
       const visitas = await fetchVisitas(start, end);
+      state.data.visitas = visitas;
       renderVisitasPage(visitas);
       const badge = document.getElementById('badge-visitas');
       if (badge) badge.textContent = fmt.num(visitas.length);
@@ -1143,8 +1176,8 @@ function renderUserChip() {
   const p = state.profile;
   const initials = (p.nome || '?').split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
   $('user-avatar').textContent = initials; $('user-name').textContent = p.nome || p.email;
-  const roleLabels = { master:'Master', gestor:'Gestor', superintendente:'Superintendente', gestor_regional:'Gestor Regional', gerente:'Gerente', supervisor:'Supervisor' };
-  $('user-role').textContent = roleLabels[p.role] || p.role;
+  const roleLabels = { master:'Master', gestor:'Gestor', superintendente:'Superintendente', gestor_regional:'Gestor Regional', gerente:'Gerente', supervisor:'Supervisor', recepcao_rottas:'Recepção' };
+  $('user-role').textContent = roleLabels[p.role] || '';
 }
 
 // ─── BOOT ────────────────────────────────────────────────────────────────

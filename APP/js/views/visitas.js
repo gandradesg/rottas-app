@@ -404,7 +404,7 @@ export async function visitaFormView(_params, app) {
       const periodo = periodoSel.value;
       const forma   = formaSel.value;
       const canal   = canalSel.value || null;
-      const imobValue = readSel(imobSel);
+      const imobValue = (readSel(imobSel) || '').toUpperCase();
 
       if (!nome) throw new Error('Nome obrigatório');
       if (!local) throw new Error('Local da Visita obrigatório');
@@ -534,7 +534,7 @@ async function downloadTemplate() {
 
     // C — LOCAL DA VISITA  (lista suspensa ABERTA — aceita valor novo)
     addListRangeOpen(wsDados, 'C2:C' + N, `Listas!$A$2:$A$${Math.max(locais.length + 1, 2)}`,
-      'LOCAL DA VISITA', 'OBRIGATÓRIO. Use a lista suspensa se possível, mas é permitido digitar um Local novo (será criado ao importar).');
+      'LOCAL DA VISITA', 'OBRIGATÓRIO: Use a lista suspensa se possível, mas é permitido digitar um Local novo (será criado ao importar).');
 
     // D — EMPREENDIMENTO  (lista suspensa)
     addListRange(wsDados, 'D2:D' + N, `Listas!$B$2:$B$${emps.length + 1}`,
@@ -559,9 +559,9 @@ async function downloadTemplate() {
     // I — CORRETOR
     addPromptRange(wsDados, 'I2:I' + N, 'CORRETOR', 'OBRIGATÓRIO se CANAL PARCEIRO = House: Nome do corretor que conduziu a visita.');
 
-    // J — IMOBILIÁRIA  (lista suspensa)
-    addListRange(wsDados, 'J2:J' + N, `Listas!$D$2:$D$${imobs.length + 1}`,
-      'IMOBILIÁRIA', 'OBRIGATÓRIO se CANAL PARCEIRO = Imob: Selecione a Imobiliária responsável.');
+    // J — IMOBILIÁRIA  (lista suspensa ABERTA — aceita imob nova; backend normaliza pra UPPER)
+    addListRangeOpen(wsDados, 'J2:J' + N, `Listas!$D$2:$D$${Math.max(imobs.length + 1, 2)}`,
+      'IMOBILIÁRIA', 'OBRIGATÓRIO se CANAL PARCEIRO = Imob: Use a lista suspensa se possível. Imobiliárias novas serão criadas em LETRA MAIÚSCULA.');
 
     // K — OBSERVAÇÕES (textLength ≤ 2000)
     addLengthValidation(wsDados, 'K2:K' + N, 2000,
@@ -615,7 +615,7 @@ async function downloadTemplate() {
       [''],
       ['REGRAS CONDICIONAIS:', true],
       ['  • Forma = Espontânea → Canal/Gerente House/Corretor/Imobiliária VAZIOS'],
-      ['  • Forma = Agendado   → Canal é OBRIGATÓRIO. Conforme o canal:'],
+      ['  • Forma = Agendado   → Canal é OBRIGATÓRIO: Conforme o canal:'],
       ['        Canal = House → Gerente House (lista) E Corretor (texto) OBRIGATÓRIOS'],
       ['        Canal = Imob  → Imobiliária (lista) OBRIGATÓRIA'],
       [''],
@@ -766,7 +766,8 @@ function openImportModal(onSuccess) {
         const canal   = sanitizeText(pickRaw(r, ['CANAL PARCEIRO', 'Canal Parceiro', 'Canal', 'Canal (House/Imob — só se Agendado)']));
         const ghouse  = sanitizeText(pickRaw(r, ['GERENTE HOUSE', 'Gerente House', 'Gerente House (se Canal=House)']));
         const corretor = sanitizeText(pickRaw(r, ['CORRETOR', 'Corretor', 'Corretor (se Canal=House)']));
-        const imob    = sanitizeText(pickRaw(r, ['IMOBILIÁRIA', 'Imobiliária', 'Imobiliária (se Canal=Imob)']));
+        let imob    = sanitizeText(pickRaw(r, ['IMOBILIÁRIA', 'Imobiliária', 'Imobiliária (se Canal=Imob)']));
+        if (imob) imob = imob.toUpperCase(); // sempre UPPERCASE
         const obs     = sanitizeText(pickRaw(r, ['OBSERVAÇÕES', 'Observações']), 2000);
 
         if (!dataVisita) errors.push({ linha, coluna: 'Data da Visita', motivo: dataRaw ? `valor inválido: "${dataRaw}" — use DD/MM/AAAA` : 'obrigatório' });
@@ -794,8 +795,7 @@ function openImportModal(onSuccess) {
             if (!corretor) errors.push({ linha, coluna: 'Corretor', motivo: 'obrigatório quando Canal=House' });
           } else if (canal === 'Imob') {
             if (!imob) errors.push({ linha, coluna: 'Imobiliária', motivo: 'obrigatório quando Canal=Imob' });
-            else if (!state.imobiliarias.some(x => x.nome === imob))
-              errors.push({ linha, coluna: 'Imobiliária', motivo: `"${imob}" não cadastrada` });
+            // NÃO valida contra lista — imobs novas são criadas automaticamente em UPPERCASE
           }
         }
 
@@ -846,7 +846,7 @@ function openImportModal(onSuccess) {
     if (!parsedRows) return;
     loadingBtn(submitBtn, true);
     try {
-      // 1. Cria Locais de Visita NOVOS (que não estão na lista) em batch
+      // 1a. Cria Locais de Visita NOVOS (que não estão na lista) em batch
       const localsCadastrados = new Set(state.locaisVisita.map(x => x.nome));
       const novosLocais = [...new Set(parsedRows.map(r => r.local_treinamento).filter(Boolean))]
         .filter(nome => !localsCadastrados.has(nome));
@@ -855,8 +855,18 @@ function openImportModal(onSuccess) {
           novosLocais.map(nome => ({ nome }))
         );
         if (errLoc) throw new Error('Falha ao criar Locais novos: ' + errLoc.message);
-        // Atualiza cache local
         novosLocais.forEach(nome => state.locaisVisita.push({ nome }));
+      }
+      // 1b. Cria Imobiliárias NOVAS em batch (sempre UPPERCASE; já normalizadas no parse)
+      const imobsCadastradas = new Set(state.imobiliarias.map(x => x.nome));
+      const novasImobs = [...new Set(parsedRows.map(r => r.imobiliaria).filter(Boolean))]
+        .filter(nome => !imobsCadastradas.has(nome));
+      if (novasImobs.length) {
+        const { error: errImob } = await supabase.from('imobiliarias').insert(
+          novasImobs.map(nome => ({ nome }))
+        );
+        if (errImob) throw new Error('Falha ao criar Imobiliárias novas: ' + errImob.message);
+        novasImobs.forEach(nome => state.imobiliarias.push({ nome }));
       }
 
       // 2. Insere visitas
