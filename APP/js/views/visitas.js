@@ -667,14 +667,21 @@ function addListRange(ws, range, formula, promptTitle, prompt) {
     error: 'Use APENAS um valor da lista suspensa (▼). Não é permitido digitar valores diferentes.',
   });
 }
-// LISTA ABERTA: mostra dropdown mas aceita valores livres (sem bloqueio)
-// Usada quando o conjunto pode crescer (ex: Local da Visita pode ser novo)
+// LISTA ABERTA: mostra dropdown ▼ MAS aceita valores livres (sem bloqueio).
+// Usada quando o conjunto pode crescer (ex: Local da Visita pode ser novo).
+// Implementação: errorStyle 'information' — mostra um "OK/Cancelar" amigável
+// quando o valor está fora da lista, mas PERMITE o usuário continuar com OK.
+// (type=list + showErrorMessage=false sozinho NÃO funciona — Excel mantém o
+//  bloqueio default. errorStyle=information é a única forma confiável.)
 function addListRangeOpen(ws, range, formula, promptTitle, prompt) {
   ws.dataValidations.add(range, {
     type: 'list', allowBlank: true,
     formulae: [formula],
     showInputMessage: true, promptTitle, prompt,
-    showErrorMessage: false, // CHAVE: sem mensagem de erro = aceita qualquer valor
+    showErrorMessage: true,
+    errorStyle: 'information',
+    errorTitle: 'Local novo será criado',
+    error: 'Este Local não está na lista. Será criado automaticamente ao importar. Clique OK pra continuar.',
   });
 }
 function addListInline(ws, range, values, promptTitle, prompt) {
