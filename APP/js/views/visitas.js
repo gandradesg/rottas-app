@@ -233,7 +233,7 @@ export async function visitaFormView(_params, app) {
 
   // Campo Nome
   const nomeInp = el('input', { class: 'input', type: 'text', name: 'nome', required: true,
-    placeholder: 'Nome e Sobrenome', autocomplete: 'off' });
+    placeholder: 'Nome e Sobrenome (Cliente)', autocomplete: 'off' });
 
   // Local da Visita — usa creatableSelect (mesmo do checkin)
   const localSel = creatableSelect({
@@ -277,7 +277,7 @@ export async function visitaFormView(_params, app) {
 
   form.append(
     field('Localização', locationFieldEl, { required: true }),
-    field('Nome e Sobrenome', nomeInp, { required: true }),
+    field('Nome e Sobrenome (Cliente)', nomeInp, { required: true }),
     field('Local da Visita', localSel, { required: true }),
     field('Empreendimento', empSel, { required: true }),
     field('Período', periodoSel, { required: true }),
@@ -451,9 +451,9 @@ async function downloadTemplate() {
     // B — NOME DO CLIENTE
     addPromptRange(wsDados, 'B2:B' + N, 'NOME DO CLIENTE', 'OBRIGATÓRIO: Nome completo do visitante (Nome + Sobrenome).');
 
-    // C — LOCAL DA VISITA  (lista suspensa)
-    addListRange(wsDados, 'C2:C' + N, `Listas!$A$2:$A$${locais.length + 1}`,
-      'LOCAL DA VISITA', 'OBRIGATÓRIO. Selecione um Local da Visita cadastrado. Use a lista suspensa.');
+    // C — LOCAL DA VISITA  (lista suspensa ABERTA — aceita valor novo)
+    addListRangeOpen(wsDados, 'C2:C' + N, `Listas!$A$2:$A$${Math.max(locais.length + 1, 2)}`,
+      'LOCAL DA VISITA', 'OBRIGATÓRIO. Use a lista suspensa se possível, mas é permitido digitar um Local novo (será criado ao importar).');
 
     // D — EMPREENDIMENTO  (lista suspensa)
     addListRange(wsDados, 'D2:D' + N, `Listas!$B$2:$B$${emps.length + 1}`,
@@ -586,6 +586,16 @@ function addListRange(ws, range, formula, promptTitle, prompt) {
     error: 'Use APENAS um valor da lista suspensa (▼). Não é permitido digitar valores diferentes.',
   });
 }
+// LISTA ABERTA: mostra dropdown mas aceita valores livres (sem bloqueio)
+// Usada quando o conjunto pode crescer (ex: Local da Visita pode ser novo)
+function addListRangeOpen(ws, range, formula, promptTitle, prompt) {
+  ws.dataValidations.add(range, {
+    type: 'list', allowBlank: true,
+    formulae: [formula],
+    showInputMessage: true, promptTitle, prompt,
+    showErrorMessage: false, // CHAVE: sem mensagem de erro = aceita qualquer valor
+  });
+}
 function addListInline(ws, range, values, promptTitle, prompt) {
   // ExcelJS: lista inline = formula com aspas duplas em volta dos valores
   const formula = `"${values.join(',')}"`;
@@ -676,8 +686,7 @@ function openImportModal(onSuccess) {
         if (periodo && !VISITA_PERIODOS.includes(periodo)) errors.push({ linha, coluna: 'Período', motivo: `valor inválido (use ${VISITA_PERIODOS.join('|')})` });
         if (forma && !VISITA_FORMAS.includes(forma))       errors.push({ linha, coluna: 'Forma', motivo: `valor inválido (use ${VISITA_FORMAS.join('|')})` });
 
-        if (local && !state.locaisVisita.some(x => x.nome === local))
-          errors.push({ linha, coluna: 'Local da Visita', motivo: `"${local}" não cadastrado` });
+        // Local da Visita: NÃO valida contra a lista — aceita valor novo (será criado em batch antes da inserção)
         if (emp && !state.empreendimentos.some(x => x.nome === emp))
           errors.push({ linha, coluna: 'Empreendimento', motivo: `"${emp}" não cadastrado` });
 
@@ -742,6 +751,20 @@ function openImportModal(onSuccess) {
     if (!parsedRows) return;
     loadingBtn(submitBtn, true);
     try {
+      // 1. Cria Locais de Visita NOVOS (que não estão na lista) em batch
+      const localsCadastrados = new Set(state.locaisVisita.map(x => x.nome));
+      const novosLocais = [...new Set(parsedRows.map(r => r.local_treinamento).filter(Boolean))]
+        .filter(nome => !localsCadastrados.has(nome));
+      if (novosLocais.length) {
+        const { error: errLoc } = await supabase.from('locais_visita').insert(
+          novosLocais.map(nome => ({ nome }))
+        );
+        if (errLoc) throw new Error('Falha ao criar Locais novos: ' + errLoc.message);
+        // Atualiza cache local
+        novosLocais.forEach(nome => state.locaisVisita.push({ nome }));
+      }
+
+      // 2. Insere visitas
       const enriched = parsedRows.map(r => ({
         ...r,
         latitude: geoData?.latitude || null,

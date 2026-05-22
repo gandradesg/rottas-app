@@ -940,7 +940,13 @@ function switchSection(section) {
   const all = ['overview', 'checkins', 'atendimentos', 'propostas', 'visitas', 'charts', 'rankings'];
   all.forEach(s => { const el = $(`sec-${s}`); if (el) el.style.display = (s === section) ? 'block' : 'none'; });
   $$('.sb-link[data-section]').forEach(l => l.classList.toggle('active', l.dataset.section === section));
+  const titlesByRole = {
+    recepcao_rottas: { visitas: 'Minhas Visitas Registradas' },
+    master:          { visitas: 'Visitas (todas — Recepção Rottas)' },
+  };
   const titles = { overview:'Visão Geral', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', visitas:'Visitas (Recepção)', charts:'Curvas & Funil', rankings:'Rankings' };
+  const roleTitles = titlesByRole[state.profile?.role] || {};
+  Object.assign(titles, roleTitles);
   $('section-title').textContent = titles[section] || section;
   // Ticker só na overview
   $('ticker-wrap').style.display = (section === 'overview') ? 'block' : 'none';
@@ -961,14 +967,18 @@ function wireFilters() {
     saveFilters(); reload();
   };
   ['periodo','estado','cidade','empreend','imob','gerente'].forEach(k => {
-    $(`f-${k}`).addEventListener('change', onChange(k));
+    $(`f-${k}`)?.addEventListener('change', onChange(k));
   });
   $('btn-reset').addEventListener('click', () => {
     state.filters = { periodo: '30d', estado: 'todos', cidade: 'todas', empreend: 'todos', imob: 'todas', gerente: 'todos' };
     if (state.profile.role === 'supervisor') state.filters.gerente = state.profile.id;
     saveFilters(); populateFilterSelects(); reload();
   });
-  $('btn-refresh').addEventListener('click', reload);
+  $('btn-refresh').addEventListener('click', () => {
+    // Recepção tem fluxo próprio (só fetchVisitas, sem snapshots globais)
+    if (state.profile?.role === 'recepcao_rottas') return reloadVisitasOnly();
+    return reload();
+  });
 }
 
 function wireRankTabs() {
@@ -1054,24 +1064,87 @@ async function boot() {
   renderUserChip();
   wireTheme(); wireLogout(); wireFilters(); wireRankTabs(); wirePropostasTabs(); wireSidebar(); wireHistoryModal(); wireChatToggle();
 
-  // Sidebar de Visitas: apenas para Master
-  if (state.profile.role === 'master') {
+  // Sidebar de Visitas: APARECE para Master E para Recepção Rottas
+  const role = state.profile.role;
+  if (role === 'master' || role === 'recepcao_rottas') {
     const link = document.getElementById('sb-visitas-link');
     const lbl  = document.getElementById('sb-section-visitas-label');
     if (link) link.style.display = '';
     if (lbl)  lbl.style.display  = '';
   }
 
-  initAiChat({
-    keyboxEl: $('ai-keybox'), historyEl: $('ai-history'), suggestionsEl: $('ai-suggestions'),
-    inputEl: $('ai-input'), sendEl: $('ai-send'), rateEl: $('ai-rate'),
-    canManageKey: ['master', 'gestor'].includes(state.profile.role), toast, sb,
-  });
+  // ── MODO RECEPÇÃO: sidebar enxuto, apenas seção Visitas ──
+  if (role === 'recepcao_rottas') {
+    // Esconde TODAS as outras seções do sidebar
+    document.querySelectorAll('.sb-link[data-section]').forEach(a => {
+      if (a.dataset.section !== 'visitas') a.style.display = 'none';
+    });
+    // Esconde os labels "Geral", "Atividades", "Análise" (mantém só "Visitas")
+    document.querySelectorAll('.sb-section-label').forEach(lbl => {
+      if (lbl.id !== 'sb-section-visitas-label') lbl.style.display = 'none';
+    });
+    // Esconde filtros do topbar que não fazem sentido (gerente/empreend/imob globais)
+    const topFilters = $('header-filters') || document.querySelector('.topbar-filters');
+    if (topFilters) topFilters.style.display = 'none';
+    // Esconde botões que não fazem sentido pra Recepção
+    const refreshBtn = $('btn-refresh');
+    if (refreshBtn) refreshBtn.querySelector('span')?.classList.add('text-xs');
+    // Esconde modal-link de histórico de snapshots (não tem sentido pra Recepção)
+    const luChip = $('last-update-chip');
+    if (luChip) luChip.style.display = 'none';
+    // Esconde drill-filters do dashboard geral
+    const drillBar = $('drill-filters-bar');
+    if (drillBar) drillBar.style.display = 'none';
+    // Esconde ticker
+    const ticker = $('ticker-wrap');
+    if (ticker) ticker.style.display = 'none';
+    // Esconde Chat IA — não é necessário pra Recepção
+    const fab = $('ai-fab'); if (fab) fab.style.display = 'none';
+    const aiPanel = $('ai-panel'); if (aiPanel) aiPanel.style.display = 'none';
+    // Força section inicial = visitas (override de qualquer sessionStorage anterior)
+    state.currentSection = 'visitas';
+    sessionStorage.setItem('dash-section', 'visitas');
+  } else {
+    // Outros roles: chat IA normal
+    initAiChat({
+      keyboxEl: $('ai-keybox'), historyEl: $('ai-history'), suggestionsEl: $('ai-suggestions'),
+      inputEl: $('ai-input'), sendEl: $('ai-send'), rateEl: $('ai-rate'),
+      canManageKey: ['master', 'gestor'].includes(role), toast, sb,
+    });
+  }
 
   switchSection(state.currentSection);
   updateLastUpdateChip();
-  await loadFilterOptions();
-  await reload();
+
+  // Recepção NÃO precisa carregar opções de gerente/empreend/imob globais nem
+  // o fetchAtividades de outros tipos. Só fetchVisitas.
+  if (role === 'recepcao_rottas') {
+    await reloadVisitasOnly();
+  } else {
+    await loadFilterOptions();
+    await reload();
+  }
+}
+
+// Reload simplificado para Recepção: só carrega visitas próprias
+async function reloadVisitasOnly() {
+  $('status-text').textContent = 'Carregando visitas...';
+  $('pulse-dot').style.background = 'var(--yellow)';
+  try {
+    const { start, end } = periodRange(state.filters.periodo);
+    const visitas = await fetchVisitas(start, end);
+    state.data.visitas = visitas;
+    renderVisitasPage(visitas);
+    state.lastUpdate = new Date();
+    $('status-text').textContent = `Atualizado às ${fmt.timeOnly(state.lastUpdate)}`;
+    $('status-counts').textContent = `${fmt.num(visitas.length)} visita(s) — visão Recepção Rottas`;
+    $('pulse-dot').style.background = 'var(--green)';
+  } catch (err) {
+    console.error('[recepcao reload]', err);
+    toast('Erro: ' + (err.message || err), 'error');
+    $('status-text').textContent = 'Erro ao carregar';
+    $('pulse-dot').style.background = 'var(--red)';
+  }
 }
 
 boot().catch(err => {

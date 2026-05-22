@@ -32,11 +32,15 @@ export function shell(content, opts = {}) {
     );
   }
 
-  // Botão Dashboard (pagina externa /dashboard) — disponível para todos EXCETO Recepção Rottas
-  // O dashboard aplica scope automaticamente: Gerente vê só seus dados +
-  // supervisores, GestReg vê suas cidades, Superint seus estados, Master tudo.
+  // Botão Dashboard (pagina externa /dashboard) — disponível para TODOS os roles
+  // O dashboard aplica scope automaticamente conforme o perfil:
+  //   • Gerente   → próprios dados + supervisores subordinados
+  //   • GestReg   → cidades_acesso
+  //   • Superint  → estados_acesso
+  //   • Master    → tudo
+  //   • Recepção  → apenas seção Visitas (sidebar enxuto, suas próprias visitas)
   let dashboardBtn = null;
-  if (state.profile?.role && !isRecepcao() && !back) {
+  if (state.profile?.role && !back) {
     dashboardBtn = el('button', {
       class: 'btn-sm flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition',
       style: {
