@@ -243,73 +243,183 @@ async function fetchVisitas(start, end) {
   return [];
 }
 
-function renderVisitasPage(visitas) {
+// Estado do filtro local da seção Visitas (clique nos KPIs / barras)
+state.visitasFilter = state.visitasFilter || { canal: null, periodo: null, forma: null, empreend: null, local: null };
+
+function renderVisitasPage(allVisitas) {
+  // Aplica filtros LOCAIS dessa seção
+  const F = state.visitasFilter;
+  const visitas = allVisitas.filter(v =>
+    (!F.canal    || v.visita_canal === F.canal) &&
+    (!F.periodo  || v.visita_periodo === F.periodo) &&
+    (!F.forma    || v.visita_forma_atendimento === F.forma) &&
+    (!F.empreend || v.empreendimento === F.empreend) &&
+    (!F.local    || v.local_treinamento === F.local)
+  );
+
   const kpis = $('visitas-kpis');
-  const total = visitas.length;
+  const totalAll = allVisitas.length;
+  const total    = visitas.length;
   const espont = visitas.filter(v => v.visita_forma_atendimento === 'Espontânea').length;
   const agend  = visitas.filter(v => v.visita_forma_atendimento === 'Agendado').length;
   const house  = visitas.filter(v => v.visita_canal === 'House').length;
   const imob   = visitas.filter(v => v.visita_canal === 'Imob').length;
   const uniqEmp = new Set(visitas.map(v => v.empreendimento).filter(Boolean)).size;
+  const pendDel = visitas.filter(v => v.solicita_exclusao).length;
+
+  // Helper pra montar card clicável que atualiza filtro
+  const kpiCard = (label, value, sub, valueColor, filterKey, filterValue) => {
+    const active = filterKey && F[filterKey] === filterValue;
+    const cursor = filterKey ? 'cursor:pointer;' : '';
+    const border = active ? 'box-shadow:0 0 0 2px var(--accent);' : '';
+    const onclick = filterKey ? `onclick="window.__toggleVisitaFilter('${filterKey}','${filterValue}')"` : '';
+    return `<div class="kpi" style="${cursor}${border}position:relative;" ${onclick}>
+      ${active ? '<span style="position:absolute;top:6px;right:8px;font-size:10px;color:var(--accent);font-weight:700;">FILTRO ATIVO ✕</span>' : ''}
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value" ${valueColor ? `style="color:${valueColor};"` : ''}>${fmt.num(value)}</div>
+      <div class="kpi-sub">${sub}</div>
+    </div>`;
+  };
 
   kpis.innerHTML = `
-    <div class="kpi kpi-accent"><div class="kpi-label">Total Visitas</div><div class="kpi-value">${fmt.num(total)}</div><div class="kpi-sub">no período</div></div>
-    <div class="kpi"><div class="kpi-label">Espontâneas</div><div class="kpi-value" style="color:var(--yellow);">${fmt.num(espont)}</div><div class="kpi-sub">${fmt.pct(total > 0 ? espont/total*100 : 0)}</div></div>
-    <div class="kpi"><div class="kpi-label">Agendados</div><div class="kpi-value" style="color:var(--green);">${fmt.num(agend)}</div><div class="kpi-sub">${fmt.pct(total > 0 ? agend/total*100 : 0)}</div></div>
-    <div class="kpi"><div class="kpi-label">Canal House</div><div class="kpi-value" style="color:var(--purple);">${fmt.num(house)}</div><div class="kpi-sub">${fmt.pct(agend > 0 ? house/agend*100 : 0)} dos agendados</div></div>
-    <div class="kpi"><div class="kpi-label">Canal Imob</div><div class="kpi-value" style="color:var(--blue);">${fmt.num(imob)}</div><div class="kpi-sub">${fmt.pct(agend > 0 ? imob/agend*100 : 0)} dos agendados</div></div>
-    <div class="kpi"><div class="kpi-label">Empreendimentos</div><div class="kpi-value">${fmt.num(uniqEmp)}</div><div class="kpi-sub">distintos visitados</div></div>
+    ${kpiCard('Total Visitas', total, totalAll === total ? 'no período' : `${fmt.num(totalAll)} sem filtro`, null, null)}
+    ${kpiCard('Espontâneas', espont, fmt.pct(total > 0 ? espont/total*100 : 0), 'var(--yellow)', 'forma', 'Espontânea')}
+    ${kpiCard('Agendados', agend, fmt.pct(total > 0 ? agend/total*100 : 0), 'var(--green)', 'forma', 'Agendado')}
+    ${kpiCard('Canal House', house, fmt.pct(agend > 0 ? house/agend*100 : 0) + ' dos agendados', 'var(--purple)', 'canal', 'House')}
+    ${kpiCard('Canal Imob', imob, fmt.pct(agend > 0 ? imob/agend*100 : 0) + ' dos agendados', 'var(--blue)', 'canal', 'Imob')}
+    ${kpiCard('Empreendimentos', uniqEmp, 'distintos visitados', null, null)}
   `;
 
-  // Bars de período (Manhã / Tarde / Noite)
-  const periodos = ['Manhã', 'Tarde', 'Noite'];
-  const maxP = Math.max(...periodos.map(p => visitas.filter(v => v.visita_periodo === p).length), 1);
-  $('visitas-periodo-bars').innerHTML = periodos.map(p => {
-    const n = visitas.filter(v => v.visita_periodo === p).length;
-    const w = (n / maxP) * 100;
-    return `<div style="display:flex;align-items:center;gap:10px;font-size:12.5px;">
-      <span style="width:60px;font-weight:600;">${p}</span>
-      <div style="flex:1;background:var(--bg-elev);border-radius:6px;height:22px;position:relative;overflow:hidden;">
-        <div style="height:100%;width:${w}%;background:linear-gradient(90deg,#F26B22,#D5530F);border-radius:6px;transition:width .3s;"></div>
-      </div>
-      <span class="num" style="width:60px;font-weight:700;">${fmt.num(n)}</span>
-    </div>`;
-  }).join('');
+  // Expõe handler global pra cliques nos cards
+  window.__toggleVisitaFilter = (key, value) => {
+    state.visitasFilter[key] = state.visitasFilter[key] === value ? null : value;
+    renderVisitasPage(allVisitas);
+  };
 
-  // Bars Espontânea vs Agendado
-  const formas = [{ label: 'Espontânea', n: espont, color: 'var(--yellow)' }, { label: 'Agendado', n: agend, color: 'var(--green)' }];
-  const maxF = Math.max(espont, agend, 1);
-  $('visitas-forma-bars').innerHTML = formas.map(f => {
-    const w = (f.n / maxF) * 100;
-    return `<div style="display:flex;align-items:center;gap:10px;font-size:12.5px;">
-      <span style="width:80px;font-weight:600;">${f.label}</span>
-      <div style="flex:1;background:var(--bg-elev);border-radius:6px;height:22px;overflow:hidden;">
-        <div style="height:100%;width:${w}%;background:${f.color};border-radius:6px;transition:width .3s;"></div>
-      </div>
-      <span class="num" style="width:60px;font-weight:700;">${fmt.num(f.n)}</span>
-    </div>`;
-  }).join('');
+  // Banner: filtros ativos + pendentes de exclusão
+  const banner = $('visitas-banner');
+  if (banner) {
+    const activeFilters = Object.entries(F).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`);
+    let html = '';
+    if (activeFilters.length) {
+      html += `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:rgba(242,107,34,0.10);border:1px solid rgba(242,107,34,0.35);border-radius:8px;font-size:11.5px;">
+        🎯 <b>Filtros ativos:</b> ${activeFilters.join(' · ')}
+        <button onclick="window.__clearVisitaFilters()" style="margin-left:auto;background:none;border:1px solid var(--accent);color:var(--accent);font-size:11px;padding:3px 9px;border-radius:6px;cursor:pointer;">Limpar</button>
+      </div>`;
+    }
+    if (pendDel > 0) {
+      html += `<div style="padding:8px 12px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-size:11.5px;margin-top:6px;">
+        ⏳ <b>${pendDel}</b> visita(s) com solicitação de exclusão pendente — aprove ou rejeite nos cards abaixo.
+      </div>`;
+    }
+    banner.innerHTML = html;
+  }
+  window.__clearVisitaFilters = () => {
+    state.visitasFilter = { canal: null, periodo: null, forma: null, empreend: null, local: null };
+    renderVisitasPage(allVisitas);
+  };
+
+  // Helper de barra horizontal clicável (filtra a seção)
+  const renderBars = (containerId, items, filterKey, gradient) => {
+    const maxV = Math.max(...items.map(i => i.n), 1);
+    const el = $(containerId);
+    if (!el) return;
+    el.innerHTML = items.map(item => {
+      const w = (item.n / maxV) * 100;
+      const active = F[filterKey] === item.label;
+      const bg = active ? 'linear-gradient(90deg, #10B981, #059669)' : (gradient || 'linear-gradient(90deg,#F26B22,#D5530F)');
+      const label = item.label || '—';
+      const safeLabel = label.replace(/'/g, "\\'");
+      return `<div onclick="window.__toggleVisitaFilter('${filterKey}','${safeLabel}')" style="display:flex;align-items:center;gap:10px;font-size:12.5px;cursor:pointer;padding:3px 0;border-radius:4px;transition:background .15s;" onmouseenter="this.style.background='var(--bg-elev)'" onmouseleave="this.style.background='transparent'">
+        <span style="width:140px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+        <div style="flex:1;background:var(--bg-elev);border-radius:6px;height:22px;overflow:hidden;">
+          <div style="height:100%;width:${w}%;background:${bg};border-radius:6px;transition:width .3s;"></div>
+        </div>
+        <span class="num" style="width:50px;font-weight:700;">${fmt.num(item.n)}</span>
+        ${active ? '<span style="color:var(--green);font-weight:700;">✓</span>' : ''}
+      </div>`;
+    }).join('');
+  };
+
+  // Período (clicável)
+  renderBars('visitas-periodo-bars',
+    ['Manhã', 'Tarde', 'Noite'].map(p => ({ label: p, n: visitas.filter(v => v.visita_periodo === p).length })),
+    'periodo'
+  );
+
+  // Espontânea vs Agendado (clicável)
+  renderBars('visitas-forma-bars',
+    [{ label: 'Espontânea', n: espont }, { label: 'Agendado', n: agend }],
+    'forma'
+  );
+
+  // ── NOVO: Top empreendimentos (clicável) ──
+  const empCounts = {};
+  visitas.forEach(v => { if (v.empreendimento) empCounts[v.empreendimento] = (empCounts[v.empreendimento] || 0) + 1; });
+  const empTop = Object.entries(empCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([label, n]) => ({ label, n }));
+  renderBars('visitas-empreend-bars', empTop.length ? empTop : [{ label: '(sem dados)', n: 0 }], 'empreend', 'linear-gradient(90deg,#A855F7,#7C3AED)');
+
+  // ── NOVO: Top locais (clicável) ──
+  const localCounts = {};
+  visitas.forEach(v => { if (v.local_treinamento) localCounts[v.local_treinamento] = (localCounts[v.local_treinamento] || 0) + 1; });
+  const localTop = Object.entries(localCounts).sort((a,b) => b[1]-a[1]).slice(0, 10).map(([label, n]) => ({ label, n }));
+  renderBars('visitas-local-bars', localTop.length ? localTop : [{ label: '(sem dados)', n: 0 }], 'local', 'linear-gradient(90deg,#3B82F6,#1D4ED8)');
 
   // Tabela
   const tw = $('visitas-table-wrap');
-  if (!visitas.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem visitas no período.</p>'; return; }
-  let html = '<table><thead><tr><th>Data</th><th>Visitante</th><th>Empreend.</th><th>Período</th><th>Forma</th><th>Canal</th><th>Detalhe</th><th>Recepção</th></tr></thead><tbody>';
-  visitas.slice(0, 200).forEach(v => {
+  if (!visitas.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem visitas no filtro/período.</p>'; return; }
+  const isMaster = state.profile?.role === 'master';
+  let html = `<table><thead><tr>
+    <th>Data</th><th>#</th><th>Visitante</th><th>Empreend.</th><th>Local</th>
+    <th>Período</th><th>Forma</th><th>Canal</th><th>Detalhe</th><th>Recepção</th>
+    ${isMaster ? '<th>Exclusão</th>' : ''}
+  </tr></thead><tbody>`;
+  visitas.slice(0, 300).forEach(v => {
     const detalhe = v.visita_canal === 'House'
-      ? (v.corretor ? `${v.corretor}` : '—')
+      ? (v.corretor ? v.corretor : '—')
       : v.visita_canal === 'Imob' ? (v.imobiliaria || '—') : '—';
-    html += `<tr>
+    const delCell = isMaster ? (v.solicita_exclusao
+      ? `<td><button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;" onclick="window.__approveDelete('${v.id}')">✓ Aprovar</button>
+              <button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;margin-left:4px;" onclick="window.__rejectDelete('${v.id}')">✕ Manter</button></td>`
+      : '<td><span style="color:var(--fg-muted);font-size:11px;">—</span></td>'
+    ) : '';
+    html += `<tr ${v.solicita_exclusao ? 'style="background:rgba(245,158,11,0.08);"' : ''}>
       <td>${fmt.dateTime(v.created_at)}</td>
-      <td style="font-weight:600;">${escapeHtml(v.cliente || '—')}</td>
+      <td><span style="color:var(--fg-muted);font-weight:600;">${v.numero_sequencial ? '#'+v.numero_sequencial : '—'}</span></td>
+      <td style="font-weight:600;">${escapeHtml(v.cliente || '—')}${v.solicita_exclusao ? ' <span class="chip chip-yellow" style="margin-left:4px;">⏳</span>' : ''}</td>
       <td>${escapeHtml(v.empreendimento || '—')}</td>
+      <td>${escapeHtml(v.local_treinamento || '—')}</td>
       <td>${escapeHtml(v.visita_periodo || '—')}</td>
       <td>${v.visita_forma_atendimento ? `<span class="chip ${v.visita_forma_atendimento === 'Agendado' ? 'chip-green' : 'chip-yellow'}">${escapeHtml(v.visita_forma_atendimento)}</span>` : '—'}</td>
       <td>${v.visita_canal ? `<span class="chip ${v.visita_canal === 'House' ? 'chip-purple' : 'chip-blue'}">${escapeHtml(v.visita_canal)}</span>` : '—'}</td>
       <td>${escapeHtml(detalhe)}</td>
       <td>${escapeHtml(v.profiles?.nome || '—')}</td>
+      ${delCell}
     </tr>`;
   });
   html += '</tbody></table>'; tw.innerHTML = html;
+
+  // Handlers globais aprovar/rejeitar exclusão (só Master)
+  if (isMaster) {
+    window.__approveDelete = async (id) => {
+      if (!confirm('Aprovar exclusão? A visita será removida permanentemente do histórico ativo.')) return;
+      const { error } = await sb.from('atividades').update({ cancelada: true }).eq('id', id);
+      if (error) { toast(error.message, 'error'); return; }
+      toast('Visita excluída.', 'success');
+      // Re-fetch a página atual pra refletir
+      const sec = state.currentSection || 'overview';
+      if (sec === 'visitas') reload();
+    };
+    window.__rejectDelete = async (id) => {
+      const { error } = await sb.from('atividades').update({
+        solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null,
+      }).eq('id', id);
+      if (error) { toast(error.message, 'error'); return; }
+      toast('Solicitação rejeitada. Visita mantida.', 'info');
+      const sec = state.currentSection || 'overview';
+      if (sec === 'visitas') reload();
+    };
+  }
 }
 
 // ─── KPIs ────────────────────────────────────────────────────────────────

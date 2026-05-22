@@ -4,7 +4,7 @@
 // - visitaFormView: formulário de registro individual (com lógica condicional)
 // ═════════════════════════════════════════════════════════════════════════
 
-import { el, icon, toast, loadingBtn, fmt, modal } from '../ui.js';
+import { el, icon, toast, loadingBtn, fmt, modal, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
 import { navigate } from '../router.js';
@@ -87,9 +87,10 @@ export async function visitasView(_params, app) {
     kpisEl.innerHTML = '';
 
     let q = supabase.from('atividades')
-      .select(`id, numero_sequencial, created_at, cliente, corretor, local_treinamento,
+      .select(`id, numero_sequencial, created_at, gerente_id, cliente, corretor, local_treinamento,
                imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento,
                visita_canal, visita_gerente_house_id, observacoes,
+               solicita_exclusao, exclusao_solicitada_em,
                profiles!atividades_gerente_id_fkey(nome)`)
       .eq('tipo', 'visita')
       .eq('cancelada', false)
@@ -122,18 +123,61 @@ export async function visitasView(_params, app) {
         'Nenhuma visita registrada. Clique em "Nova Visita" ou importe um XLSX.'));
       return;
     }
-    visitas.forEach(v => listEl.appendChild(visitaRow(v)));
+    visitas.forEach(v => listEl.appendChild(visitaRow(v, reload)));
   }
 
   await reload();
 }
 
-function visitaRow(v) {
+function visitaRow(v, onAfterAction) {
   const dt = new Date(v.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
   const gerente = state.gerentesHouse?.find(g => g.id === v.visita_gerente_house_id)?.nome;
   const numTag = v.numero_sequencial ? `#${v.numero_sequencial} ` : '';
+  const isOwn = v.gerente_id === state.user?.id;
+  const pendingDelete = !!v.solicita_exclusao;
 
-  return el('div', { class: 'card p-3' },
+  // Botão de exclusão (só pra dono, e desde que não tenha solicitação ativa)
+  const deleteBtn = (isOwn && !pendingDelete) ? el('button', {
+    class: 'btn btn-ghost btn-sm text-danger flex-shrink-0',
+    title: 'Solicitar exclusão',
+    onclick: async (e) => {
+      e.stopPropagation();
+      const ok = await confirmModal({
+        title: 'Solicitar exclusão?',
+        message: 'A visita só será removida após aprovação do Master. Você pode cancelar a solicitação a qualquer momento.',
+        confirmLabel: 'Solicitar exclusão',
+        danger: true,
+      });
+      if (!ok) return;
+      const { error } = await supabase.from('atividades').update({
+        solicita_exclusao: true,
+        exclusao_solicitada_em: new Date().toISOString(),
+        exclusao_solicitada_por: state.user.id,
+      }).eq('id', v.id);
+      if (error) { toast(error.message, 'error'); return; }
+      toast('Solicitação enviada. Aguardando aprovação do Master.', 'success');
+      onAfterAction?.();
+    },
+  }, icon('trash', 16)) : null;
+
+  // Botão de CANCELAR solicitação (se já tem solicitação pendente)
+  const cancelDeleteBtn = (isOwn && pendingDelete) ? el('button', {
+    class: 'btn btn-secondary btn-sm flex-shrink-0',
+    title: 'Cancelar solicitação',
+    onclick: async (e) => {
+      e.stopPropagation();
+      const { error } = await supabase.from('atividades').update({
+        solicita_exclusao: false,
+        exclusao_solicitada_em: null,
+        exclusao_solicitada_por: null,
+      }).eq('id', v.id);
+      if (error) { toast(error.message, 'error'); return; }
+      toast('Solicitação cancelada.', 'info');
+      onAfterAction?.();
+    },
+  }, 'Cancelar solicitação') : null;
+
+  return el('div', { class: 'card p-3', style: pendingDelete ? { borderLeft: '3px solid var(--warning, #F59E0B)' } : {} },
     el('div', { class: 'flex items-start gap-3' },
       el('div', {
         class: 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 text-lg',
@@ -150,6 +194,7 @@ function visitaRow(v) {
             class: 'chip ' + (v.visita_canal === 'House' ? 'chip-purple' : 'chip-blue')
           }, v.visita_canal),
           v.visita_periodo && el('span', { class: 'chip chip-gray' }, v.visita_periodo),
+          pendingDelete && el('span', { class: 'chip chip-yellow' }, '⏳ Exclusão solicitada'),
         ),
         el('div', { class: 'text-xs text-fg-muted mt-1' },
           [v.local_treinamento, v.empreendimento].filter(Boolean).join(' · ') || '—'),
@@ -159,6 +204,8 @@ function visitaRow(v) {
            dt,
            v.profiles?.nome && `por ${v.profiles.nome}`].filter(Boolean).join(' · ')),
       ),
+      deleteBtn,
+      cancelDeleteBtn,
     ),
   );
 }
@@ -364,29 +411,14 @@ async function downloadTemplate() {
     wb.created = new Date();
 
     // ════════════════════════════════════════════════════════════
-    // Aba "Listas" — fonte das listas suspensas (renderizada antes pra existir
-    // quando "Dados" referenciá-la)
+    // ORDEM DAS ABAS (ExcelJS preserva ordem de criação):
+    //   1ª  "Dados"     (visível, ATIVA ao abrir)
+    //   2ª  "Listas"    (OCULTA — fonte das validações)
+    //   3ª  "Instruções" (visível)
     // ════════════════════════════════════════════════════════════
-    const wsListas = wb.addWorksheet('Listas', { state: 'hidden' });
-    wsListas.columns = [
-      { header: 'Locais de Visita',  key: 'locais',   width: 28 },
-      { header: 'Empreendimentos',    key: 'emps',     width: 30 },
-      { header: 'Gerentes House',     key: 'gerentes', width: 26 },
-      { header: 'Imobiliárias',       key: 'imobs',    width: 32 },
-    ];
-    const maxLen = Math.max(locais.length, emps.length, gerentes.length, imobs.length, 1);
-    for (let i = 0; i < maxLen; i++) {
-      wsListas.addRow({
-        locais: locais[i] || null,
-        emps: emps[i] || null,
-        gerentes: gerentes[i] || null,
-        imobs: imobs[i] || null,
-      });
-    }
-    wsListas.getRow(1).font = { bold: true };
 
     // ════════════════════════════════════════════════════════════
-    // Aba "Dados" — cabeçalhos + 1 linha exemplo + DATA VALIDATIONS
+    // Aba "Dados" — cabeçalhos + DATA VALIDATIONS (criada PRIMEIRO)
     // ════════════════════════════════════════════════════════════
     const wsDados = wb.addWorksheet('Dados');
     wsDados.columns = [
@@ -409,17 +441,6 @@ async function downloadTemplate() {
     wsDados.getRow(1).height = 22;
     wsDados.autoFilter = { from: 'A1', to: 'K1' };
     wsDados.views = [{ state: 'frozen', ySplit: 1 }];
-
-    // Linha exemplo
-    wsDados.addRow({
-      data: new Date().toLocaleDateString('pt-BR'),
-      nome: 'João da Silva',
-      local: locais[0] || '<preencher>',
-      emp: emps[0] || '<preencher>',
-      periodo: 'Manhã',
-      forma: 'Espontânea',
-      obs: 'Visita exemplo (apague esta linha)',
-    });
 
     // ── PROMPTS (input message ao clicar na célula) e VALIDATIONS ──
     // Usa exatamente os títulos e textos que você ajustou no arquivo de referência.
@@ -466,6 +487,27 @@ async function downloadTemplate() {
       'OBSERVAÇÕES', 'Opcional: Notas adicionais sobre a visita (máx 2000 caracteres).');
 
     // ════════════════════════════════════════════════════════════
+    // Aba "Listas" — OCULTA, fonte das validações range
+    // ════════════════════════════════════════════════════════════
+    const wsListas = wb.addWorksheet('Listas', { state: 'veryHidden' });
+    wsListas.columns = [
+      { header: 'Locais de Visita',  key: 'locais',   width: 28 },
+      { header: 'Empreendimentos',    key: 'emps',     width: 30 },
+      { header: 'Gerentes House',     key: 'gerentes', width: 26 },
+      { header: 'Imobiliárias',       key: 'imobs',    width: 32 },
+    ];
+    const maxLen = Math.max(locais.length, emps.length, gerentes.length, imobs.length, 1);
+    for (let i = 0; i < maxLen; i++) {
+      wsListas.addRow({
+        locais: locais[i] || null,
+        emps: emps[i] || null,
+        gerentes: gerentes[i] || null,
+        imobs: imobs[i] || null,
+      });
+    }
+    wsListas.getRow(1).font = { bold: true };
+
+    // ════════════════════════════════════════════════════════════
     // Aba "Instruções"
     // ════════════════════════════════════════════════════════════
     const wsInstr = wb.addWorksheet('Instruções');
@@ -504,6 +546,9 @@ async function downloadTemplate() {
       if (bold) row.font = { bold: true, color: { argb: 'FFF26B22' } };
     });
 
+    // Define a aba ATIVA ao abrir = Dados (índice 0)
+    wb.views = [{ activeTab: 0, firstSheet: 0, x: 0, y: 0, width: 16000, height: 12000, visibility: 'visible' }];
+
     // ════════════════════════════════════════════════════════════
     // SALVA
     // ════════════════════════════════════════════════════════════
@@ -535,9 +580,10 @@ function addListRange(ws, range, formula, promptTitle, prompt) {
     type: 'list', allowBlank: true,
     formulae: [formula],
     showInputMessage: true, promptTitle, prompt,
-    showErrorMessage: true, errorStyle: 'warning',
+    showErrorMessage: true,
+    errorStyle: 'stop', // BLOQUEIA — sem "Continuar mesmo assim"
     errorTitle: 'Valor não cadastrado',
-    error: 'Selecione um valor da lista suspensa (▼). Valores divergentes geram rejeição no upload.',
+    error: 'Use APENAS um valor da lista suspensa (▼). Não é permitido digitar valores diferentes.',
   });
 }
 function addListInline(ws, range, values, promptTitle, prompt) {

@@ -421,7 +421,10 @@
       <!-- ═══ VISITAS (Master only) ═══════════════════════════════════ -->
       <section id="sec-visitas" class="fade-in" style="display:none;">
         <h2 class="sec-title">🚪 Visitas — Recepção Rottas</h2>
-        <p class="sec-subtitle">Registros de visitas captados pelos perfis Recepção Rottas. Visível apenas para Master.</p>
+        <p class="sec-subtitle">Clique nos KPIs ou barras para filtrar. Botões de aprovação aparecem para Master.</p>
+
+        <!-- Banner de filtros ativos + pendentes de exclusão -->
+        <div id="visitas-banner" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
 
         <div id="visitas-kpis" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px;"></div>
 
@@ -433,6 +436,17 @@
           <div class="card" style="padding:18px;">
             <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Espontânea vs Agendado</h3>
             <div id="visitas-forma-bars" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px;" class="grid-charts">
+          <div class="card" style="padding:18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Top 10 Empreendimentos</h3>
+            <div id="visitas-empreend-bars" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+          <div class="card" style="padding:18px;">
+            <h3 style="font-size:13.5px;font-weight:700;margin-bottom:12px;">Top 10 Locais da Visita</h3>
+            <div id="visitas-local-bars" style="display:flex;flex-direction:column;gap:6px;"></div>
           </div>
         </div>
 
