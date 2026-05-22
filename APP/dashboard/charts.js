@@ -106,7 +106,7 @@ export async function renderLineChart(wrapEl, atividades, periodo) {
     data: {
       labels,
       datasets: [
-        { label: 'Visitas',     data: sVisitas, borderColor: c.blue,   backgroundColor: 'rgba(59,130,246,0.10)', tension: 0.35, fill: true,  pointRadius: labels.length > 30 ? 0 : 3, borderWidth: 2 },
+        { label: 'Check-ins + Atend.', data: sVisitas, borderColor: c.blue,   backgroundColor: 'rgba(59,130,246,0.10)', tension: 0.35, fill: true,  pointRadius: labels.length > 30 ? 0 : 3, borderWidth: 2 },
         { label: 'Atendimentos',data: sAtend,   borderColor: c.purple, backgroundColor: 'rgba(168,85,247,0.08)', tension: 0.35, fill: false, pointRadius: labels.length > 30 ? 0 : 3, borderWidth: 2 },
         { label: 'Propostas',   data: sProp,    borderColor: c.accent, backgroundColor: 'rgba(242,107,34,0.10)', tension: 0.35, fill: false, pointRadius: labels.length > 30 ? 0 : 3, borderWidth: 2 },
       ],
@@ -165,8 +165,8 @@ export async function renderFunnel(wrapEl, kpis) {
       backgroundColor: c.bg, borderColor: c.border, textStyle: { color: c.fg },
       formatter: (params) => {
         const extras = {
-          'Visitas': '',
-          'Atendimentos': ` (${convVisAt}% das visitas)`,
+          'Check-ins + Atend.': ` (check-ins + atendimentos do gerente na imob)`,
+          'Atendimentos': ` (${convVisAt}% das visitas comerciais)`,
           'Propostas': ` (${convAtPr}% dos atend.)`,
           'Vendas': ` (${convPrVd}% das propostas)`,
         };
@@ -195,7 +195,7 @@ export async function renderFunnel(wrapEl, kpis) {
       itemStyle: { borderColor: c.bg, borderWidth: 2 },
       emphasis: { label: { fontSize: 13 } },
       data: [
-        { value: totalVis,   name: 'Visitas',      itemStyle: { color: c.blue } },
+        { value: totalVis,   name: 'Check-ins + Atend.', itemStyle: { color: c.blue } },
         { value: totalAtend, name: 'Atendimentos', itemStyle: { color: c.purple } },
         { value: totalProp,  name: 'Propostas',    itemStyle: { color: c.accent } },
         { value: totalVend,  name: 'Vendas',       itemStyle: { color: c.green } },
