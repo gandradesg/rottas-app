@@ -87,7 +87,7 @@ export const fmt = {
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
 
 // ─── AUTH ────────────────────────────────────────────────────────────────
-const ALL_ROLES = ['master', 'gestor', 'superintendente', 'gestor_regional', 'gerente', 'supervisor'];
+const ALL_ROLES = ['master', 'gestor', 'superintendente', 'gestor_regional', 'gerente', 'supervisor', 'recepcao_rottas'];
 
 async function authBoot() {
   const setMsg = (m) => { const e = $('auth-msg'); if (e) e.textContent = m; };
