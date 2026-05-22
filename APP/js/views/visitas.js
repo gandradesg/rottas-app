@@ -107,8 +107,8 @@ export async function visitasView(_params, app) {
 
   content.appendChild(el('div', { class: 'flex items-center justify-between flex-wrap gap-3' },
     el('div', {},
-      el('h1', { class: 'text-2xl font-extrabold' }, '🚪 Visitas'),
-      el('p', { class: 'text-sm text-fg-muted' }, 'Recepção Rottas — Registro de visitantes'),
+      el('h1', { class: 'text-2xl font-extrabold' }, '🚪 Minhas Visitas'),
+      el('p', { class: 'text-sm text-fg-muted' }, 'Suas visitas registradas — para visão consolidada da equipe, abra o Dashboard'),
     ),
     el('div', { class: 'flex items-center gap-2 flex-wrap' },
       isRecepcao() ? el('button', { class: 'btn btn-secondary', onclick: () => downloadTemplate() },
@@ -132,6 +132,10 @@ export async function visitasView(_params, app) {
     listEl.innerHTML = '<div class="skeleton h-16"></div><div class="skeleton h-16"></div>';
     kpisEl.innerHTML = '';
 
+    // No app: cada usuário vê APENAS as próprias visitas (controle pessoal).
+    // No dashboard, a visão é consolidada (todas as visitas com filtro por
+    // registrador). RLS já permitiria ver todas; o filtro aqui é client-side
+    // para SEPARAR contexto pessoal vs analítico.
     let q = supabase.from('atividades')
       .select(`id, numero_sequencial, created_at, data_visita, gerente_id, cliente, corretor, local_treinamento,
                imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento,
@@ -140,6 +144,7 @@ export async function visitasView(_params, app) {
                profiles!atividades_gerente_id_fkey(nome)`)
       .eq('tipo', 'visita')
       .eq('cancelada', false)
+      .eq('gerente_id', state.user.id)
       .order('data_visita', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(500);
