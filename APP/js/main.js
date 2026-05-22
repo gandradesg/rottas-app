@@ -92,6 +92,7 @@ import { masterListasView } from './views/master-listas.js';
 import { agendaView } from './views/agenda.js';
 import { agendaFormView } from './views/agenda-form.js';
 import { visitasView, visitaFormView } from './views/visitas.js';
+import { visitaDetailView } from './views/visita-detail.js';
 
 // Splash screen rápido enquanto auth carrega
 function splash() {
@@ -208,6 +209,7 @@ route('/inicio',                   blockRecepcao(inicioGerenteView));
 route('/historico',                blockRecepcao(historicoView));
 route('/visitas',                  visitasGuard(visitasView));
 route('/visitas/nova',             visitasGuard(visitaFormView));
+route('/visita/:id',               visitasGuard(visitaDetailView));
 route('/usuarios',                 permGuard('gerenciar_usuarios', masterUsuariosView));
 route('/listas',                   permGuard('gerenciar_listas',   masterListasView));
 route('/sobre',                    authGuard((p, a) => import('./views/sobre.js').then(m => m.sobreView(p, a))));

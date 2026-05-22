@@ -228,8 +228,8 @@ function refreshCidadesSelect() {
 async function fetchVisitas(start, end) {
   // Tenta SELECT completo (com colunas visita_*); se falhar (migration v19 não aplicada),
   // faz fallback para SELECT mínimo sem quebrar a página
-  const fullCols = 'id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, observacoes, profiles!atividades_gerente_id_fkey(nome)';
-  const safeCols = 'id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, observacoes, profiles!atividades_gerente_id_fkey(nome)';
+  const fullCols = 'id, tipo, created_at, data_visita, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento, visita_canal, visita_gerente_house_id, numero_sequencial, observacoes, solicita_exclusao, profiles!atividades_gerente_id_fkey(nome)';
+  const safeCols = 'id, tipo, created_at, gerente_id, cliente, corretor, local_treinamento, imobiliaria, empreendimento, numero_sequencial, observacoes, solicita_exclusao, profiles!atividades_gerente_id_fkey(nome)';
   for (const cols of [fullCols, safeCols]) {
     let q = sb.from('atividades').select(cols)
       .eq('tipo', 'visita').eq('cancelada', false)
@@ -383,8 +383,8 @@ function renderVisitasPage(allVisitas) {
               <button class="btn btn-secondary" style="font-size:10px;padding:3px 7px;margin-left:4px;" onclick="window.__rejectDelete('${v.id}')">✕ Manter</button></td>`
       : '<td><span style="color:var(--fg-muted);font-size:11px;">—</span></td>'
     ) : '';
-    html += `<tr ${v.solicita_exclusao ? 'style="background:rgba(245,158,11,0.08);"' : ''}>
-      <td>${fmt.dateTime(v.created_at)}</td>
+    html += `<tr style="cursor:pointer;${v.solicita_exclusao ? 'background:rgba(245,158,11,0.08);' : ''}" onclick="if(!event.target.closest('button')) window.location.href='/#/visita/${v.id}'">
+      <td>${v.data_visita ? new Date(v.data_visita+'T00:00:00').toLocaleDateString('pt-BR') : fmt.dateTime(v.created_at)}</td>
       <td><span style="color:var(--fg-muted);font-weight:600;">${v.numero_sequencial ? '#'+v.numero_sequencial : '—'}</span></td>
       <td style="font-weight:600;">${escapeHtml(v.cliente || '—')}${v.solicita_exclusao ? ' <span class="chip chip-yellow" style="margin-left:4px;">⏳</span>' : ''}</td>
       <td>${escapeHtml(v.empreendimento || '—')}</td>

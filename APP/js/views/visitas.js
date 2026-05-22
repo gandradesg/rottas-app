@@ -42,6 +42,34 @@ async function loadExcelJS() {
   return _exceljsPromise;
 }
 
+// ─── PARSE DE DATA (aceita "DD/MM/AAAA", "AAAA-MM-DD", Date object do Excel) ──
+// Retorna string "AAAA-MM-DD" pronta pro PostgreSQL date, ou null se inválido
+function parseDateBR(v) {
+  if (v == null || v === '') return null;
+  // Date object (Excel quando célula é formatada como data)
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return null;
+    return v.getFullYear() + '-' + String(v.getMonth()+1).padStart(2,'0') + '-' + String(v.getDate()).padStart(2,'0');
+  }
+  const s = String(v).trim();
+  // ISO YYYY-MM-DD
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const [, y, mo, d] = m;
+    if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
+    return `${y}-${mo}-${d}`;
+  }
+  // BR DD/MM/YYYY ou DD-MM-YYYY ou DD/MM/YY
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) {
+    let [, d, mo, y] = m;
+    if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
+    if (y.length === 2) y = (+y > 50 ? '19' : '20') + y;
+    return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+  return null;
+}
+
 // ─── SANITIZAÇÃO ─────────────────────────────────────────────────────────
 function sanitizeText(s, maxLen = 500) {
   if (s == null) return null;
@@ -87,13 +115,14 @@ export async function visitasView(_params, app) {
     kpisEl.innerHTML = '';
 
     let q = supabase.from('atividades')
-      .select(`id, numero_sequencial, created_at, gerente_id, cliente, corretor, local_treinamento,
+      .select(`id, numero_sequencial, created_at, data_visita, gerente_id, cliente, corretor, local_treinamento,
                imobiliaria, empreendimento, visita_periodo, visita_forma_atendimento,
                visita_canal, visita_gerente_house_id, observacoes,
                solicita_exclusao, exclusao_solicitada_em,
                profiles!atividades_gerente_id_fkey(nome)`)
       .eq('tipo', 'visita')
       .eq('cancelada', false)
+      .order('data_visita', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(500);
     const { data, error } = await q;
@@ -130,7 +159,11 @@ export async function visitasView(_params, app) {
 }
 
 function visitaRow(v, onAfterAction) {
-  const dt = new Date(v.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+  // data DA visita (preenchida) — sem hora; e "registrado em" (created_at automático)
+  const dataVisita = v.data_visita
+    ? new Date(v.data_visita + 'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
+    : null;
+  const registradoEm = new Date(v.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
   const gerente = state.gerentesHouse?.find(g => g.id === v.visita_gerente_house_id)?.nome;
   const numTag = v.numero_sequencial ? `#${v.numero_sequencial} ` : '';
   const isOwn = v.gerente_id === state.user?.id;
@@ -177,7 +210,15 @@ function visitaRow(v, onAfterAction) {
     },
   }, 'Cancelar solicitação') : null;
 
-  return el('div', { class: 'card p-3', style: pendingDelete ? { borderLeft: '3px solid var(--warning, #F59E0B)' } : {} },
+  return el('div', {
+      class: 'card p-3 cursor-pointer hover:bg-bg-elev transition',
+      style: pendingDelete ? { borderLeft: '3px solid var(--warning, #F59E0B)' } : {},
+      onclick: (e) => {
+        // Não navega se clicou no botão de exclusão
+        if (e.target.closest('button')) return;
+        navigate('/visita/' + v.id);
+      },
+    },
     el('div', { class: 'flex items-start gap-3' },
       el('div', {
         class: 'w-10 h-10 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 text-lg',
@@ -201,8 +242,10 @@ function visitaRow(v, onAfterAction) {
         el('div', { class: 'text-xs text-fg-subtle mt-0.5' },
           [v.visita_canal === 'House' ? `🏠 ${gerente || '—'} ${v.corretor ? '· ' + v.corretor : ''}` :
            v.visita_canal === 'Imob' ? `🏢 ${v.imobiliaria || '—'}` : '',
-           dt,
-           v.profiles?.nome && `por ${v.profiles.nome}`].filter(Boolean).join(' · ')),
+           dataVisita ? `📅 Data da visita: ${dataVisita}` : null,
+           v.profiles?.nome && `por ${v.profiles.nome}`,
+           `registrado em ${registradoEm}`,
+          ].filter(Boolean).join(' · ')),
       ),
       deleteBtn,
       cancelDeleteBtn,
@@ -230,6 +273,13 @@ export async function visitaFormView(_params, app) {
   const locationFieldEl = locationField();
 
   const form = el('form', { class: 'flex flex-col gap-3' });
+
+  // Data da Visita (sem hora; default = hoje; pode ser retroativa)
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dataVisitaInp = el('input', {
+    class: 'input', type: 'date', name: 'data_visita', required: true,
+    value: hoje, max: hoje, // não permite futuro
+  });
 
   // Campo Nome
   const nomeInp = el('input', { class: 'input', type: 'text', name: 'nome', required: true,
@@ -277,6 +327,7 @@ export async function visitaFormView(_params, app) {
 
   form.append(
     field('Localização', locationFieldEl, { required: true }),
+    field('Data da Visita', dataVisitaInp, { required: true, help: 'Pode ser retroativa. Não permite data futura.' }),
     field('Nome e Sobrenome (Cliente)', nomeInp, { required: true }),
     field('Local da Visita', localSel, { required: true }),
     field('Empreendimento', empSel, { required: true }),
@@ -359,6 +410,7 @@ export async function visitaFormView(_params, app) {
         tipo: 'visita',
         gerente_id: state.user.id,
         cancelada: false,
+        data_visita: dataVisitaInp.value || hoje,
         cliente: nome,
         local_treinamento: local,
         empreendimento: emp,
@@ -422,7 +474,7 @@ async function downloadTemplate() {
     // ════════════════════════════════════════════════════════════
     const wsDados = wb.addWorksheet('Dados');
     wsDados.columns = [
-      { header: 'DATA DE IMPORTAÇÃO',    key: 'data',     width: 22 },
+      { header: 'DATA DA VISITA',        key: 'data',     width: 18 },
       { header: 'NOME DO CLIENTE',       key: 'nome',     width: 28 },
       { header: 'LOCAL DA VISITA',       key: 'local',    width: 22 },
       { header: 'EMPREENDIMENTO',        key: 'emp',      width: 24 },
@@ -445,8 +497,19 @@ async function downloadTemplate() {
     // ── PROMPTS (input message ao clicar na célula) e VALIDATIONS ──
     // Usa exatamente os títulos e textos que você ajustou no arquivo de referência.
 
-    // A — DATA DE IMPORTAÇÃO (apenas prompt, sem lista)
-    addPromptRange(wsDados, 'A2:A' + N, 'DATA DE IMPORTAÇÃO', 'OBRIGATÓRIO: Preencha aqui a data da visita.');
+    // A — DATA DA VISITA (date validation: aceita só datas, não permite futuras)
+    wsDados.dataValidations.add('A2:A' + N, {
+      type: 'date', operator: 'lessThanOrEqual',
+      formulae: [new Date()], allowBlank: false,
+      showInputMessage: true,
+      promptTitle: 'DATA DA VISITA',
+      prompt: 'OBRIGATÓRIO: Data em que a visita REALMENTE aconteceu (pode ser retroativa). Formato: DD/MM/AAAA. Não pode ser data futura.',
+      showErrorMessage: true, errorStyle: 'stop',
+      errorTitle: 'Data inválida',
+      error: 'Use o formato DD/MM/AAAA. Não pode ser data futura.',
+    });
+    // Formatação visual da coluna como data
+    wsDados.getColumn('A').numFmt = 'dd/mm/yyyy';
 
     // B — NOME DO CLIENTE
     addPromptRange(wsDados, 'B2:B' + N, 'NOME DO CLIENTE', 'OBRIGATÓRIO: Nome completo do visitante (Nome + Sobrenome).');
@@ -666,6 +729,8 @@ function openImportModal(onSuccess) {
       rows.forEach((r, idx) => {
         const linha = idx + 2;
         // Aceita TODOS os nomes históricos de cabeçalho — atual + antigos
+        const dataRaw = pickRaw(r, ['DATA DA VISITA', 'Data da Visita', 'DATA DE IMPORTAÇÃO', 'Data de Importação']);
+        const dataVisita = parseDateBR(dataRaw); // string YYYY-MM-DD ou null
         const nome    = sanitizeText(pickRaw(r, ['NOME DO CLIENTE', 'Nome do Cliente', 'Nome e Sobrenome', 'Nome Sobrenome']));
         const local   = sanitizeText(pickRaw(r, ['LOCAL DA VISITA', 'Local da Visita']));
         const emp     = sanitizeText(pickRaw(r, ['EMPREENDIMENTO', 'Empreendimento']));
@@ -677,6 +742,8 @@ function openImportModal(onSuccess) {
         const imob    = sanitizeText(pickRaw(r, ['IMOBILIÁRIA', 'Imobiliária', 'Imobiliária (se Canal=Imob)']));
         const obs     = sanitizeText(pickRaw(r, ['OBSERVAÇÕES', 'Observações']), 2000);
 
+        if (!dataVisita) errors.push({ linha, coluna: 'Data da Visita', motivo: dataRaw ? `valor inválido: "${dataRaw}" — use DD/MM/AAAA` : 'obrigatório' });
+        else if (dataVisita > new Date().toISOString().slice(0,10)) errors.push({ linha, coluna: 'Data da Visita', motivo: 'não pode ser futura' });
         if (!nome)    errors.push({ linha, coluna: 'Nome e Sobrenome', motivo: 'obrigatório' });
         if (!local)   errors.push({ linha, coluna: 'Local da Visita', motivo: 'obrigatório' });
         if (!emp)     errors.push({ linha, coluna: 'Empreendimento', motivo: 'obrigatório' });
@@ -710,6 +777,7 @@ function openImportModal(onSuccess) {
           tipo: 'visita',
           gerente_id: state.user.id,
           cancelada: false,
+          data_visita: dataVisita,
           cliente: nome,
           local_treinamento: local,
           empreendimento: emp,
