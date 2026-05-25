@@ -1267,6 +1267,9 @@ async function reloadVisitasOnly() {
     const visitas = await fetchVisitas(start, end);
     state.data.visitas = visitas;
     renderVisitasPage(visitas);
+    // Atualiza o badge na sidebar
+    const badge = document.getElementById('badge-visitas');
+    if (badge) badge.textContent = fmt.num(visitas.length);
     state.lastUpdate = new Date();
     $('status-text').textContent = `Atualizado às ${fmt.timeOnly(state.lastUpdate)}`;
     $('status-counts').textContent = `${fmt.num(visitas.length)} visita(s) — visão Recepção Rottas`;
