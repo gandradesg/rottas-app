@@ -3,7 +3,7 @@ import { el, icon, toast, loadingBtn, fmt, modal, confirmModal } from '../ui.js'
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
 import { signOut, setPassword, isMaster } from '../auth.js';
-import { ESTADOS_BR, APP_VERSION } from '../config.js';
+import { ESTADOS_BR, APP_VERSION, ROLES } from '../config.js';
 import { navigate } from '../router.js';
 
 export async function perfilView(_params, app) {
@@ -77,7 +77,7 @@ export async function perfilView(_params, app) {
         el('div', { class: 'text-xs text-fg-muted' }, p.email),
         el('div', { class: 'mt-1' },
           el('span', { class: 'chip ' + (isMaster() ? 'chip-orange' : 'chip-blue') },
-            isMaster() ? 'Master' : 'Gerente de Plataforma'),
+            ROLES[p.role]?.label || p.role || 'Usuário'),
         ),
       ),
     ),
