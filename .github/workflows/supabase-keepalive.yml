@@ -1,20 +1,27 @@
 name: Supabase Keep-Alive
 
-# Mantem o projeto Supabase (plano gratuito) ativo, evitando a pausa
-# automatica que ocorre apos 7 dias sem atividade no banco.
-# Chama a funcao public.ping() via REST diariamente.
-# Roda na infraestrutura do GitHub (nao depende de nenhum PC ligado).
-# A anon key abaixo e PUBLICA por design (ja vai no frontend, protegida por RLS).
+# Mantem o Supabase (plano gratuito) ativo - evita a pausa apos 7 dias.
+# Pinga a funcao public.ping() diariamente E faz um commit de timestamp,
+# o que reseta o contador de 60 dias do GitHub (workflows agendados sao
+# desativados apos 60 dias SEM atividade no repo). Resultado: nunca pausa,
+# sem depender de PC ligado nem de commits manuais.
+# A anon key e PUBLICA por design (ja vai no frontend, protegida por RLS).
 
 on:
   schedule:
-    - cron: '0 9 * * *'
-  workflow_dispatch: {}
+    - cron: '0 9 * * *'      # todo dia 09:00 UTC (06:00 Brasilia)
+  workflow_dispatch: {}        # permite rodar manual pelo botao Run workflow
+
+permissions:
+  contents: write              # necessario para o commit de keep-alive
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Ping Supabase
         run: |
           echo "Pingando Supabase em $(date -u)"
@@ -32,3 +39,13 @@ jobs:
             exit 1
           fi
           echo "Ping OK (HTTP $STATUS) - Supabase ativo."
+
+      - name: Commit de keep-alive (mantem o schedule vivo > 60 dias)
+        run: |
+          mkdir -p .keepalive
+          date -u +"Ultimo keep-alive: %Y-%m-%dT%H:%M:%SZ" > .keepalive/last-run.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive/last-run.txt
+          git commit -m "chore: keep-alive $(date -u +%F) [skip ci]" || { echo "nada a commitar"; exit 0; }
+          git push
