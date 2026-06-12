@@ -1,19 +1,21 @@
 name: Supabase Keep-Alive
 
 # Mantem o Supabase (plano gratuito) ativo - evita a pausa apos 7 dias.
-# Pinga a funcao public.ping() diariamente E faz um commit de timestamp,
-# o que reseta o contador de 60 dias do GitHub (workflows agendados sao
-# desativados apos 60 dias SEM atividade no repo). Resultado: nunca pausa,
-# sem depender de PC ligado nem de commits manuais.
+# 1) Pinga public.ping() diariamente (sempre funciona, sem token).
+# 2) Faz um commit de timestamp -> reseta o contador de 60 dias do GitHub
+#    (workflows agendados sao desativados apos 60 dias SEM atividade no repo).
+#    Esse passo 2 exige "Read and write permissions" em
+#    Settings > Actions > General > Workflow permissions. Se nao estiver
+#    ligado, o passo e ignorado sem erro (o ping do passo 1 continua valendo).
 # A anon key e PUBLICA por design (ja vai no frontend, protegida por RLS).
 
 on:
   schedule:
     - cron: '0 9 * * *'      # todo dia 09:00 UTC (06:00 Brasilia)
-  workflow_dispatch: {}        # permite rodar manual pelo botao Run workflow
+  workflow_dispatch: {}
 
 permissions:
-  contents: write              # necessario para o commit de keep-alive
+  contents: write
 
 jobs:
   ping:
@@ -22,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ping Supabase
+      - name: Ping Supabase (essencial)
         run: |
           echo "Pingando Supabase em $(date -u)"
           ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtempsaXJ6ZXh5b3BuanhvaGV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2NzExMjcsImV4cCI6MjA5MzI0NzEyN30.V23FCvrJKRkGhjmZQqAnaXYLbtpMw7Wc_Ae7UB0t7a8"
@@ -40,7 +42,8 @@ jobs:
           fi
           echo "Ping OK (HTTP $STATUS) - Supabase ativo."
 
-      - name: Commit de keep-alive (mantem o schedule vivo > 60 dias)
+      - name: Commit de keep-alive (reset do timer de 60 dias - tolerante a falha)
+        continue-on-error: true
         run: |
           mkdir -p .keepalive
           date -u +"Ultimo keep-alive: %Y-%m-%dT%H:%M:%SZ" > .keepalive/last-run.txt
@@ -48,4 +51,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .keepalive/last-run.txt
           git commit -m "chore: keep-alive $(date -u +%F) [skip ci]" || { echo "nada a commitar"; exit 0; }
-          git push
+          if git push; then
+            echo "Commit de keep-alive enviado - timer de 60 dias resetado."
+          else
+            echo "AVISO: push bloqueado. Ative Read and write em Settings > Actions > General."
+          fi
