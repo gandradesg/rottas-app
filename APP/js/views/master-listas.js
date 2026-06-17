@@ -178,11 +178,11 @@ export async function masterListasView(_params, app) {
       };
     } else if (extraDef.type === 'cidades-multi') {
       // Editor de tags: lista de cidades extras onde o empreendimento aparece.
-      // Sugestões via datalist a partir das cidades já conhecidas (empreend + imob).
+      // Sugestões = SÓ cidades onde já temos empreendimentos cadastrados
+      // (cidade-sede de cada empreendimento). Você ainda pode digitar uma nova.
       const tags = Array.isArray(initial) ? [...initial] : [];
       const known = new Set();
-      (state.empreendimentos || []).forEach(e => { if (e.cidade) known.add(e.cidade); });
-      (state.imobiliarias || []).forEach(i => { if (i.cidade) known.add(i.cidade); });
+      (state.empreendimentos || []).forEach(e => { if (e.cidade) known.add(e.cidade.trim()); });
       const listId = 'cidades-multi-' + Math.random().toString(36).slice(2, 8);
       const dl = el('datalist', { id: listId },
         ...[...known].sort().map(c => el('option', { value: c })));
