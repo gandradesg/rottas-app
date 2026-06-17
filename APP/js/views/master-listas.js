@@ -48,6 +48,18 @@ const TABS = [
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
   { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo/DWV', stateKey: 'motivosOrulo' },
   { id: 'gerentes_house',  table: 'gerentes_house',  label: 'Gerentes House',    stateKey: 'gerentesHouse' },
+  {
+    id: 'clientes', table: 'clientes', label: 'Clientes (leads)', stateKey: 'clientes',
+    loadOnDemand: true,  // não vem no loadLists — carrega ao abrir a aba
+    extraFields: [
+      { key: 'telefone', label: 'Telefone', type: 'text', placeholder: '(00) 00000-0000' },
+      { key: 'email', label: 'E-mail', type: 'email', placeholder: 'email@exemplo.com' },
+    ],
+    displayExtra: (item) => {
+      const parts = [item.telefone, item.email].filter(Boolean);
+      return parts.length ? el('div', { class: 'text-xs text-fg-muted mt-0.5' }, '📞 ' + parts.join(' · ')) : null;
+    },
+  },
 ];
 
 export async function masterListasView(_params, app) {
@@ -60,7 +72,7 @@ export async function masterListasView(_params, app) {
     el('p', { class: 'text-sm text-fg-muted' }, 'Cadastros usados nos formulários do app'),
   ));
 
-  const tabBar = el('div', { class: 'flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pr-8' });
+  const tabBar = el('div', { class: 'flex flex-wrap gap-2' });
   const dash = el('div', { class: 'flex flex-col gap-3' });
   content.append(tabBar, dash);
 
@@ -80,6 +92,15 @@ export async function masterListasView(_params, app) {
     renderTabs();
     const tab = TABS.find(t => t.id === activeId);
     dash.innerHTML = '';
+
+    // Tabelas que não vêm no loadLists (ex.: clientes) são carregadas ao abrir a aba
+    if (tab.loadOnDemand && !Array.isArray(state[tab.stateKey])) {
+      dash.appendChild(el('div', { class: 'card p-6 text-center text-fg-muted' }, 'Carregando...'));
+      const { data } = await supabase.from(tab.table).select('*').order('nome').limit(5000);
+      state[tab.stateKey] = data || [];
+      dash.innerHTML = '';
+    }
+
     const items = state[tab.stateKey] || [];
 
     const addBtn = el('button', {
@@ -99,11 +120,18 @@ export async function masterListasView(_params, app) {
 
     items.forEach(it => {
       const extra = tab.displayExtra ? tab.displayExtra(it) : null;
+      // Na aba Imobiliárias, botão pra ver/gerenciar corretores vinculados
+      const corretoresBtn = (tab.id === 'imobiliarias') ? el('button', {
+        class: 'p-1.5 rounded hover:bg-bg-elev transition flex items-center gap-1 text-xs text-rottas-600 font-semibold',
+        title: 'Ver corretores desta imobiliária',
+        onclick: () => openCorretoresModal(it),
+      }, icon('users', 16), 'Corretores') : null;
       dash.appendChild(el('div', { class: 'card p-3 flex items-center gap-3' },
         el('div', { class: 'flex-1 min-w-0' },
           el('div', { class: 'font-medium' }, it.nome),
           extra,
         ),
+        corretoresBtn,
         el('button', {
           class: 'p-1.5 rounded hover:bg-bg-elev transition',
           onclick: () => openEdit(tab, it)
@@ -360,6 +388,86 @@ export async function masterListasView(_params, app) {
   }
 
   // Importa lista em massa: aceita texto colado (1 nome por linha) ou arquivo .txt/.csv
+  // Modal: corretores vinculados a uma imobiliária (ver / adicionar / excluir)
+  function openCorretoresModal(imob) {
+    const listWrap = el('div', { class: 'flex flex-col gap-2 max-h-72 overflow-y-auto' });
+    const nomeInp = el('input', { class: 'input', placeholder: 'Nome do corretor' });
+    const telInp  = el('input', { class: 'input', type: 'tel', placeholder: 'Telefone (opcional)' });
+    const mailInp = el('input', { class: 'input', type: 'email', placeholder: 'E-mail (opcional)' });
+    const addBtn  = el('button', { class: 'btn btn-primary btn-sm' }, icon('plus', 14), 'Adicionar');
+    const closeBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Fechar');
+
+    function renderList() {
+      listWrap.innerHTML = '';
+      const lista = (state.corretores || []).filter(c => (c.imobiliaria_nome || '') === imob.nome);
+      if (!lista.length) {
+        listWrap.appendChild(el('div', { class: 'text-sm text-fg-muted text-center py-4' }, 'Nenhum corretor cadastrado nesta imobiliária.'));
+        return;
+      }
+      lista.forEach(c => {
+        listWrap.appendChild(el('div', { class: 'card p-2.5 flex items-center gap-2' },
+          el('div', { class: 'flex-1 min-w-0' },
+            el('div', { class: 'font-medium text-sm' }, c.nome),
+            (c.telefone || c.email) ? el('div', { class: 'text-xs text-fg-muted' }, [c.telefone, c.email].filter(Boolean).join(' · ')) : null,
+          ),
+          el('button', {
+            class: 'p-1.5 rounded hover:bg-bg-elev transition',
+            title: 'Excluir corretor',
+            onclick: async () => {
+              const ok = await confirmModal({ title: 'Excluir corretor?', message: `Remover "${c.nome}"?`, confirmLabel: 'Excluir', danger: true });
+              if (!ok) return;
+              const { data, error } = await supabase.from('corretores').delete().eq('id', c.id).select();
+              if (error) return toast(error.message, 'error', 6000);
+              if (!data || !data.length) return toast('Sem permissão para excluir corretor.', 'error', 6000);
+              state.corretores = (state.corretores || []).filter(x => x.id !== c.id);
+              renderList();
+              toast('Corretor removido', 'success');
+            },
+          }, icon('trash', 16, 'text-danger')),
+        ));
+      });
+    }
+
+    addBtn.addEventListener('click', async () => {
+      const nome = nomeInp.value.trim();
+      if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+      addBtn.disabled = true;
+      try {
+        const payload = {
+          nome, telefone: telInp.value.trim() || null, email: mailInp.value.trim() || null,
+          imobiliaria_id: imob.id || null, imobiliaria_nome: imob.nome,
+          created_by: state.user?.id || null,
+        };
+        const { data, error } = await supabase.from('corretores').insert(payload).select().single();
+        if (error) { toast('Erro: ' + error.message, 'error', 6000); addBtn.disabled = false; return; }
+        if (!Array.isArray(state.corretores)) state.corretores = [];
+        state.corretores.push(data);
+        state.corretores.sort((a, b) => a.nome.localeCompare(b.nome));
+        nomeInp.value = ''; telInp.value = ''; mailInp.value = '';
+        renderList();
+        toast('Corretor adicionado', 'success');
+      } catch (e) {
+        toast('Falha: ' + (e.message || e), 'error', 6000);
+      } finally {
+        addBtn.disabled = false;
+      }
+    });
+
+    const m = modal({
+      title: `👥 Corretores · ${imob.nome}`, size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-3' },
+        listWrap,
+        el('div', { class: 'border-t border-border pt-3 flex flex-col gap-2' },
+          el('div', { class: 'text-xs font-bold text-fg-muted uppercase' }, 'Adicionar corretor'),
+          nomeInp, telInp, mailInp,
+          el('div', { class: 'flex justify-end' }, addBtn),
+        ),
+      ),
+      footer: [closeBtn],
+    });
+    renderList();
+  }
+
   function openImport(tab) {
     // Empreendimentos aceita multi-coluna: Nome;Cidade ou Nome,Cidade
     const isMultiCol = (tab.importColumns || []).length > 1;

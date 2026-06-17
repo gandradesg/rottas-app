@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.3';
+export const APP_VERSION = '1.1.4';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.4',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: nas Listas, clique em "Corretores" numa imobiliária para ver/adicionar/excluir os corretores vinculados a ela',
+      'NOVO: aba "Clientes (leads)" nas Listas — veja e gerencie os clientes cadastrados nos atendimentos/propostas',
+      'Barra de abas das Listas agora quebra linha (não corta mais "Gerentes House")',
+    ],
+  },
   {
     version: '1.1.3',
     date: '17/06/2026',
