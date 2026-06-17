@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '1.1.2';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.2',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: Corretor agora é lista suspensa filtrada pela imobiliária — cadastro na hora (nome obrigatório, telefone e e-mail opcionais), vinculado automaticamente à imobiliária selecionada',
+      'NOVO: Cliente abre cadastro de lead (nome + telefone/e-mail opcionais); avisa se o telefone/e-mail já existe e permite reaproveitar o cadastro',
+      'Atividades agora guardam o vínculo com o cadastro de cliente e corretor (base para retornos futuros)',
+    ],
+  },
   {
     version: '1.1.1',
     date: '17/06/2026',

@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField, corretorField, clienteField } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -293,6 +293,7 @@ export async function atividadeFormView(params, app) {
   // ===== ATENDIMENTO - ordem: Localização, Local visita, Imobiliária, Corretor, Empreendimento, Cliente, Termômetro, Obs =====
   if (tipo === 'atendimento') {
     if (!id) locationFieldEl = locationField();
+    let atImobWrap;
 
     form.append(
       locationFieldEl ? field('Localização', locationFieldEl, { required: true }) :
@@ -301,15 +302,15 @@ export async function atividadeFormView(params, app) {
         name: 'local_visita', items: state.locaisVisita, value: initial?.local_visita,
         required: true, allowAdd: true, onAdd: addLocalVisita,
       }), { required: true, help: 'Você pode adicionar um novo local se não estiver na lista' }),
-      field('Imobiliária', creatableSelect({
+      (atImobWrap = creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
-      }), { required: true }),
-      field('Corretor', el('input', { class: 'input', name: 'corretor', required: true, value: initial?.corretor || '' }), { required: true }),
+      })) && field('Imobiliária', atImobWrap, { required: true }),
+      field('Corretor', corretorField({ imobWrap: atImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'produto', items: getScopedEmpreendimentos(), value: initial?.produto, required: true,
       }), { required: true }),
-      field('Cliente', el('input', { class: 'input', name: 'cliente', required: true, value: initial?.cliente || '' }), { required: true }),
+      field('Cliente', clienteField({ value: initial?.cliente, valueId: initial?.cliente_id }), { required: true, help: 'Abre o cadastro de cliente (lead).' }),
       field('Termômetro', termometroField({ value: initial?.termometro }), { required: true }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
@@ -333,13 +334,14 @@ export async function atividadeFormView(params, app) {
       valorInput.value = formatCurrency(num);
     });
 
+    let prImobWrap;
     form.append(
-      field('Cliente', el('input', { class: 'input', name: 'cliente', required: true, value: initial?.cliente || '' }), { required: true }),
-      field('Imobiliária', creatableSelect({
+      field('Cliente', clienteField({ value: initial?.cliente, valueId: initial?.cliente_id }), { required: true, help: 'Abre o cadastro de cliente (lead).' }),
+      (prImobWrap = creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
-      }), { required: true }),
-      field('Corretor', el('input', { class: 'input', name: 'corretor', required: true, value: initial?.corretor || '' }), { required: true }),
+      })) && field('Imobiliária', prImobWrap, { required: true }),
+      field('Corretor', corretorField({ imobWrap: prImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
       }), { required: true }),
@@ -365,13 +367,14 @@ export async function atividadeFormView(params, app) {
       el('option', { value: 'Órulo', selected: (initial?.plataforma || '') === 'Órulo' }, 'Órulo (PR)'),
       el('option', { value: 'DWV', selected: (initial?.plataforma || '') === 'DWV' }, 'DWV (SC)'),
     );
+    let orImobWrap;
     form.append(
       field('Plataforma', plataformaSel, { required: true, help: 'Por qual plataforma o contato veio' }),
-      field('Imobiliária', creatableSelect({
+      (orImobWrap = creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
-      }), { required: true }),
-      field('Corretor', el('input', { class: 'input', name: 'corretor', required: true, value: initial?.corretor || '' }), { required: true }),
+      })) && field('Imobiliária', orImobWrap, { required: true }),
+      field('Corretor', corretorField({ imobWrap: orImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
       }), { required: true }),
@@ -489,7 +492,9 @@ export async function atividadeFormView(params, app) {
         payload.produto = (fd.get('produto')||'').toString().trim();
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
+        payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
         payload.cliente = (fd.get('cliente')||'').toString().trim();
+        payload.cliente_id = (fd.get('cliente_id')||'').toString().trim() || null;
         payload.termometro = (fd.get('termometro')||'').toString().trim();
         for (const k of ['local_visita','produto','imobiliaria','corretor','cliente','termometro']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
@@ -500,7 +505,9 @@ export async function atividadeFormView(params, app) {
       if (tipo === 'proposta') {
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
+        payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
         payload.cliente = (fd.get('cliente')||'').toString().trim();
+        payload.cliente_id = (fd.get('cliente_id')||'').toString().trim() || null;
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();
         payload.unidade = (fd.get('unidade')||'').toString().trim();
         payload.valor = parseCurrency(fd.get('valor'));
@@ -523,6 +530,7 @@ export async function atividadeFormView(params, app) {
         payload.plataforma = plataforma;
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
+        payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();
         payload.motivo_contato = (fd.get('motivo_contato')||'').toString().trim();
         for (const k of ['imobiliaria','corretor','empreendimento','motivo_contato']) {
