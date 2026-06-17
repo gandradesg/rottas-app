@@ -8,6 +8,13 @@ import { TIPO_ATIVIDADE } from '../config.js';
 import { exportAtividadesExcel } from '../exports.js';
 
 export async function historicoView(_params, app) {
+  // Visão de EQUIPE para todos os papéis admin (gestor, master, superintendente,
+  // gestor_regional) — respeitando o toggle (se admin alternar p/ visão Gerente,
+  // vê só as próprias). A RLS já escopa: superintendente -> seus estados,
+  // gestor_regional -> suas cidades, gestor/master -> tudo.
+  const viewRole = activeViewRole();
+  const isTeamView = ['gestor', 'master', 'superintendente', 'gestor_regional'].includes(viewRole);
+
   const filters = {
     tipo: 'todos',
     periodo: 'mes',
@@ -22,8 +29,8 @@ export async function historicoView(_params, app) {
   // Header com título e ações
   content.appendChild(el('div', { class: 'flex items-center justify-between' },
     el('div', {},
-      el('h1', { class: 'text-2xl font-extrabold' }, ( activeViewRole() === "gestor") ? 'Histórico geral' : 'Meu histórico'),
-      el('p', { class: 'text-sm text-fg-muted' }, ( activeViewRole() === "gestor") ? 'Todas as atividades da equipe' : 'Suas atividades registradas'),
+      el('h1', { class: 'text-2xl font-extrabold' }, isTeamView ? 'Histórico da equipe' : 'Meu histórico'),
+      el('p', { class: 'text-sm text-fg-muted' }, isTeamView ? 'Atividades da equipe no seu escopo' : 'Suas atividades registradas'),
     ),
   ));
 
@@ -44,7 +51,7 @@ export async function historicoView(_params, app) {
   );
 
   let gerenteSel = null;
-  if (( activeViewRole() === "gestor")) {
+  if (isTeamView) {
     gerenteSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos os gerentes'));
     // populado depois com profiles
   }
@@ -66,9 +73,9 @@ export async function historicoView(_params, app) {
   }, icon('download', 16), 'Exportar Excel');
   content.appendChild(exportBtn);
 
-  // Funil de vendas (só para gerente)
+  // Funil de vendas (só na visão individual/gerente)
   const funnelSection = el('div', {});
-  if (activeViewRole() !== 'gestor') content.appendChild(funnelSection);
+  if (!isTeamView) content.appendChild(funnelSection);
 
   const summary = el('div', { class: 'flex items-center justify-between text-xs text-fg-muted' });
   content.appendChild(summary);
@@ -76,11 +83,13 @@ export async function historicoView(_params, app) {
   const list = el('div', { class: 'flex flex-col gap-2' });
   content.appendChild(list);
 
-  app.appendChild(shell(content, { title: ( activeViewRole() === "gestor") ? 'Histórico' : 'Meu funil' }));
+  app.appendChild(shell(content, { title: isTeamView ? 'Histórico' : 'Meu funil' }));
 
-  // Carrega gerentes (se master)
-  if (( activeViewRole() === "gestor")) {
-    const { data: gerentes } = await supabase.from('profiles').select('id, nome').eq('role', 'gerente').eq('ativo', true).order('nome');
+  // Carrega gerentes para o filtro (RLS escopa: superintendente vê os do seu
+  // estado, gestor_regional os da sua cidade, gestor/master todos).
+  if (isTeamView) {
+    const { data: gerentes } = await supabase.from('profiles').select('id, nome')
+      .in('role', ['gerente', 'supervisor']).eq('ativo', true).order('nome');
     (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
   }
 
@@ -92,8 +101,8 @@ export async function historicoView(_params, app) {
 
     // Exclui visitas do histórico operacional (visitas só aparecem em /visitas)
     let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email)').eq('cancelada', false).neq('tipo', 'visita').order('created_at', { ascending: false });
-    if (!( activeViewRole() === "gestor")) q = q.eq('gerente_id', state.user.id);
-    if (( activeViewRole() === "gestor") && filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
+    if (!isTeamView) q = q.eq('gerente_id', state.user.id);
+    if (isTeamView && filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
     if (filters.tipo !== 'todos') q = q.eq('tipo', filters.tipo);
 
     const now = new Date();

@@ -169,8 +169,13 @@ export async function painelGestorView(_params, app) {
             class: 'btn btn-danger btn-sm',
             onclick: async () => {
               if (!confirm('Excluir definitivamente?')) return;
-              const { error } = await supabase.from('atividades').delete().eq('id', p.id);
+              // .select() retorna as linhas afetadas — se vazio, RLS bloqueou (0 linhas)
+              const { data, error } = await supabase.from('atividades').delete().eq('id', p.id).select();
               if (error) { toast(error.message, 'error'); return; }
+              if (!data || !data.length) {
+                toast('Sem permissão para excluir esta atividade (fora do seu escopo).', 'error', 6000);
+                return;
+              }
               toast('✓ Excluída', 'success');
               renderAprovacoes();
             }
@@ -178,10 +183,14 @@ export async function painelGestorView(_params, app) {
           el('button', {
             class: 'btn btn-ghost btn-sm',
             onclick: async () => {
-              const { error } = await supabase.from('atividades').update({
+              const { data, error } = await supabase.from('atividades').update({
                 solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null
               }).eq('id', p.id).select();
               if (error) { toast(error.message, 'error'); return; }
+              if (!data || !data.length) {
+                toast('Sem permissão para alterar esta atividade (fora do seu escopo).', 'error', 6000);
+                return;
+              }
               toast('Rejeitada', 'info');
               renderAprovacoes();
             }
