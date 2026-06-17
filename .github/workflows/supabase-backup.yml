@@ -1,0 +1,67 @@
+name: Supabase Backup (2 em 2 horas)
+
+# Faz dump completo (schema + dados) do banco a cada 2h e guarda num repo
+# PRIVADO separado (rottas-backups) — fora do Supabase, p/ sobreviver mesmo
+# se o projeto pausar/sumir. Mantém os últimos 30 dias (prune automático).
+#
+# PRÉ-REQUISITOS (configurar 1x — ver instruções que o Claude passou):
+#   1. Criar repo privado: gandradesg/rottas-backups
+#   2. Secret SUPABASE_DB_URL  = connection string do Postgres (com senha)
+#   3. Secret BACKUP_REPO_TOKEN = PAT (fine-grained) com Contents:write no rottas-backups
+# Sem os secrets, o job sai sem erro (não fica mandando email de falha).
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # a cada 2 horas
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verifica secrets
+        id: chk
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$TOKEN" ]; then
+            echo "Secrets ausentes — pulando (configure SUPABASE_DB_URL e BACKUP_REPO_TOKEN)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Supabase CLI
+        if: steps.chk.outputs.ok == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Dump do banco (schema + dados)
+        if: steps.chk.outputs.ok == 'true'
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          TS=$(date -u +%Y%m%d-%H%M)
+          mkdir -p out
+          supabase db dump --db-url "$DB_URL" -f "out/schema-$TS.sql"
+          supabase db dump --db-url "$DB_URL" --data-only -f "out/data-$TS.sql"
+          gzip out/*.sql
+          ls -lh out
+
+      - name: Envia para o repo de backups (privado)
+        if: steps.chk.outputs.ok == 'true'
+        env:
+          TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          git clone --depth 1 "https://x-access-token:$TOKEN@github.com/gandradesg/rottas-backups.git" repo
+          mkdir -p repo/dumps
+          cp out/*.gz repo/dumps/
+          cd repo
+          find dumps -name '*.gz' -mtime +30 -delete   # mantém 30 dias
+          git config user.name "backup-bot"
+          git config user.email "backup@rottasconstrutora.com.br"
+          git add -A
+          git commit -m "backup $(date -u +%FT%H:%MZ)" || { echo "sem mudancas"; exit 0; }
+          git push
