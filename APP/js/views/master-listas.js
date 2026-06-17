@@ -60,7 +60,7 @@ export async function masterListasView(_params, app) {
     el('p', { class: 'text-sm text-fg-muted' }, 'Cadastros usados nos formulários do app'),
   ));
 
-  const tabBar = el('div', { class: 'flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4' });
+  const tabBar = el('div', { class: 'flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pr-8' });
   const dash = el('div', { class: 'flex flex-col gap-3' });
   content.append(tabBar, dash);
 
@@ -70,7 +70,7 @@ export async function masterListasView(_params, app) {
     tabBar.innerHTML = '';
     TABS.forEach(t => {
       tabBar.appendChild(el('button', {
-        class: 'btn btn-sm flex-shrink-0 ' + (activeId === t.id ? 'btn-primary' : 'btn-secondary'),
+        class: 'btn btn-sm flex-shrink-0 whitespace-nowrap ' + (activeId === t.id ? 'btn-primary' : 'btn-secondary'),
         onclick: () => { activeId = t.id; renderActive(); }
       }, t.label));
     });
