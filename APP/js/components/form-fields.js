@@ -580,43 +580,70 @@ export function clienteField({ value, valueId, required = true }) {
 // (get/set) como um <input>, então `node.value.trim()` continua funcionando.
 // Valor guardado/lido = "+55 (22) 99763-7344".
 // ═══════════════════════════════════════════════════════════════════════════
+// Cada país tem `masks` (formatos reais, do mais curto p/ o mais longo) onde
+// '#' é um dígito e o resto é literal. `lens` = quantidades de dígitos válidas.
 const PHONE_COUNTRIES = [
-  { iso: 'BR', flag: '🇧🇷', code: '55',  name: 'Brasil' },
-  { iso: 'PT', flag: '🇵🇹', code: '351', name: 'Portugal' },
-  { iso: 'US', flag: '🇺🇸', code: '1',   name: 'EUA / Canadá' },
-  { iso: 'AR', flag: '🇦🇷', code: '54',  name: 'Argentina' },
-  { iso: 'PY', flag: '🇵🇾', code: '595', name: 'Paraguai' },
-  { iso: 'UY', flag: '🇺🇾', code: '598', name: 'Uruguai' },
-  { iso: 'CL', flag: '🇨🇱', code: '56',  name: 'Chile' },
-  { iso: 'BO', flag: '🇧🇴', code: '591', name: 'Bolívia' },
-  { iso: 'CO', flag: '🇨🇴', code: '57',  name: 'Colômbia' },
-  { iso: 'PE', flag: '🇵🇪', code: '51',  name: 'Peru' },
-  { iso: 'ES', flag: '🇪🇸', code: '34',  name: 'Espanha' },
-  { iso: 'MX', flag: '🇲🇽', code: '52',  name: 'México' },
-  { iso: 'IT', flag: '🇮🇹', code: '39',  name: 'Itália' },
-  { iso: 'FR', flag: '🇫🇷', code: '33',  name: 'França' },
-  { iso: 'DE', flag: '🇩🇪', code: '49',  name: 'Alemanha' },
-  { iso: 'GB', flag: '🇬🇧', code: '44',  name: 'Reino Unido' },
+  { iso: 'BR', code: '55',  name: 'Brasil',        masks: ['(##) ####-####', '(##) #####-####'], lens: [10, 11] },
+  { iso: 'PT', code: '351', name: 'Portugal',      masks: ['### ### ###'],                       lens: [9] },
+  { iso: 'US', code: '1',   name: 'EUA / Canadá',  masks: ['(###) ###-####'],                    lens: [10] },
+  { iso: 'AR', code: '54',  name: 'Argentina',     masks: ['## #### ####', '## ##### ####'],     lens: [10, 11] },
+  { iso: 'PY', code: '595', name: 'Paraguai',      masks: ['### ### ###'],                        lens: [9] },
+  { iso: 'UY', code: '598', name: 'Uruguai',       masks: ['#### ####', '## ### ###'],            lens: [8, 9] },
+  { iso: 'CL', code: '56',  name: 'Chile',         masks: ['# #### ####'],                        lens: [9] },
+  { iso: 'BO', code: '591', name: 'Bolívia',       masks: ['#### ####'],                          lens: [8] },
+  { iso: 'CO', code: '57',  name: 'Colômbia',      masks: ['### ### ####'],                       lens: [10] },
+  { iso: 'PE', code: '51',  name: 'Peru',          masks: ['### ### ###'],                        lens: [9] },
+  { iso: 'ES', code: '34',  name: 'Espanha',       masks: ['### ## ## ##'],                       lens: [9] },
+  { iso: 'MX', code: '52',  name: 'México',        masks: ['## #### ####'],                       lens: [10] },
+  { iso: 'IT', code: '39',  name: 'Itália',        masks: ['### ### ####'],                       lens: [10] },
+  { iso: 'FR', code: '33',  name: 'França',        masks: ['# ## ## ## ##'],                      lens: [9] },
+  { iso: 'DE', code: '49',  name: 'Alemanha',      masks: ['### ########'],                       lens: [10, 11] },
+  { iso: 'GB', code: '44',  name: 'Reino Unido',   masks: ['##### ######'],                       lens: [10, 11] },
 ];
 
-// Formata os dígitos nacionais conforme o país (Brasil é o caso rico).
-function formatPhoneNational(iso, digits) {
-  if (iso === 'BR') {
-    const d = digits.slice(0, 11);
-    if (d.length <= 2)  return d.length ? `(${d}` : '';
-    if (d.length <= 6)  return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+// Aplica uma máscara progressivamente: preenche os '#' com os dígitos e só
+// emite separadores quando há dígito depois deles.
+function applyMask(mask, digits) {
+  let out = '', di = 0;
+  for (const ch of mask) {
+    if (di >= digits.length) break;
+    if (ch === '#') out += digits[di++];
+    else out += ch;
   }
-  // Genérico: grupos de 3, máx. 14 dígitos
-  return (digits.slice(0, 14).match(/.{1,3}/g) || []).join(' ');
+  return out;
 }
 
-// true se o número nacional parece válido (Brasil: 10 fixo ou 11 celular)
-function phoneNationalValid(iso, digits) {
-  if (!digits) return true; // vazio é "ok" (campo opcional)
-  if (iso === 'BR') return digits.length === 10 || digits.length === 11;
-  return digits.length >= 6;
+// Formata os dígitos nacionais escolhendo a máscara do país que melhor cabe.
+function formatPhoneNational(country, digits) {
+  const masks = country.masks || ['##############'];
+  const maxLen = Math.max(...masks.map(m => (m.match(/#/g) || []).length));
+  const d = digits.slice(0, maxLen);
+  // menor máscara cujo nº de dígitos >= o que já foi digitado
+  const mask = masks.find(m => (m.match(/#/g) || []).length >= d.length) || masks[masks.length - 1];
+  return applyMask(mask, d);
+}
+
+// Placeholder do país: a máscara mais longa com 0 no lugar dos dígitos
+function placeholderFor(country) {
+  const masks = country.masks || ['##############'];
+  return masks[masks.length - 1].replace(/#/g, '0');
+}
+
+// true se o número nacional parece válido p/ o país (vazio = ok, campo opcional)
+function phoneNationalValid(country, digits) {
+  if (!digits) return true;
+  return (country.lens || []).includes(digits.length);
+}
+
+// Imagem real da bandeira (Windows/Chrome não renderiza emoji de bandeira).
+function flagImg(iso, h = 14) {
+  return el('img', {
+    src: `https://flagcdn.com/${(h * 2)}x${Math.round(h * 1.5)}/${iso.toLowerCase()}.png`,
+    alt: iso,
+    width: Math.round(h * 4 / 3), height: h,
+    loading: 'lazy',
+    style: { height: h + 'px', width: 'auto', borderRadius: '2px', display: 'inline-block', objectFit: 'cover' },
+  });
 }
 
 export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name } = {}) {
@@ -651,7 +678,7 @@ export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name }
       class: 'w-full text-left px-3 py-2 hover:bg-bg-elev text-sm flex items-center gap-2',
       onclick: () => { setCountry(c); reformat(); closePopup(); input.focus(); },
     },
-      el('span', { class: 'text-lg' }, c.flag),
+      flagImg(c.iso, 14),
       el('span', { class: 'flex-1 truncate' }, c.name),
       el('span', { class: 'text-fg-subtle' }, '+' + c.code),
     ));
@@ -660,7 +687,8 @@ export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name }
   function setCountry(c) {
     country = c;
     flagLabel.innerHTML = '';
-    flagLabel.append(el('span', { class: 'text-lg' }, c.flag), document.createTextNode(' +' + c.code));
+    flagLabel.append(flagImg(c.iso, 14), document.createTextNode(' +' + c.code));
+    input.placeholder = placeholderFor(c);
   }
   function openPopup()  { popup.classList.remove('hidden'); document.addEventListener('click', outside); }
   function closePopup() { popup.classList.add('hidden'); document.removeEventListener('click', outside); }
@@ -668,13 +696,13 @@ export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name }
 
   function reformat() {
     const digits = input.value.replace(/\D/g, '');
-    input.value = formatPhoneNational(country.iso, digits);
-    if (phoneNationalValid(country.iso, digits)) {
+    input.value = formatPhoneNational(country, digits);
+    if (phoneNationalValid(country, digits)) {
       hint.classList.add('hidden');
     } else {
       hint.textContent = country.iso === 'BR'
         ? 'Número incompleto — celular tem 11 dígitos com DDD.'
-        : 'Número parece incompleto.';
+        : 'Número parece incompleto para ' + country.name + '.';
       hint.classList.remove('hidden');
     }
   }
@@ -693,7 +721,7 @@ export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name }
       if (cand) { c = cand; rest = lead.slice(c.code.length) + ' ' + (m[2] || ''); }
     }
     setCountry(c);
-    input.value = formatPhoneNational(c.iso, rest.replace(/\D/g, ''));
+    input.value = formatPhoneNational(c, rest.replace(/\D/g, ''));
   }
 
   flagBtn.addEventListener('click', (e) => {

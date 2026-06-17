@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.6';
+export const APP_VERSION = '1.1.7';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.7',
+    date: '17/06/2026',
+    changes: [
+      'MELHORADO: telefone agora mostra a bandeira real do país (o emoji não aparecia no Windows) e usa o formato de cada país — ex.: Portugal 351 999 999 999, EUA (000) 000-0000, etc. O placeholder muda conforme o país escolhido',
+    ],
+  },
   {
     version: '1.1.6',
     date: '17/06/2026',
