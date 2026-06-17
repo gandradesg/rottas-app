@@ -750,7 +750,7 @@ export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name }
 // conforme você completa o domínio e aceita qualquer outro provedor. Drop-in:
 // expõe `.value` (get/set) como um <input>.
 // ═══════════════════════════════════════════════════════════════════════════
-const EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com.br', 'icloud.com'];
+const EMAIL_DOMAINS = ['rottasconstrutora.com.br', 'rottasvendas.com.br', 'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com.br', 'icloud.com'];
 
 export function emailInput({ value = '', placeholder = 'email@exemplo.com', name } = {}) {
   const wrap = el('div', { class: 'relative' });

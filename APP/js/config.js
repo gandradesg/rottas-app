@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.8';
+export const APP_VERSION = '1.1.9';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.9',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: sugestões de e-mail agora incluem os domínios da Rottas (@rottasconstrutora.com.br e @rottasvendas.com.br) no topo da lista',
+    ],
+  },
   {
     version: '1.1.8',
     date: '17/06/2026',
