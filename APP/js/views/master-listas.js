@@ -2,6 +2,7 @@
 import { el, icon, toast, confirmModal, modal, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { supabase, loadLists, state } from '../supabase.js';
+import { phoneInput, emailInput } from '../components/form-fields.js';
 
 // Cada tab pode ter `extraFields` (lista de campos além do `nome`)
 // e `displayExtra(item)` para mostrar metadado adicional na linha
@@ -52,7 +53,7 @@ const TABS = [
     id: 'clientes', table: 'clientes', label: 'Clientes (leads)', stateKey: 'clientes',
     loadOnDemand: true,  // não vem no loadLists — carrega ao abrir a aba
     extraFields: [
-      { key: 'telefone', label: 'Telefone', type: 'text', placeholder: '(00) 00000-0000' },
+      { key: 'telefone', label: 'Telefone', type: 'phone' },
       { key: 'email', label: 'E-mail', type: 'email', placeholder: 'email@exemplo.com' },
     ],
     displayExtra: (item) => {
@@ -258,6 +259,10 @@ export async function masterListasView(_params, app) {
         getValue: () => tags.slice(),  // array (text[])
         getExtras: null,
       };
+    } else if (extraDef.type === 'phone') {
+      inputEl = phoneInput({ value: initial || '' });
+    } else if (extraDef.type === 'email') {
+      inputEl = emailInput({ value: initial || '', placeholder: extraDef.placeholder || 'email@exemplo.com' });
     } else {
       inputEl = el('input', {
         class: 'input', type: extraDef.type || 'text',
@@ -392,8 +397,8 @@ export async function masterListasView(_params, app) {
   function openCorretoresModal(imob) {
     const listWrap = el('div', { class: 'flex flex-col gap-2 max-h-72 overflow-y-auto' });
     const nomeInp = el('input', { class: 'input', placeholder: 'Nome do corretor' });
-    const telInp  = el('input', { class: 'input', type: 'tel', placeholder: 'Telefone (opcional)' });
-    const mailInp = el('input', { class: 'input', type: 'email', placeholder: 'E-mail (opcional)' });
+    const telInp  = phoneInput({});
+    const mailInp = emailInput({ placeholder: 'E-mail (opcional)' });
     const addBtn  = el('button', { class: 'btn btn-primary btn-sm' }, icon('plus', 14), 'Adicionar');
     const closeBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Fechar');
 

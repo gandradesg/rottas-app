@@ -415,8 +415,8 @@ export function corretorField({ imobWrap, value, valueId, required = true }) {
   function openAddCorretor(imob, presetNome) {
     if (!imob) { toast('Selecione a imobiliária primeiro', 'error'); return; }
     const nomeInp = el('input', { class: 'input', value: presetNome || '', placeholder: 'Nome do corretor' });
-    const telInp  = el('input', { class: 'input', type: 'tel', placeholder: '(00) 00000-0000' });
-    const mailInp = el('input', { class: 'input', type: 'email', placeholder: 'email@exemplo.com (opcional)' });
+    const telInp  = phoneInput({});
+    const mailInp = emailInput({ placeholder: 'email@exemplo.com (opcional)' });
     const saveBtn = el('button', { class: 'btn btn-primary' }, 'Cadastrar');
     const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
     const m = modal({
@@ -492,8 +492,8 @@ export function clienteField({ value, valueId, required = true }) {
 
   function openModal() {
     const nomeInp = el('input', { class: 'input', value: hiddenNome.value || '', placeholder: 'Nome do cliente' });
-    const telInp  = el('input', { class: 'input', type: 'tel', placeholder: '(00) 00000-0000' });
-    const mailInp = el('input', { class: 'input', type: 'email', placeholder: 'email@exemplo.com (opcional)' });
+    const telInp  = phoneInput({});
+    const mailInp = emailInput({ placeholder: 'email@exemplo.com (opcional)' });
     const dupBox  = el('div', {});
     const saveBtn = el('button', { class: 'btn btn-primary' }, 'Usar este cliente');
     const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
@@ -570,5 +570,202 @@ export function clienteField({ value, valueId, required = true }) {
 
   display.addEventListener('click', openModal);
   wrap.append(hiddenNome, hiddenId, display);
+  return wrap;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TELEFONE INTELIGENTE — seletor de país (bandeira + DDI, padrão Brasil +55) +
+// máscara automática conforme o país. Para o Brasil formata (XX) XXXXX-XXXX e
+// valida o celular (11 dígitos). Drop-in: o nó retornado expõe `.value`
+// (get/set) como um <input>, então `node.value.trim()` continua funcionando.
+// Valor guardado/lido = "+55 (22) 99763-7344".
+// ═══════════════════════════════════════════════════════════════════════════
+const PHONE_COUNTRIES = [
+  { iso: 'BR', flag: '🇧🇷', code: '55',  name: 'Brasil' },
+  { iso: 'PT', flag: '🇵🇹', code: '351', name: 'Portugal' },
+  { iso: 'US', flag: '🇺🇸', code: '1',   name: 'EUA / Canadá' },
+  { iso: 'AR', flag: '🇦🇷', code: '54',  name: 'Argentina' },
+  { iso: 'PY', flag: '🇵🇾', code: '595', name: 'Paraguai' },
+  { iso: 'UY', flag: '🇺🇾', code: '598', name: 'Uruguai' },
+  { iso: 'CL', flag: '🇨🇱', code: '56',  name: 'Chile' },
+  { iso: 'BO', flag: '🇧🇴', code: '591', name: 'Bolívia' },
+  { iso: 'CO', flag: '🇨🇴', code: '57',  name: 'Colômbia' },
+  { iso: 'PE', flag: '🇵🇪', code: '51',  name: 'Peru' },
+  { iso: 'ES', flag: '🇪🇸', code: '34',  name: 'Espanha' },
+  { iso: 'MX', flag: '🇲🇽', code: '52',  name: 'México' },
+  { iso: 'IT', flag: '🇮🇹', code: '39',  name: 'Itália' },
+  { iso: 'FR', flag: '🇫🇷', code: '33',  name: 'França' },
+  { iso: 'DE', flag: '🇩🇪', code: '49',  name: 'Alemanha' },
+  { iso: 'GB', flag: '🇬🇧', code: '44',  name: 'Reino Unido' },
+];
+
+// Formata os dígitos nacionais conforme o país (Brasil é o caso rico).
+function formatPhoneNational(iso, digits) {
+  if (iso === 'BR') {
+    const d = digits.slice(0, 11);
+    if (d.length <= 2)  return d.length ? `(${d}` : '';
+    if (d.length <= 6)  return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  }
+  // Genérico: grupos de 3, máx. 14 dígitos
+  return (digits.slice(0, 14).match(/.{1,3}/g) || []).join(' ');
+}
+
+// true se o número nacional parece válido (Brasil: 10 fixo ou 11 celular)
+function phoneNationalValid(iso, digits) {
+  if (!digits) return true; // vazio é "ok" (campo opcional)
+  if (iso === 'BR') return digits.length === 10 || digits.length === 11;
+  return digits.length >= 6;
+}
+
+export function phoneInput({ value = '', placeholder = '(00) 00000-0000', name } = {}) {
+  const wrap = el('div', { class: 'flex flex-col gap-1' });
+  const row = el('div', { class: 'relative flex gap-2' });
+
+  let country = PHONE_COUNTRIES[0]; // Brasil por padrão
+
+  const flagBtn = el('button', {
+    type: 'button',
+    class: 'select flex items-center gap-1 flex-shrink-0',
+    style: { width: 'auto', minWidth: '5.5rem' },
+    title: 'Trocar país',
+  });
+  const flagLabel = el('span', {}, '');
+  flagBtn.append(flagLabel, icon('chevronDown', 14, 'text-fg-subtle'));
+
+  const input = el('input', {
+    class: 'input flex-1', type: 'tel', placeholder, inputmode: 'tel', autocomplete: 'off',
+  });
+  if (name) input.name = name;
+
+  const hint = el('p', { class: 'text-xs text-danger hidden' }, '');
+
+  const popup = el('div', {
+    class: 'absolute z-50 left-0 mt-1 card max-h-64 overflow-y-auto hidden',
+    style: { top: '100%', minWidth: '14rem' },
+  });
+  PHONE_COUNTRIES.forEach(c => {
+    popup.appendChild(el('button', {
+      type: 'button',
+      class: 'w-full text-left px-3 py-2 hover:bg-bg-elev text-sm flex items-center gap-2',
+      onclick: () => { setCountry(c); reformat(); closePopup(); input.focus(); },
+    },
+      el('span', { class: 'text-lg' }, c.flag),
+      el('span', { class: 'flex-1 truncate' }, c.name),
+      el('span', { class: 'text-fg-subtle' }, '+' + c.code),
+    ));
+  });
+
+  function setCountry(c) {
+    country = c;
+    flagLabel.innerHTML = '';
+    flagLabel.append(el('span', { class: 'text-lg' }, c.flag), document.createTextNode(' +' + c.code));
+  }
+  function openPopup()  { popup.classList.remove('hidden'); document.addEventListener('click', outside); }
+  function closePopup() { popup.classList.add('hidden'); document.removeEventListener('click', outside); }
+  function outside(e)   { if (!row.contains(e.target)) closePopup(); }
+
+  function reformat() {
+    const digits = input.value.replace(/\D/g, '');
+    input.value = formatPhoneNational(country.iso, digits);
+    if (phoneNationalValid(country.iso, digits)) {
+      hint.classList.add('hidden');
+    } else {
+      hint.textContent = country.iso === 'BR'
+        ? 'Número incompleto — celular tem 11 dígitos com DDD.'
+        : 'Número parece incompleto.';
+      hint.classList.remove('hidden');
+    }
+  }
+
+  function setValue(raw) {
+    raw = (raw || '').trim();
+    if (!raw) { setCountry(PHONE_COUNTRIES[0]); input.value = ''; hint.classList.add('hidden'); return; }
+    let c = PHONE_COUNTRIES[0];
+    let rest = raw;
+    const m = raw.match(/^\+\s*(\d[\d\s]*?)\s*(\(.*)?$/) || raw.match(/^\+\s*(\d+)(.*)$/);
+    if (m) {
+      const lead = m[1].replace(/\D/g, '');
+      const cand = PHONE_COUNTRIES
+        .filter(x => lead.startsWith(x.code))
+        .sort((a, b) => b.code.length - a.code.length)[0];
+      if (cand) { c = cand; rest = lead.slice(c.code.length) + ' ' + (m[2] || ''); }
+    }
+    setCountry(c);
+    input.value = formatPhoneNational(c.iso, rest.replace(/\D/g, ''));
+  }
+
+  flagBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popup.classList.contains('hidden') ? openPopup() : closePopup();
+  });
+  input.addEventListener('input', reformat);
+
+  row.append(flagBtn, input, popup);
+  wrap.append(row, hint);
+  setValue(value);
+
+  Object.defineProperty(wrap, 'value', {
+    get() {
+      const digits = input.value.replace(/\D/g, '');
+      if (!digits) return '';
+      return `+${country.code} ${input.value.trim()}`;
+    },
+    set(v) { setValue(v); },
+  });
+  return wrap;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// E-MAIL INTELIGENTE — ao digitar "@" sugere gmail/outlook/hotmail; filtra
+// conforme você completa o domínio e aceita qualquer outro provedor. Drop-in:
+// expõe `.value` (get/set) como um <input>.
+// ═══════════════════════════════════════════════════════════════════════════
+const EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com.br', 'icloud.com'];
+
+export function emailInput({ value = '', placeholder = 'email@exemplo.com', name } = {}) {
+  const wrap = el('div', { class: 'relative' });
+  const input = el('input', { class: 'input', type: 'email', placeholder, autocomplete: 'off', value: value || '' });
+  if (name) input.name = name;
+  const popup = el('div', { class: 'absolute z-50 left-0 right-0 mt-1 card overflow-hidden hidden', style: { top: '100%' } });
+
+  function render() {
+    const v = input.value;
+    const at = v.indexOf('@');
+    popup.innerHTML = '';
+    if (at < 1) { popup.classList.add('hidden'); return; }
+    const local = v.slice(0, at);
+    const typed = v.slice(at + 1).toLowerCase();
+    const matches = EMAIL_DOMAINS.filter(d => d.startsWith(typed));
+    // já completou um domínio conhecido → não sugere
+    if (!matches.length || (matches.length === 1 && matches[0] === typed)) {
+      popup.classList.add('hidden'); return;
+    }
+    matches.forEach(d => {
+      const btn = el('button', {
+        type: 'button',
+        class: 'w-full text-left px-3 py-2 hover:bg-bg-elev text-sm',
+      }, el('span', { class: 'text-fg-subtle' }, local + '@'), el('strong', {}, d));
+      // mousedown (antes do blur) pra não fechar antes do clique
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.value = local + '@' + d;
+        popup.classList.add('hidden');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      popup.appendChild(btn);
+    });
+    popup.classList.remove('hidden');
+  }
+  input.addEventListener('input', render);
+  input.addEventListener('focus', render);
+  input.addEventListener('blur', () => setTimeout(() => popup.classList.add('hidden'), 120));
+
+  wrap.append(input, popup);
+  Object.defineProperty(wrap, 'value', {
+    get: () => input.value,
+    set: (v) => { input.value = v || ''; },
+  });
   return wrap;
 }

@@ -3,6 +3,7 @@ import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js'
 import { shell } from './shell.js';
 import { supabase, loadAllProfiles, state } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES, ROLES } from '../config.js';
+import { phoneInput, emailInput } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
 
 let listEl = null;
@@ -302,8 +303,10 @@ function openEditModal(p) {
 function userFormFields(p) {
   const form = el('div', { class: 'flex flex-col gap-3' });
   const nome = el('input', { class: 'input', value: p.nome || '', placeholder: 'Nome completo' });
-  const email = el('input', { class: 'input', type: 'email', value: p.email || '', placeholder: 'email@rottasconstrutora.com.br', disabled: !!p.id });
-  const tel = el('input', { class: 'input', value: p.telefone || '', placeholder: '(00) 00000-0000' });
+  const email = p.id
+    ? el('input', { class: 'input', type: 'email', value: p.email || '', disabled: true })
+    : emailInput({ value: p.email || '', placeholder: 'email@rottasconstrutora.com.br' });
+  const tel = phoneInput({ value: p.telefone || '' });
   const cidade = el('input', { class: 'input', value: p.cidade || '', placeholder: 'Cidade' });
   const estado = el('select', { class: 'select' },
     el('option', { value: '' }, 'UF'),

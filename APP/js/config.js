@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.5';
+export const APP_VERSION = '1.1.6';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.6',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: campo de telefone inteligente — já vem como Brasil 🇧🇷 (+55), com troca de país, e formata sozinho enquanto você digita: (22) 99763-7344. Avisa se o celular estiver incompleto',
+      'NOVO: campo de e-mail sugere @gmail.com, @outlook.com e @hotmail.com ao digitar "@" (e aceita qualquer outro provedor)',
+      'Aplicado em todos os cadastros com telefone/e-mail: corretor, cliente, usuário e perfil',
+    ],
+  },
   {
     version: '1.1.5',
     date: '17/06/2026',

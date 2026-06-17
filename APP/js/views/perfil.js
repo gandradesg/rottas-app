@@ -5,13 +5,14 @@ import { state, supabase } from '../supabase.js';
 import { signOut, setPassword, isMaster } from '../auth.js';
 import { ESTADOS_BR, APP_VERSION, ROLES } from '../config.js';
 import { navigate } from '../router.js';
+import { phoneInput } from '../components/form-fields.js';
 
 export async function perfilView(_params, app) {
   const p = state.profile;
   if (!p) return;
 
   const nome = el('input', { class: 'input', value: p.nome });
-  const tel = el('input', { class: 'input', value: p.telefone || '', placeholder: '(00) 00000-0000' });
+  const tel = phoneInput({ value: p.telefone || '' });
   const cidade = el('input', { class: 'input', value: p.cidade || '' });
   const estado = el('select', { class: 'select' },
     el('option', { value: '' }, 'UF'),
