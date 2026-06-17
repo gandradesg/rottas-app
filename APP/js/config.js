@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.0';
-export const APP_BUILD_DATE = '2026-05-21';
+export const APP_VERSION = '1.1.1';
+export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.1',
+    date: '17/06/2026',
+    changes: [
+      'CORRIGIDO: rejeitar/aprovar solicitação de exclusão agora funciona sempre (antes falhava silenciosamente para Superintendente/Gestor Regional)',
+      'CORRIGIDO: Histórico agora aparece para Superintendente e Gestor Regional, com a equipe do escopo deles (estado/cidade)',
+      'NOVO: Empreendimentos podem aparecer em cidades adicionais — campo "Aparece também em" nas Listas (ex.: empreendimento de Itapoá vendido em Curitiba)',
+    ],
+  },
   {
     version: '1.1.0',
     date: '21/05/2026',

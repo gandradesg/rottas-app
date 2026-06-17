@@ -61,7 +61,7 @@ export async function loadLists() {
   // 6 queries em paralelo (inclui gerentes_house para a atividade visita)
   const [imob, emp, mv, mo, lv, gh] = await Promise.all([
     supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome'),
-    supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url').order('nome'),
+    supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url, cidades_visiveis').order('nome'),
     supabase.from('motivos_visita').select('id, nome').order('nome'),
     supabase.from('motivos_orulo').select('id, nome').order('nome'),
     supabase.from('locais_visita').select('id, nome').order('nome'),
@@ -107,23 +107,33 @@ export function getScopedImobiliarias() {
   return all;
 }
 
-// Retorna empreendimentos visíveis ao usuário atual (mesma lógica)
+// Retorna empreendimentos visíveis ao usuário atual.
+// Um empreendimento aparece numa cidade se for a cidade-sede (campo cidade)
+// OU se a cidade estiver em cidades_visiveis (multi-cidade — ex.: empreend. de
+// Itapoá vendido em Curitiba).
 export function getScopedEmpreendimentos() {
   const all = state.empreendimentos || [];
   const p = state.profile;
   if (!p) return [];
   if (['master', 'gestor'].includes(p.role)) return all;
+  // Helper: o empreendimento "atende" alguma das cidades informadas?
+  const atendeCidades = (e, cidades) => {
+    const extras = Array.isArray(e.cidades_visiveis) ? e.cidades_visiveis : [];
+    return cidades.some(c => e.cidade === c || extras.includes(c));
+  };
   if (p.role === 'superintendente') {
     const estados = Array.isArray(p.estados_acesso) ? p.estados_acesso : [];
+    // Sede no estado OU alguma cidade_visivel (cidade não mapeia estado direto,
+    // então mantemos o critério por estado da sede como base).
     return all.filter(e => estados.includes(e.estado));
   }
   if (p.role === 'gestor_regional') {
     const cidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
-    return all.filter(e => cidades.includes(e.cidade));
+    return all.filter(e => atendeCidades(e, cidades));
   }
   if (['gerente', 'supervisor'].includes(p.role)) {
     if (!p.cidade) return [];
-    return all.filter(e => e.cidade === p.cidade);
+    return all.filter(e => atendeCidades(e, [p.cidade]));
   }
   return all;
 }

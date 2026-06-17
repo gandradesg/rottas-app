@@ -23,8 +23,10 @@ const TABS = [
   {
     id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos',
     extraFields: [
-      { key: 'cidade', label: 'Cidade', type: 'text', placeholder: 'Ex: Ponta Grossa' },
+      { key: 'cidade', label: 'Cidade-sede', type: 'text', placeholder: 'Ex: Ponta Grossa' },
       { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'] },
+      { key: 'cidades_visiveis', label: 'Aparece também em (outras cidades)', type: 'cidades-multi',
+        placeholder: 'Ex: Curitiba — adicionar cidade' },
       { key: 'link_url', label: 'Link do produto (opcional)', type: 'url', placeholder: 'https://...' }
     ],
     // Import aceita CSV de 3 colunas: "Nome;Cidade;Estado" (separadores ; , ou TAB)
@@ -34,6 +36,10 @@ const TABS = [
       if (item.cidade || item.estado) {
         const locStr = [item.cidade, item.estado].filter(Boolean).join(' · ');
         parts.push(el('span', { class: 'text-xs text-fg-muted' }, '📍 ' + locStr));
+      }
+      if (Array.isArray(item.cidades_visiveis) && item.cidades_visiveis.length) {
+        parts.push(el('span', { class: 'text-xs text-blue-500' },
+          '➕ também em: ' + item.cidades_visiveis.join(', ')));
       }
       if (item.link_url) parts.push(el('a', { href: item.link_url, target: '_blank', class: 'text-xs text-rottas-500 hover:underline truncate ml-2' }, '🔗 ' + item.link_url.replace(/^https?:\/\//, '').slice(0, 30)));
       return parts.length ? el('div', { class: 'flex items-center gap-2 flex-wrap mt-0.5' }, ...parts) : null;
@@ -169,6 +175,56 @@ export async function masterListasView(_params, app) {
         ),
         getValue: () => (inputEl.value || '').trim() || null,
         getExtras: extraGetter,
+      };
+    } else if (extraDef.type === 'cidades-multi') {
+      // Editor de tags: lista de cidades extras onde o empreendimento aparece.
+      // Sugestões via datalist a partir das cidades já conhecidas (empreend + imob).
+      const tags = Array.isArray(initial) ? [...initial] : [];
+      const known = new Set();
+      (state.empreendimentos || []).forEach(e => { if (e.cidade) known.add(e.cidade); });
+      (state.imobiliarias || []).forEach(i => { if (i.cidade) known.add(i.cidade); });
+      const listId = 'cidades-multi-' + Math.random().toString(36).slice(2, 8);
+      const dl = el('datalist', { id: listId },
+        ...[...known].sort().map(c => el('option', { value: c })));
+      const chipsWrap = el('div', { class: 'flex flex-wrap gap-1.5 mb-2' });
+      const addInput = el('input', {
+        class: 'input flex-1', type: 'text', list: listId,
+        placeholder: extraDef.placeholder || 'Adicionar cidade', autocomplete: 'off',
+      });
+      const addBtn = el('button', { type: 'button', class: 'btn btn-secondary btn-sm flex-shrink-0' }, '+ Add');
+      function renderChips() {
+        chipsWrap.innerHTML = '';
+        if (!tags.length) {
+          chipsWrap.appendChild(el('span', { class: 'text-xs text-fg-subtle' }, 'Nenhuma cidade extra (só a cidade-sede).'));
+          return;
+        }
+        tags.forEach((c, idx) => {
+          chipsWrap.appendChild(el('span', {
+            class: 'chip chip-blue flex items-center gap-1',
+          }, c, el('button', {
+            type: 'button', class: 'font-bold ml-1', title: 'Remover',
+            onclick: () => { tags.splice(idx, 1); renderChips(); },
+          }, '✕')));
+        });
+      }
+      function addTag() {
+        const v = (addInput.value || '').trim();
+        if (!v) return;
+        if (!tags.some(t => t.toLowerCase() === v.toLowerCase())) tags.push(v);
+        addInput.value = '';
+        renderChips();
+      }
+      addBtn.addEventListener('click', addTag);
+      addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
+      renderChips();
+      return {
+        wrapper: el('div', {},
+          el('label', { class: 'label' }, extraDef.label),
+          chipsWrap,
+          el('div', { class: 'flex gap-2' }, addInput, addBtn, dl),
+        ),
+        getValue: () => tags.slice(),  // array (text[])
+        getExtras: null,
       };
     } else {
       inputEl = el('input', {
