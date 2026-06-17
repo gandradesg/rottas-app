@@ -440,13 +440,19 @@ export function corretorField({ imobWrap, value, valueId, required = true }) {
         created_by: state.user?.id || null,
       };
       saveBtn.disabled = true;
-      const { data, error } = await supabase.from('corretores').insert(payload).select().single();
-      if (error) { toast('Erro: ' + error.message, 'error'); saveBtn.disabled = false; return; }
-      state.corretores.push(data);
-      state.corretores.sort((a, b) => a.nome.localeCompare(b.nome));
-      setValue(data.nome, data.id);
-      m.close(); close();
-      toast(`Corretor "${data.nome}" cadastrado`, 'success');
+      try {
+        const { data, error } = await supabase.from('corretores').insert(payload).select().single();
+        if (error) { toast('Erro: ' + error.message, 'error', 6000); saveBtn.disabled = false; return; }
+        if (!Array.isArray(state.corretores)) state.corretores = [];
+        state.corretores.push(data);
+        state.corretores.sort((a, b) => a.nome.localeCompare(b.nome));
+        setValue(data.nome, data.id);
+        m.close(); close();
+        toast(`Corretor "${data.nome}" cadastrado`, 'success');
+      } catch (e) {
+        toast('Falha ao cadastrar corretor: ' + (e.message || e), 'error', 6000);
+        saveBtn.disabled = false;
+      }
     });
   }
 
@@ -549,11 +555,16 @@ export function clienteField({ value, valueId, required = true }) {
         nome, telefone: telInp.value.trim() || null, email: mailInp.value.trim() || null,
         created_by: state.user?.id || null,
       };
-      const { data, error } = await supabase.from('clientes').insert(payload).select().single();
-      if (error) { toast('Erro: ' + error.message, 'error'); saveBtn.disabled = false; return; }
-      setValue(data.nome, data.id);
-      m.close();
-      toast(`Cliente "${data.nome}" cadastrado`, 'success');
+      try {
+        const { data, error } = await supabase.from('clientes').insert(payload).select().single();
+        if (error) { toast('Erro: ' + error.message, 'error', 6000); saveBtn.disabled = false; return; }
+        setValue(data.nome, data.id);
+        m.close();
+        toast(`Cliente "${data.nome}" cadastrado`, 'success');
+      } catch (e) {
+        toast('Falha ao cadastrar cliente: ' + (e.message || e), 'error', 6000);
+        saveBtn.disabled = false;
+      }
     });
   }
 

@@ -1,8 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.2';
+export const APP_VERSION = '1.1.3';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.3',
+    date: '17/06/2026',
+    changes: [
+      'CORRIGIDO: edição/exclusão de listas (empreendimentos, gerentes house, etc) liberada para todos que têm a permissão "Gerenciar listas" — não só Master/Gestor',
+      'CORRIGIDO: exclusão de item de lista agora avisa se faltar permissão (antes falhava em silêncio)',
+      'CORRIGIDO: cadastro de corretor/cliente com tratamento de erro robusto (não trava mais o botão sem feedback)',
+      'Label "Gerentes House" não corta mais na barra de listas',
+    ],
+  },
   {
     version: '1.1.2',
     date: '17/06/2026',

@@ -117,8 +117,12 @@ export async function masterListasView(_params, app) {
               confirmLabel: 'Excluir', danger: true,
             });
             if (!ok) return;
-            const { error } = await supabase.from(tab.table).delete().eq('id', it.id);
-            if (error) return toast(error.message, 'error');
+            // .select() retorna o que foi deletado — se vazio, RLS bloqueou (sem permissão)
+            const { data, error } = await supabase.from(tab.table).delete().eq('id', it.id).select();
+            if (error) return toast(error.message, 'error', 6000);
+            if (!data || !data.length) {
+              return toast('Sem permissão para excluir. Peça ao Master a permissão "Gerenciar listas".', 'error', 6000);
+            }
             await loadLists();
             renderActive();
             toast('Excluído', 'success');
