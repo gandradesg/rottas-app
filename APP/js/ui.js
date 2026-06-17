@@ -85,7 +85,7 @@ export function toast(message, type = 'info', duration = 3500) {
 }
 
 // ----- Modal -----
-export function modal({ title, content, footer, onClose, size = 'md' }) {
+export function modal({ title, content, footer, onClose, size = 'md', dismissible = false }) {
   const root = document.getElementById('modal-root');
   const overlay = el('div', { class: 'modal-overlay' });
   const sizeClass = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' }[size] || 'max-w-lg';
@@ -107,7 +107,9 @@ export function modal({ title, content, footer, onClose, size = 'md' }) {
     ...(Array.isArray(footer) ? footer : [footer])
   ));
   overlay.appendChild(content_div);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  // Por padrão NÃO fecha ao clicar fora (evita perder o que foi digitado).
+  // Só fecha pelo "✕" ou botões. Passe dismissible:true p/ permitir clicar fora.
+  if (dismissible) overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 
   root.appendChild(overlay);
   return { close, overlay, content: content_div };

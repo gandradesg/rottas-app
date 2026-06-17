@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.7';
+export const APP_VERSION = '1.1.8';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.8',
+    date: '17/06/2026',
+    changes: [
+      'CORRIGIDO: janelas de cadastro não fecham mais ao clicar fora por engano — agora só fecham no "✕" ou nos botões. Não se perde mais o que foi digitado',
+    ],
+  },
   {
     version: '1.1.7',
     date: '17/06/2026',
