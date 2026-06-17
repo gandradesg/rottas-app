@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.4';
+export const APP_VERSION = '1.1.5';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.1.5',
+    date: '17/06/2026',
+    changes: [
+      'CORRIGIDO: URL não fica mais presa com "?_logout=..." depois de sair e entrar de novo',
+    ],
+  },
   {
     version: '1.1.4',
     date: '17/06/2026',

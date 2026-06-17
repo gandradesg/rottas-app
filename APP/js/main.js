@@ -219,6 +219,13 @@ async function boot() {
   initTheme();
   splash();
 
+  // Limpa o cache-buster ?_logout=... que o signOut adiciona à URL.
+  // Ele só serve pra forçar reload limpo no logout; depois do boot fica preso
+  // na barra de endereço (mesmo já logado). Remove preservando o hash da rota.
+  if (location.search.includes('_logout')) {
+    try { history.replaceState(null, '', location.pathname + (location.hash || '#/')); } catch (e) {}
+  }
+
   // ===== Detecção AGRESSIVA de fluxo de recovery na URL =====
   const initialHash = location.hash || '';
   const initialSearch = location.search || '';
