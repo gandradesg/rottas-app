@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.2.1';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.2.1',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: o Master agora altera o status de cada sugestão (Nova → Em andamento → Concluída → Não acatada) direto no Perfil',
+      'NOVO: botão "Ditar" no campo de sugestões (voz → texto), igual ao das observações',
+    ],
+  },
   {
     version: '1.2.0',
     date: '17/06/2026',

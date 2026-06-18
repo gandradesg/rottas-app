@@ -6,6 +6,7 @@ import { signOut, setPassword, isMaster } from '../auth.js';
 import { ESTADOS_BR, APP_VERSION, ROLES } from '../config.js';
 import { navigate } from '../router.js';
 import { phoneInput } from '../components/form-fields.js';
+import { audioField } from '../components/audio-field.js';
 
 export async function perfilView(_params, app) {
   const p = state.profile;
@@ -70,9 +71,16 @@ export async function perfilView(_params, app) {
   // Todos enviam e veem as suas; o Master vê todas (consulta de insights).
   const isM = isMaster();
   const CATEGORIAS = ['Geral', 'Visitas', 'Atividades', 'Relatórios', 'Agenda', 'Usabilidade', 'Bug / erro', 'Outro'];
-  const STATUS_LABEL = { nova: '🆕 Nova', analise: '🔍 Em análise', implementada: '✅ Implementada', descartada: '🗑️ Descartada' };
+  const STATUS = [
+    { v: 'nova', label: '🆕 Nova' },
+    { v: 'andamento', label: '⏳ Em andamento' },
+    { v: 'concluida', label: '✅ Concluída' },
+    { v: 'nao_acatada', label: '🚫 Não acatada' },
+  ];
+  const STATUS_LABEL = Object.fromEntries(STATUS.map(s => [s.v, s.label]));
 
   const sugTxt = el('textarea', { class: 'input', rows: 3, placeholder: 'Escreva sua sugestão de melhoria para o app...' });
+  const sugDitar = audioField({ targetTextarea: sugTxt });
   const sugCat = el('select', { class: 'select' },
     el('option', { value: '' }, 'Categoria (opcional)'),
     ...CATEGORIAS.map(c => el('option', { value: c }, c)),
@@ -84,6 +92,24 @@ export async function perfilView(_params, app) {
   function sugCard(s, showAuthor) {
     const meta = [fmt.date(s.created_at)];
     if (s.categoria) meta.push(s.categoria);
+    // Master altera o status; os demais só veem o selo
+    let statusEl;
+    if (isM) {
+      const sel = el('select', {
+        class: 'select ml-auto',
+        style: { width: 'auto', height: 'auto', padding: '3px 24px 3px 8px', fontSize: '12px' },
+      }, ...STATUS.map(o => el('option', { value: o.v, selected: (s.status || 'nova') === o.v }, o.label)));
+      sel.addEventListener('change', async () => {
+        const prev = s.status || 'nova';
+        const { data, error } = await supabase.from('sugestoes').update({ status: sel.value }).eq('id', s.id).select();
+        if (error || !data || !data.length) { sel.value = prev; return toast(error?.message || 'Sem permissão para alterar.', 'error'); }
+        s.status = sel.value;
+        toast('Status atualizado', 'success');
+      });
+      statusEl = sel;
+    } else {
+      statusEl = el('span', { class: 'ml-auto' }, STATUS_LABEL[s.status] || '🆕 Nova');
+    }
     return el('div', { class: 'card p-3 flex flex-col gap-1.5' },
       el('div', { class: 'flex items-start gap-2' },
         el('p', { class: 'text-sm flex-1 whitespace-pre-wrap' }, s.texto),
@@ -104,7 +130,7 @@ export async function perfilView(_params, app) {
         showAuthor ? el('span', { class: 'font-semibold text-fg-muted' }, '👤 ' + (s.user_nome || 'Anônimo')) : null,
         showAuthor && s.user_role ? el('span', { class: 'chip chip-blue' }, ROLES[s.user_role]?.label || s.user_role) : null,
         el('span', {}, '📅 ' + meta.join(' · ')),
-        el('span', { class: 'ml-auto' }, STATUS_LABEL[s.status] || s.status || '🆕 Nova'),
+        statusEl,
       ),
     );
   }
@@ -188,7 +214,7 @@ export async function perfilView(_params, app) {
       el('h2', { class: 'font-bold' }, '💡 Sugestões de melhoria'),
       el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
         'Tem uma ideia para melhorar o app? Mande pra cá — toda sugestão é registrada e analisada.'),
-      el('div', { class: 'flex flex-col gap-2' }, sugTxt, sugCat, sugBtn),
+      el('div', { class: 'flex flex-col gap-2' }, sugTxt, sugDitar, sugCat, sugBtn),
       minhasWrap,
     ),
 
