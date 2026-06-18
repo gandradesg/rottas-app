@@ -14,7 +14,14 @@ export async function painelGestorView(_params, app) {
     empreendimento: 'todos',
     imobiliaria: 'todas',
     gerente: 'todos',
+    busca: '',
     aba: 'overview', // overview | gerentes | empreendimentos | imobiliarias | feed | ranking
+  };
+
+  // Busca dinâmica client-side: bate em qualquer campo do objeto (igual ao Histórico)
+  const hay = (o) => {
+    const b = (filters.busca || '').trim().toLowerCase();
+    return !b || JSON.stringify(o).toLowerCase().includes(b);
   };
 
   const content = el('div', { class: 'flex flex-col gap-4' });
@@ -69,6 +76,10 @@ export async function painelGestorView(_params, app) {
   filterBar.append(periodoSel, empSel, imobSel, gerSel, estSel);
   content.appendChild(filterBar);
 
+  // Busca dinâmica (filtra o conteúdo de todas as abas)
+  const buscaInput = el('input', { class: 'input', type: 'search', placeholder: 'Buscar (gerente, imobiliária, empreendimento, cliente...)' });
+  content.appendChild(buscaInput);
+
   // Container principal
   const dash = el('div', { class: 'flex flex-col gap-4', id: 'gestor-dash' });
   content.appendChild(dash);
@@ -78,7 +89,7 @@ export async function painelGestorView(_params, app) {
     .select('*').eq('role', 'gerente').eq('ativo', true).order('nome');
   (gerentes || []).forEach(g => gerSel.appendChild(el('option', { value: g.id }, g.nome)));
 
-  let allAtividades = [];
+  let baseAtividades = [];
 
   async function reload() {
     const now = new Date();
@@ -102,7 +113,7 @@ export async function painelGestorView(_params, app) {
     if (filters.imobiliaria !== 'todas') {
       filtered = filtered.filter(a => a.imobiliaria === filters.imobiliaria);
     }
-    allAtividades = filtered;
+    baseAtividades = filtered;
     renderAll();
   }
 
@@ -138,9 +149,14 @@ export async function painelGestorView(_params, app) {
       ));
       return;
     }
+    const pend = pendentes.filter(hay);
+    if (!pend.length) {
+      dash.appendChild(el('div', { class: 'card p-6 text-center text-sm text-fg-muted' }, 'Nenhuma aprovação encontrada para a busca.'));
+      return;
+    }
     dash.appendChild(el('div', { class: 'card p-3 gradient-rottas-soft text-sm font-semibold' },
-      `⏳ ${pendentes.length} solicitação${pendentes.length !== 1 ? 'ões' : ''} aguardando sua aprovação`));
-    pendentes.forEach(p => {
+      `⏳ ${pend.length} solicitação${pend.length !== 1 ? 'ões' : ''} aguardando sua aprovação`));
+    pend.forEach(p => {
       const t = TIPO_ATIVIDADE[p.tipo];
       let titulo = p.imobiliaria || p.empreendimento || p.local_visita || '-';
       if (p.tipo === 'proposta') titulo = `${p.empreendimento} · Un. ${p.unidade}`;
@@ -201,6 +217,7 @@ export async function painelGestorView(_params, app) {
   }
 
   function renderOverview() {
+    const allAtividades = baseAtividades.filter(hay);
     const c = {
       checkin: allAtividades.filter(a => a.tipo === 'checkin').length,
       atend:   allAtividades.filter(a => a.tipo === 'atendimento').length,
@@ -299,6 +316,7 @@ export async function painelGestorView(_params, app) {
   }
 
   function renderGerentes() {
+    const allAtividades = baseAtividades.filter(hay);
     const byGerente = {};
     allAtividades.forEach(a => {
       const id = a.gerente_id;
@@ -310,8 +328,9 @@ export async function painelGestorView(_params, app) {
       if (a.tipo === 'proposta') { g.prop++; g.vgv += parseFloat(a.valor) || 0; if (a.reserva) g.vendas++; }
       if (a.tipo === 'orulo') g.orulo++;
     });
-    // Inclui gerentes sem atividades
+    // Inclui gerentes sem atividades (respeitando a busca)
     (gerentes || []).forEach(g => {
+      if (!hay(g)) return;
       if (!byGerente[g.id]) byGerente[g.id] = { id: g.id, nome: g.nome, profile: g, checkin:0, atend:0, prop:0, vendas:0, orulo:0, vgv:0 };
     });
     const list = Object.values(byGerente).sort((a,b) => b.atend + b.checkin - (a.atend + a.checkin));
@@ -352,6 +371,7 @@ export async function painelGestorView(_params, app) {
   }
 
   function renderEmpreendimentos() {
+    const allAtividades = baseAtividades.filter(hay);
     const byEmp = {};
     allAtividades.forEach(a => {
       const emp = a.empreendimento || a.produto;
@@ -391,6 +411,7 @@ export async function painelGestorView(_params, app) {
   //  - calcula "última visita" (max created_at) e dias desde então
   //  - alerta visual (laranja) quando última visita > 7 dias
   function renderImobiliarias() {
+    const allAtividades = baseAtividades.filter(hay);
     const byImob = {};
     allAtividades.forEach(a => {
       const nome = a.imobiliaria;
@@ -408,6 +429,7 @@ export async function painelGestorView(_params, app) {
     });
     // Inclui imobiliárias cadastradas SEM atividades no período (pra acender alerta)
     state.imobiliarias.forEach(im => {
+      if (!hay(im)) return;
       if (!byImob[im.nome]) byImob[im.nome] = {
         nome: im.nome, checkin: 0, atend: 0, prop: 0, vendas: 0, vgv: 0, orulo: 0, lastAt: null,
       };
@@ -481,6 +503,7 @@ export async function painelGestorView(_params, app) {
   }
 
   function renderRanking() {
+    const allAtividades = baseAtividades.filter(hay);
     // Ranking por número de propostas e visitas
     const byGer = {};
     allAtividades.forEach(a => {
@@ -546,6 +569,7 @@ export async function painelGestorView(_params, app) {
   }
 
   function renderFeed() {
+    const allAtividades = baseAtividades.filter(hay);
     if (!allAtividades.length) {
       dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' }, 'Sem atividades no período.'));
       return;
@@ -589,8 +613,9 @@ export async function painelGestorView(_params, app) {
       el('button', {
         class: 'btn btn-secondary flex-1 flex items-center justify-center gap-2',
         onclick: async () => {
-          if (!allAtividades.length) return toast('Nada para exportar', 'warning');
-          try { await exportAtividadesExcel(allAtividades); toast('Excel exportado!', 'success'); }
+          const exp = baseAtividades.filter(hay);
+          if (!exp.length) return toast('Nada para exportar', 'warning');
+          try { await exportAtividadesExcel(exp); toast('Excel exportado!', 'success'); }
           catch (e) { toast(e.message || 'Erro', 'error'); }
         }
       }, icon('download', 16), 'Exportar Excel'),
@@ -610,6 +635,11 @@ export async function painelGestorView(_params, app) {
   imobSel.addEventListener('change', () => { filters.imobiliaria = imobSel.value; reload(); });
   gerSel.addEventListener('change', () => { filters.gerente = gerSel.value; reload(); });
   estSel.addEventListener('change', () => { filters.estado = estSel.value; reload(); });
+  let buscaTimer;
+  buscaInput.addEventListener('input', () => {
+    clearTimeout(buscaTimer);
+    buscaTimer = setTimeout(() => { filters.busca = buscaInput.value; renderAll(); }, 250);
+  });
 
   reload();
 }

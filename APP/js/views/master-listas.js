@@ -119,7 +119,20 @@ export async function masterListasView(_params, app) {
       return;
     }
 
-    items.forEach(it => {
+    // Busca dinâmica (filtra os itens da aba ativa por qualquer texto)
+    const buscaInput = el('input', { class: 'input', type: 'search', placeholder: `Buscar em ${tab.label.toLowerCase()}...` });
+    const listWrap = el('div', { class: 'flex flex-col gap-2' });
+    dash.append(buscaInput, listWrap);
+
+    function renderItems(f) {
+      listWrap.innerHTML = '';
+      const ff = (f || '').trim().toLowerCase();
+      const arr = ff ? items.filter(it => JSON.stringify(it).toLowerCase().includes(ff)) : items;
+      if (!arr.length) {
+        listWrap.appendChild(el('div', { class: 'card p-6 text-center text-sm text-fg-muted' }, 'Nenhum resultado para a busca.'));
+        return;
+      }
+      arr.forEach(it => {
       const extra = tab.displayExtra ? tab.displayExtra(it) : null;
       // Na aba Imobiliárias, botão pra ver/gerenciar corretores vinculados
       const corretoresBtn = (tab.id === 'imobiliarias') ? el('button', {
@@ -127,7 +140,7 @@ export async function masterListasView(_params, app) {
         title: 'Ver corretores desta imobiliária',
         onclick: () => openCorretoresModal(it),
       }, icon('users', 16), 'Corretores') : null;
-      dash.appendChild(el('div', { class: 'card p-3 flex items-center gap-3' },
+      listWrap.appendChild(el('div', { class: 'card p-3 flex items-center gap-3' },
         el('div', { class: 'flex-1 min-w-0' },
           el('div', { class: 'font-medium' }, it.nome),
           extra,
@@ -158,7 +171,15 @@ export async function masterListasView(_params, app) {
           }
         }, icon('trash', 16, 'text-danger')),
       ));
+      });
+    }
+
+    let buscaTimer;
+    buscaInput.addEventListener('input', () => {
+      clearTimeout(buscaTimer);
+      buscaTimer = setTimeout(() => renderItems(buscaInput.value), 200);
     });
+    renderItems('');
   }
 
   // Helper: renderiza um campo extra (input/select/cidade-select) e retorna {wrapper, getValue, getExtras}

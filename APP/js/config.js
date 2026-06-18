@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.2.2',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: busca dinâmica no Painel do Gestor (filtra todas as abas: visão geral, aprovações, gerentes, empreendimentos, imobiliárias, ranking e feed)',
+      'NOVO: busca dinâmica nas Listas (filtra os itens de qualquer aba enquanto você digita)',
+    ],
+  },
   {
     version: '1.2.1',
     date: '17/06/2026',
