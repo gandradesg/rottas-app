@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.1.9';
+export const APP_VERSION = '1.2.0';
 export const APP_BUILD_DATE = '2026-06-17';
 
 export const CHANGELOG = [
+  {
+    version: '1.2.0',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: campo de Sugestões de melhoria no Perfil — qualquer usuário pode registrar ideias para o app e acompanhar as que enviou',
+      'NOVO: o Master vê todas as sugestões da equipe no Perfil (consulta de insights), com autor, perfil e data',
+    ],
+  },
   {
     version: '1.1.9',
     date: '17/06/2026',

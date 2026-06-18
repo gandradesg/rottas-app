@@ -66,6 +66,84 @@ export async function perfilView(_params, app) {
     toast('Chave removida', 'info');
   } }, 'Remover chave');
 
+  // ── Sugestões de melhoria ────────────────────────────────────────────────
+  // Todos enviam e veem as suas; o Master vê todas (consulta de insights).
+  const isM = isMaster();
+  const CATEGORIAS = ['Geral', 'Visitas', 'Atividades', 'Relatórios', 'Agenda', 'Usabilidade', 'Bug / erro', 'Outro'];
+  const STATUS_LABEL = { nova: '🆕 Nova', analise: '🔍 Em análise', implementada: '✅ Implementada', descartada: '🗑️ Descartada' };
+
+  const sugTxt = el('textarea', { class: 'input', rows: 3, placeholder: 'Escreva sua sugestão de melhoria para o app...' });
+  const sugCat = el('select', { class: 'select' },
+    el('option', { value: '' }, 'Categoria (opcional)'),
+    ...CATEGORIAS.map(c => el('option', { value: c }, c)),
+  );
+  const sugBtn = el('button', { class: 'btn btn-primary w-full' }, icon('plus', 16), 'Enviar sugestão');
+  const minhasWrap = el('div', { class: 'flex flex-col gap-2 mt-3' });
+  const todasWrap = isM ? el('div', { class: 'flex flex-col gap-2' }) : null;
+
+  function sugCard(s, showAuthor) {
+    const meta = [fmt.date(s.created_at)];
+    if (s.categoria) meta.push(s.categoria);
+    return el('div', { class: 'card p-3 flex flex-col gap-1.5' },
+      el('div', { class: 'flex items-start gap-2' },
+        el('p', { class: 'text-sm flex-1 whitespace-pre-wrap' }, s.texto),
+        isM ? el('button', {
+          class: 'p-1 rounded hover:bg-bg-elev transition flex-shrink-0', title: 'Excluir sugestão',
+          onclick: async () => {
+            const ok = await confirmModal({ title: 'Excluir sugestão?', message: 'Esta ação não pode ser desfeita.', confirmLabel: 'Excluir', danger: true });
+            if (!ok) return;
+            const { data, error } = await supabase.from('sugestoes').delete().eq('id', s.id).select();
+            if (error) return toast(error.message, 'error', 6000);
+            if (!data || !data.length) return toast('Sem permissão para excluir.', 'error');
+            toast('Sugestão excluída', 'success');
+            loadMinhas(); loadTodas();
+          },
+        }, icon('trash', 15, 'text-danger')) : null,
+      ),
+      el('div', { class: 'flex items-center gap-2 flex-wrap text-xs text-fg-subtle' },
+        showAuthor ? el('span', { class: 'font-semibold text-fg-muted' }, '👤 ' + (s.user_nome || 'Anônimo')) : null,
+        showAuthor && s.user_role ? el('span', { class: 'chip chip-blue' }, ROLES[s.user_role]?.label || s.user_role) : null,
+        el('span', {}, '📅 ' + meta.join(' · ')),
+        el('span', { class: 'ml-auto' }, STATUS_LABEL[s.status] || s.status || '🆕 Nova'),
+      ),
+    );
+  }
+
+  async function loadMinhas() {
+    const { data, error } = await supabase.from('sugestoes').select('*').eq('user_id', p.id).order('created_at', { ascending: false }).limit(50);
+    minhasWrap.innerHTML = '';
+    if (error) { minhasWrap.appendChild(el('div', { class: 'text-sm text-danger' }, 'Erro ao carregar: ' + error.message)); return; }
+    if (!data || !data.length) { minhasWrap.appendChild(el('div', { class: 'text-sm text-fg-muted' }, 'Você ainda não enviou sugestões.')); return; }
+    minhasWrap.appendChild(el('p', { class: 'text-xs font-bold text-fg-muted uppercase' }, 'Minhas sugestões'));
+    data.forEach(s => minhasWrap.appendChild(sugCard(s, false)));
+  }
+  async function loadTodas() {
+    if (!isM) return;
+    const { data, error } = await supabase.from('sugestoes').select('*').order('created_at', { ascending: false }).limit(500);
+    todasWrap.innerHTML = '';
+    if (error) { todasWrap.appendChild(el('div', { class: 'text-sm text-danger' }, 'Erro ao carregar: ' + error.message)); return; }
+    if (!data || !data.length) { todasWrap.appendChild(el('div', { class: 'text-sm text-fg-muted' }, 'Nenhuma sugestão enviada ainda.')); return; }
+    todasWrap.appendChild(el('p', { class: 'text-xs text-fg-muted' }, `${data.length} sugestão(ões) no total`));
+    data.forEach(s => todasWrap.appendChild(sugCard(s, true)));
+  }
+
+  sugBtn.addEventListener('click', async () => {
+    const texto = sugTxt.value.trim();
+    if (!texto) return toast('Escreva sua sugestão', 'error');
+    loadingBtn(sugBtn, true);
+    try {
+      const { error } = await supabase.from('sugestoes').insert({
+        texto, categoria: sugCat.value || null,
+        user_id: p.id, user_nome: p.nome, user_email: p.email, user_role: p.role,
+      });
+      if (error) throw error;
+      sugTxt.value = ''; sugCat.value = '';
+      toast('Sugestão enviada! Obrigado 🙏', 'success');
+      await loadMinhas(); await loadTodas();
+    } catch (e) { toast(e.message, 'error', 6000); }
+    finally { loadingBtn(sugBtn, false); }
+  });
+
   const content = el('div', { class: 'flex flex-col gap-4' },
     // Cabeçalho
     el('div', { class: 'card p-5 flex items-center gap-4' },
@@ -103,6 +181,23 @@ export async function perfilView(_params, app) {
       el('div', { class: 'flex flex-col gap-3' },
         newPwd, confirmPwd, pwdBtn,
       ),
+    ),
+
+    // Sugestões de melhoria (todos enviam e veem as suas)
+    el('div', { class: 'card p-4' },
+      el('h2', { class: 'font-bold' }, '💡 Sugestões de melhoria'),
+      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
+        'Tem uma ideia para melhorar o app? Mande pra cá — toda sugestão é registrada e analisada.'),
+      el('div', { class: 'flex flex-col gap-2' }, sugTxt, sugCat, sugBtn),
+      minhasWrap,
+    ),
+
+    // Todas as sugestões (só Master — consulta de insights)
+    isM && el('div', { class: 'card p-4' },
+      el('h2', { class: 'font-bold' }, '📋 Todas as sugestões (insights)'),
+      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
+        'Tudo que a equipe sugeriu, mais recente primeiro.'),
+      todasWrap,
     ),
 
     // Whisper (só para master)
@@ -146,4 +241,8 @@ export async function perfilView(_params, app) {
   );
 
   app.appendChild(shell(content, { title: 'Perfil', back: true, hideBottomNav: true }));
+
+  // Carrega as sugestões depois de montar a tela
+  loadMinhas();
+  loadTodas();
 }
