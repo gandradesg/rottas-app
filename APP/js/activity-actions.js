@@ -100,6 +100,16 @@ export async function aplicarEdicao(a) {
   return { ok: true };
 }
 
+// Registra no histórico uma edição aplicada DIRETAMENTE (gestor/master editou
+// sem precisar de aprovação). Não falha o fluxo se o log der erro.
+export async function auditarEdicaoDireta(a, antes, depois) {
+  if (!depois || !Object.keys(depois).length) return;
+  await logHistorico({
+    atividade_id: a.id, tipo_evento: 'edicao', resumo: resumoAtividade(a),
+    dados: { antes, depois },
+  });
+}
+
 // Rejeita a edição pendente (descarta a proposta de alteração). Retorna { ok, error }.
 export async function rejeitarEdicao(a) {
   const { data, error } = await supabase.from('atividades').update({

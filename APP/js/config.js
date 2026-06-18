@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.3.1';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.3.1',
+    date: '18/06/2026',
+    changes: [
+      'CORRIGIDO: app não abria após a v1.3.0 (função de auditoria faltando quebrava o carregamento). Tudo normalizado.',
+    ],
+  },
   {
     version: '1.3.0',
     date: '18/06/2026',
