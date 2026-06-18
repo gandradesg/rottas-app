@@ -2,10 +2,11 @@
 import { el, icon, fmt, toast, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
-import { isMaster, isGestor, can, canApproveLevel, roleLevel } from '../auth.js';
+import { isMaster, isGestor, isAdmin, can, canApproveLevel, roleLevel } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, PROPOSTA_STATUS, NEXT_APPROVER, ROLES } from '../config.js';
 import { gmapsLink } from '../geo.js';
+import { aplicarEdicao, rejeitarEdicao, excluirAtividade, FIELD_LABELS } from '../activity-actions.js';
 
 export async function atividadeDetailView(params, app) {
   const { data: a, error } = await supabase
@@ -22,9 +23,11 @@ export async function atividadeDetailView(params, app) {
   const t = TIPO_ATIVIDADE[a.tipo];
   const isOwner = a.gerente_id === state.user.id;
   const userIsGestor = isGestor();
-  // Gestor/Master pode editar tudo. Gerente só Reserva (proposta).
+  const userIsAdmin = isAdmin();
+  // Gestor/Master edita direto. Gerente edita tudo, mas com aprovação do gestor.
   const canFullEdit = userIsGestor;
-  const canEditReserva = isOwner && a.tipo === 'proposta';
+  const canRequestEdit = isOwner && !userIsGestor && !a.solicita_edicao;
+  const canApproveEdit = userIsAdmin && !isOwner && a.solicita_edicao;
   const canApproveDeletion = userIsGestor && a.solicita_exclusao;
   const canRequestDeletion = isOwner && !a.solicita_exclusao;
   const canHardDelete = userIsGestor;
@@ -67,7 +70,7 @@ export async function atividadeDetailView(params, app) {
       } else {
         rows.push(el('div', { class: 'card p-3 mt-3 gradient-rottas-soft text-xs text-fg-muted' },
           '⏳ Sem reserva registrada. ',
-          (canFullEdit || canEditReserva) ? 'Edite a atividade para informar a reserva quando ela for efetivada no CV.' : ''
+          (canFullEdit || canRequestEdit) ? 'Edite a atividade para informar a reserva quando ela for efetivada no CV.' : ''
         ));
       }
       break;
@@ -117,7 +120,7 @@ export async function atividadeDetailView(params, app) {
   }
 
   const headerActions = [];
-  if (canFullEdit || canEditReserva) {
+  if (canFullEdit || canRequestEdit) {
     headerActions.push(el('button', {
       class: 'p-2 rounded-lg hover:bg-bg-elev transition',
       'aria-label': 'Editar',
@@ -159,26 +162,83 @@ export async function atividadeDetailView(params, app) {
     ),
   ) : null;
 
+  // ===== Banner de EDIÇÃO pendente (mostra o que foi proposto) =====
+  const editBanner = a.solicita_edicao ? renderEdicaoPendenteBanner(a) : null;
+
   // ===== Banner de status de aprovação (só pra propostas) =====
   const aprovacaoBanner = a.tipo === 'proposta' ? renderAprovacaoBanner(a) : null;
+
+  // ===== Histórico de auditoria (edições + exclusões) desta atividade =====
+  const histSection = el('div', {});
+  (async () => {
+    const { data: hist } = await supabase
+      .from('atividades_historico')
+      .select('*')
+      .eq('atividade_id', a.id)
+      .order('em', { ascending: false })
+      .limit(100);
+    if (!hist || !hist.length) return;
+    histSection.appendChild(el('details', { class: 'card p-4' },
+      el('summary', { class: 'cursor-pointer font-bold text-sm flex items-center gap-2' },
+        icon('clock', 16, 'text-fg-muted'), `Histórico de alterações (${hist.length})`),
+      el('div', { class: 'flex flex-col gap-2 mt-3' }, ...hist.map(renderHistEntry)),
+    ));
+  })();
 
   const content = el('div', { class: 'flex flex-col gap-3' },
     header,
     aprovacaoBanner,
+    editBanner,
     pendingBanner,
     el('div', { class: 'card p-4' }, ...rows),
     fotosSection,
 
-    // Botão de edição: em proposta usa "Informar/Atualizar reserva" (acao principal),
-    // nos demais tipos usa "Editar atividade"
-    (canFullEdit || canEditReserva) && el('button', {
+    // Botão de edição. Gerente: vai para aprovação. Gestor/Master: edita direto.
+    (canFullEdit || canRequestEdit) && !a.solicita_edicao && el('button', {
       class: 'btn btn-secondary',
       onclick: () => navigate(`/atividade/${a.id}/editar/${a.tipo}`)
     }, icon('edit', 16),
-      a.tipo === 'proposta'
-        ? (a.reserva ? 'Atualizar reserva' : 'Informar reserva')
-        : 'Editar atividade'
+      canRequestEdit ? 'Editar (requer aprovação)' : 'Editar atividade'
     ),
+
+    // Aprovador: aplicar a edição proposta
+    canApproveEdit && el('button', {
+      class: 'btn btn-primary',
+      onclick: async () => {
+        const ok = await confirmModal({
+          title: 'Aprovar edição?',
+          message: 'As alterações propostas serão aplicadas à atividade.',
+          confirmLabel: 'Aprovar e aplicar',
+        });
+        if (!ok) return;
+        const r = await aplicarEdicao(a);
+        if (!r.ok) { toast(r.error, 'error', 6000); return; }
+        toast('✓ Edição aplicada', 'success');
+        location.reload();
+      }
+    }, icon('check', 16), 'Aprovar edição'),
+
+    // Aprovador: rejeitar a edição proposta
+    canApproveEdit && el('button', {
+      class: 'btn btn-ghost text-danger',
+      onclick: async () => {
+        const r = await rejeitarEdicao(a);
+        if (!r.ok) { toast(r.error, 'error', 6000); return; }
+        toast('Edição rejeitada', 'info');
+        location.reload();
+      }
+    }, '✕ Rejeitar edição'),
+
+    // Dono: cancelar a própria solicitação de edição
+    isOwner && a.solicita_edicao && a.edicao_solicitada_por === state.user.id && el('button', {
+      class: 'btn btn-ghost',
+      onclick: async () => {
+        const r = await rejeitarEdicao(a);
+        if (!r.ok) { toast(r.error, 'error', 6000); return; }
+        toast('Solicitação de edição cancelada', 'info');
+        location.reload();
+      }
+    }, '↩ Cancelar solicitação de edição'),
 
     // Gestor: aprovar exclusão
     canApproveDeletion && el('button', {
@@ -190,9 +250,9 @@ export async function atividadeDetailView(params, app) {
           confirmLabel: 'Aprovar e excluir', danger: true,
         });
         if (!ok) return;
-        const { error } = await supabase.from('atividades').update({ cancelada: true }).eq('id', a.id);
-        if (error) { toast(error.message, 'error'); return; }
-        toast('✓ Atividade cancelada', 'success');
+        const r = await excluirAtividade(a);
+        if (!r.ok) { toast(r.error, 'error', 6000); return; }
+        toast('✓ Atividade excluída (mantida no histórico)', 'success');
         navigate('/historico', true);
       }
     }, icon('check', 16), 'Aprovar exclusão e remover'),
@@ -251,24 +311,84 @@ export async function atividadeDetailView(params, app) {
       onclick: async () => {
         const ok = await confirmModal({
           title: 'Excluir atividade?',
-          message: 'Esta ação não pode ser desfeita. Considere usar "solicitar exclusão" se quiser preservar histórico.',
+          message: 'A atividade sai das telas, mas fica registrada no histórico de exclusões para auditoria.',
           confirmLabel: 'Excluir', danger: true,
         });
         if (!ok) return;
-        const { error } = await supabase.from('atividades').delete().eq('id', a.id);
-        if (error) { toast(error.message, 'error'); return; }
-        toast('Atividade excluída', 'success');
+        const r = await excluirAtividade(a);
+        if (!r.ok) { toast(r.error, 'error', 6000); return; }
+        toast('Atividade excluída (mantida no histórico)', 'success');
         navigate('/historico', true);
       }
     }, icon('trash', 16), 'Excluir'),
 
     // ===== AÇÕES DE WORKFLOW DE PROPOSTA (Aprovar / Escalar / Rejeitar) =====
     ...(a.tipo === 'proposta' ? renderPropostaActions(a) : []),
+
+    // Histórico de auditoria desta atividade
+    histSection,
   );
 
   app.appendChild(shell(content, {
     title: t.label, back: true, hideBottomNav: true, headerActions
   }));
+}
+
+function fmtFieldValue(k, v) {
+  if (v == null || v === '') return '—';
+  if (k === 'valor') return fmt.currency(v);
+  if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+  return String(v);
+}
+
+function renderEdicaoPendenteBanner(a) {
+  const dep = a.edicao_pendente || {};
+  const keys = Object.keys(dep).filter(k => FIELD_LABELS[k]);
+  return el('div', { class: 'card p-3 border-2', style: { borderColor: '#F59E0B', background: 'rgba(245,158,11,0.1)' } },
+    el('div', { class: 'flex items-center gap-2' },
+      el('span', { class: 'text-2xl' }, '✏️'),
+      el('div', { class: 'flex-1' },
+        el('div', { class: 'font-bold text-warning' }, 'Edição aguardando aprovação'),
+        el('div', { class: 'text-xs text-fg-subtle' }, fmt.relative(a.edicao_solicitada_em)),
+      ),
+    ),
+    keys.length ? el('div', { class: 'flex flex-col gap-1.5 mt-2 pt-2 border-t border-border' },
+      ...keys.map(k => el('div', { class: 'text-xs' },
+        el('span', { class: 'font-semibold' }, FIELD_LABELS[k] + ': '),
+        el('span', { class: 'text-fg-muted line-through' }, fmtFieldValue(k, a[k])),
+        el('span', { class: 'mx-1' }, '→'),
+        el('span', { class: 'text-fg font-medium' }, fmtFieldValue(k, dep[k])),
+      )),
+    ) : null,
+  );
+}
+
+function renderHistEntry(h) {
+  const isExcl = h.tipo_evento === 'exclusao';
+  const dados = h.dados || {};
+  const changes = [];
+  if (!isExcl && dados.depois) {
+    for (const k of Object.keys(dados.depois)) {
+      if (!FIELD_LABELS[k]) continue;
+      changes.push(el('div', { class: 'text-xs' },
+        el('span', { class: 'font-semibold' }, FIELD_LABELS[k] + ': '),
+        el('span', { class: 'text-fg-muted line-through' }, fmtFieldValue(k, dados.antes?.[k])),
+        el('span', { class: 'mx-1' }, '→'),
+        el('span', {}, fmtFieldValue(k, dados.depois[k])),
+      ));
+    }
+  }
+  return el('div', { class: 'border-l-2 border-border pl-3 py-1' },
+    el('div', { class: 'text-sm font-medium flex items-center gap-2' },
+      isExcl ? '🗑️ Exclusão' : '✏️ Edição',
+      el('span', { class: 'text-xs text-fg-subtle font-normal' }, fmt.dateTime(h.em)),
+    ),
+    el('div', { class: 'text-xs text-fg-muted' },
+      'por ' + (h.por_nome || '?') +
+      (h.aprovado_por_nome && h.aprovado_por_nome !== h.por_nome ? ` · aprovado por ${h.aprovado_por_nome}` : '')),
+    isExcl && dados.motivo ? el('div', { class: 'text-xs italic text-fg-muted mt-0.5' }, '"' + dados.motivo + '"') : null,
+    changes.length ? el('div', { class: 'flex flex-col gap-0.5 mt-1' }, ...changes) : null,
+  );
 }
 
 function locationMapRow(lat, lng) {

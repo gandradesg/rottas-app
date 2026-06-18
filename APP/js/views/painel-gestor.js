@@ -5,6 +5,7 @@ import { state, supabase } from '../supabase.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, ESTADOS_BR } from '../config.js';
 import { exportAtividadesExcel, exportElementPNG } from '../exports.js';
+import { aplicarEdicao, rejeitarEdicao, excluirAtividade, FIELD_LABELS } from '../activity-actions.js';
 
 export async function painelGestorView(_params, app) {
   const filters = {
@@ -129,88 +130,115 @@ export async function painelGestorView(_params, app) {
     if (filters.aba === 'feed')            renderFeed();
   }
 
+  const fv = (k, v) => (v == null || v === '') ? '—' : (k === 'valor' ? fmt.currencyMillions(v) : Array.isArray(v) ? (v.join(', ') || '—') : String(v));
+
+  function aprovTitulo(p) {
+    if (p.tipo === 'proposta') return `${p.empreendimento} · Un. ${p.unidade}`;
+    return p.imobiliaria || p.empreendimento || p.local_visita || '-';
+  }
+  function aprovIcon(p) {
+    return el('div', { class: `activity-icon activity-${p.tipo}` },
+      icon(p.tipo==='checkin'?'mapPin':p.tipo==='atendimento'?'users':p.tipo==='proposta'?'fileText':'globe', 18));
+  }
+
   async function renderAprovacoes() {
     dash.innerHTML = '<div class="skeleton h-20"></div>';
     const { data: pendentes, error } = await supabase
       .from('atividades')
-      .select('*, profiles!atividades_gerente_id_fkey(nome), solicitante:profiles!atividades_exclusao_solicitada_por_fkey(nome)')
-      .eq('solicita_exclusao', true)
-      .order('exclusao_solicitada_em', { ascending: false });
+      .select('*, profiles!atividades_gerente_id_fkey(nome)')
+      .or('solicita_exclusao.eq.true,solicita_edicao.eq.true')
+      .order('created_at', { ascending: false });
     dash.innerHTML = '';
     if (error) {
       dash.appendChild(el('div', { class: 'card p-4 text-danger text-sm' }, 'Erro: ' + error.message));
       return;
     }
-    if (!pendentes?.length) {
+    const all = (pendentes || []).filter(hay);
+    if (!all.length) {
       dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' },
         el('div', { class: 'text-4xl mb-2' }, '✅'),
         el('div', { class: 'font-bold' }, 'Tudo em ordem'),
-        el('div', { class: 'text-sm mt-1' }, 'Nenhuma solicitação de exclusão pendente.'),
+        el('div', { class: 'text-sm mt-1' }, pendentes?.length ? 'Nenhuma aprovação para a busca.' : 'Nenhuma solicitação pendente.'),
       ));
       return;
     }
-    const pend = pendentes.filter(hay);
-    if (!pend.length) {
-      dash.appendChild(el('div', { class: 'card p-6 text-center text-sm text-fg-muted' }, 'Nenhuma aprovação encontrada para a busca.'));
-      return;
-    }
+    const edicoes = all.filter(p => p.solicita_edicao);
+    const exclusoes = all.filter(p => p.solicita_exclusao);
     dash.appendChild(el('div', { class: 'card p-3 gradient-rottas-soft text-sm font-semibold' },
-      `⏳ ${pend.length} solicitação${pend.length !== 1 ? 'ões' : ''} aguardando sua aprovação`));
-    pend.forEach(p => {
+      `⏳ ${all.length} solicitação${all.length !== 1 ? 'ões' : ''} aguardando sua aprovação`));
+
+    // ===== EDIÇÕES =====
+    if (edicoes.length) {
+      dash.appendChild(el('div', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mt-2' }, `✏️ Edições (${edicoes.length})`));
+    }
+    edicoes.forEach(p => {
       const t = TIPO_ATIVIDADE[p.tipo];
-      let titulo = p.imobiliaria || p.empreendimento || p.local_visita || '-';
-      if (p.tipo === 'proposta') titulo = `${p.empreendimento} · Un. ${p.unidade}`;
+      const dep = p.edicao_pendente || {};
+      const keys = Object.keys(dep).filter(k => FIELD_LABELS[k]);
+      dash.appendChild(el('div', { class: 'card p-4' },
+        el('div', { class: 'flex items-start gap-3 mb-2' },
+          aprovIcon(p),
+          el('div', { class: 'flex-1 min-w-0' },
+            el('div', { class: 'font-semibold' }, aprovTitulo(p)),
+            el('div', { class: 'text-xs text-fg-muted' }, t.label, ' · ', p.profiles?.nome ? 'Por: ' + p.profiles.nome : ''),
+            el('div', { class: 'text-xs text-warning mt-1' }, '✏️ Edição solicitada ' + fmt.relative(p.edicao_solicitada_em)),
+          ),
+        ),
+        keys.length ? el('div', { class: 'flex flex-col gap-1 mb-3 pt-2 border-t border-border' },
+          ...keys.map(k => el('div', { class: 'text-xs' },
+            el('span', { class: 'font-semibold' }, FIELD_LABELS[k] + ': '),
+            el('span', { class: 'text-fg-muted line-through' }, fv(k, p[k])),
+            el('span', { class: 'mx-1' }, '→'),
+            el('span', { class: 'font-medium' }, fv(k, dep[k])),
+          )),
+        ) : el('div', { class: 'text-xs text-fg-muted mb-3' }, 'Sem alterações de campos exibíveis.'),
+        el('div', { class: 'flex gap-2' },
+          el('button', { class: 'btn btn-secondary btn-sm flex-1', onclick: () => navigate(`/atividade/${p.id}`) }, 'Ver detalhes'),
+          el('button', { class: 'btn btn-primary btn-sm', onclick: async () => {
+            const r = await aplicarEdicao(p);
+            if (!r.ok) { toast(r.error, 'error', 6000); return; }
+            toast('✓ Edição aplicada', 'success'); renderAprovacoes();
+          } }, '✓ Aprovar'),
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => {
+            const r = await rejeitarEdicao(p);
+            if (!r.ok) { toast(r.error, 'error', 6000); return; }
+            toast('Edição rejeitada', 'info'); renderAprovacoes();
+          } }, '✕ Rejeitar'),
+        ),
+      ));
+    });
+
+    // ===== EXCLUSÕES =====
+    if (exclusoes.length) {
+      dash.appendChild(el('div', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mt-2' }, `🗑️ Exclusões (${exclusoes.length})`));
+    }
+    exclusoes.forEach(p => {
+      const t = TIPO_ATIVIDADE[p.tipo];
       dash.appendChild(el('div', { class: 'card p-4' },
         el('div', { class: 'flex items-start gap-3 mb-3' },
-          el('div', { class: `activity-icon activity-${p.tipo}` },
-            icon(p.tipo==='checkin'?'mapPin':p.tipo==='atendimento'?'users':p.tipo==='proposta'?'fileText':'globe', 18)),
+          aprovIcon(p),
           el('div', { class: 'flex-1 min-w-0' },
-            el('div', { class: 'font-semibold' }, titulo),
-            el('div', { class: 'text-xs text-fg-muted' },
-              t.label, ' · ', fmt.dateTime(p.created_at),
-              p.profiles?.nome ? ' · Por: ' + p.profiles.nome : '',
-            ),
-            el('div', { class: 'text-xs text-warning mt-1' },
-              '⏳ Solicitada ' + fmt.relative(p.exclusao_solicitada_em),
-              p.solicitante?.nome ? ' por ' + p.solicitante.nome : '',
-            ),
+            el('div', { class: 'font-semibold' }, aprovTitulo(p)),
+            el('div', { class: 'text-xs text-fg-muted' }, t.label, ' · ', fmt.dateTime(p.created_at), p.profiles?.nome ? ' · Por: ' + p.profiles.nome : ''),
+            el('div', { class: 'text-xs text-warning mt-1' }, '⏳ Exclusão solicitada ' + fmt.relative(p.exclusao_solicitada_em)),
           ),
         ),
         el('div', { class: 'flex gap-2' },
-          el('button', {
-            class: 'btn btn-secondary btn-sm flex-1',
-            onclick: () => navigate(`/atividade/${p.id}`)
-          }, 'Ver detalhes'),
-          el('button', {
-            class: 'btn btn-danger btn-sm',
-            onclick: async () => {
-              if (!confirm('Excluir definitivamente?')) return;
-              // .select() retorna as linhas afetadas — se vazio, RLS bloqueou (0 linhas)
-              const { data, error } = await supabase.from('atividades').delete().eq('id', p.id).select();
-              if (error) { toast(error.message, 'error'); return; }
-              if (!data || !data.length) {
-                toast('Sem permissão para excluir esta atividade (fora do seu escopo).', 'error', 6000);
-                return;
-              }
-              toast('✓ Excluída', 'success');
-              renderAprovacoes();
-            }
-          }, '✓ Aprovar'),
-          el('button', {
-            class: 'btn btn-ghost btn-sm',
-            onclick: async () => {
-              const { data, error } = await supabase.from('atividades').update({
-                solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null
-              }).eq('id', p.id).select();
-              if (error) { toast(error.message, 'error'); return; }
-              if (!data || !data.length) {
-                toast('Sem permissão para alterar esta atividade (fora do seu escopo).', 'error', 6000);
-                return;
-              }
-              toast('Rejeitada', 'info');
-              renderAprovacoes();
-            }
-          }, '✕ Rejeitar'),
+          el('button', { class: 'btn btn-secondary btn-sm flex-1', onclick: () => navigate(`/atividade/${p.id}`) }, 'Ver detalhes'),
+          el('button', { class: 'btn btn-danger btn-sm', onclick: async () => {
+            if (!confirm('Aprovar exclusão? A atividade fica no histórico de exclusões.')) return;
+            const r = await excluirAtividade(p);
+            if (!r.ok) { toast(r.error, 'error', 6000); return; }
+            toast('✓ Excluída (mantida no histórico)', 'success'); renderAprovacoes();
+          } }, '✓ Aprovar'),
+          el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => {
+            const { data, error } = await supabase.from('atividades').update({
+              solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null
+            }).eq('id', p.id).select();
+            if (error) { toast(error.message, 'error'); return; }
+            if (!data || !data.length) { toast('Sem permissão (fora do seu escopo).', 'error', 6000); return; }
+            toast('Rejeitada', 'info'); renderAprovacoes();
+          } }, '✕ Rejeitar'),
         ),
       ));
     });

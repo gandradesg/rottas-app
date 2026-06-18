@@ -1,8 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.2.2';
-export const APP_BUILD_DATE = '2026-06-17';
+export const APP_VERSION = '1.3.0';
+export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.3.0',
+    date: '18/06/2026',
+    changes: [
+      'NOVO: gerente agora pode editar qualquer campo da própria atividade — a alteração vai para aprovação do gestor (os dados só mudam depois de aprovada)',
+      'NOVO: aba Aprovações (Painel) lista edições e exclusões pendentes, mostrando o antes → depois de cada mudança',
+      'NOVO: histórico de alterações dentro de cada atividade (quem editou o quê e quando) para Master e gestores',
+      'NOVO: central de auditoria no Perfil do Master — todas as edições e exclusões registradas',
+      'MUDANÇA: excluir atividade agora preserva ela no histórico de exclusões (não some mais de vez)',
+    ],
+  },
   {
     version: '1.2.2',
     date: '17/06/2026',

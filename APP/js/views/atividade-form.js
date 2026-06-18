@@ -8,6 +8,7 @@ import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { audioField } from '../components/audio-field.js';
 import { isGestor } from '../auth.js';
+import { buildDiff, auditarEdicaoDireta } from '../activity-actions.js';
 
 const TITLES = {
   checkin:     { novo: 'Registro de novo Check-in',     editar: 'Editar Check-in' },
@@ -134,19 +135,26 @@ export async function atividadeFormView(params, app) {
     };
   }
 
-  // ===== MODO RESTRITO: Gerente editando proposta - só Reserva =====
-  // Gerente só pode editar o campo Reserva da própria Proposta
-  if (id && initial && tipo === 'proposta' && !isGestor() && initial.gerente_id === state.user.id) {
-    return reservaOnlyForm(app, initial);
-  }
-  // Gerente tentando editar outras atividades - bloqueia
-  if (id && !isGestor() && initial?.gerente_id === state.user.id && tipo !== 'proposta') {
-    toast('Apenas Gestores podem editar esta atividade', 'error', 5000);
-    navigate(`/atividade/${id}`, true);
-    return;
-  }
+  // Gerente editando a própria atividade: pode editar TODOS os campos, mas o
+  // resultado vai para aprovação do gestor (os dados só mudam após aprovado).
+  const gerenteEditandoPropria = !!id && !isGestor() && initial?.gerente_id === state.user.id;
 
   const form = el('form', { class: 'flex flex-col gap-4' });
+
+  // Aviso de que a edição precisará de aprovação
+  if (gerenteEditandoPropria) {
+    form.appendChild(el('div', {
+      class: 'card p-3 border-2 flex items-start gap-2 text-sm',
+      style: { borderColor: '#F59E0B', background: 'rgba(245,158,11,0.08)' }
+    },
+      el('span', { class: 'text-xl' }, '✏️'),
+      el('div', { class: 'flex-1' },
+        el('div', { class: 'font-bold text-warning' }, 'Edição com aprovação'),
+        el('div', { class: 'text-xs text-fg-muted mt-0.5' },
+          'As alterações serão enviadas ao seu gestor. A atividade só muda depois que ele aprovar.'),
+      ),
+    ));
+  }
 
   // Banner quando vindo da agenda
   if (agendamento) {
@@ -539,6 +547,29 @@ export async function atividadeFormView(params, app) {
         loadingBtn(submitBtn, true);
       }
 
+      // ===== GERENTE: edição vai para aprovação (não altera os dados agora) =====
+      if (gerenteEditandoPropria) {
+        const { depois } = buildDiff(initial, payload);
+        if (!Object.keys(depois).length) {
+          clearTimeout(safetyTimeout);
+          toast('Nenhuma alteração para enviar', 'info');
+          loadingBtn(submitBtn, false);
+          return;
+        }
+        const { data, error } = await supabase.from('atividades').update({
+          solicita_edicao: true,
+          edicao_solicitada_em: new Date().toISOString(),
+          edicao_solicitada_por: state.user.id,
+          edicao_pendente: depois,
+        }).eq('id', id).select();
+        if (error) throw error;
+        if (!data || !data.length) throw new Error('Sem permissão para solicitar edição (RLS rejeitou)');
+        clearTimeout(safetyTimeout);
+        toast('✓ Edição enviada para aprovação do gestor', 'success', 3500);
+        navigate(`/atividade/${id}`, true);
+        return;
+      }
+
       // ===== INSERT/UPDATE com detecção de RLS-rejection =====
       console.log('[atividade] enviando:', tipo, id ? 'UPDATE' : 'INSERT');
       const { data, error } = id
@@ -547,6 +578,11 @@ export async function atividadeFormView(params, app) {
       if (error) throw error;
       if (!data || !data.length) {
         throw new Error('Sem permissão para ' + (id ? 'editar' : 'criar') + ' (RLS rejeitou)');
+      }
+      // Edição direta (gestor/master): registra no histórico de auditoria
+      if (id) {
+        const { antes, depois } = buildDiff(initial, payload);
+        auditarEdicaoDireta({ ...initial, ...payload, id }, antes, depois).catch(() => {});
       }
 
       clearTimeout(safetyTimeout);

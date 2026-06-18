@@ -7,6 +7,7 @@ import { ESTADOS_BR, APP_VERSION, ROLES } from '../config.js';
 import { navigate } from '../router.js';
 import { phoneInput } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
+import { FIELD_LABELS } from '../activity-actions.js';
 
 export async function perfilView(_params, app) {
   const p = state.profile;
@@ -170,6 +171,50 @@ export async function perfilView(_params, app) {
     finally { loadingBtn(sugBtn, false); }
   });
 
+  // ── Histórico de edições e exclusões (só Master — central de auditoria) ───
+  const histWrap = isM ? el('div', { class: 'flex flex-col gap-2' }) : null;
+  const fvHist = (k, v) => (v == null || v === '') ? '—' : (k === 'valor' ? fmt.currency(v) : Array.isArray(v) ? (v.join(', ') || '—') : String(v));
+  function histCard(h) {
+    const isExcl = h.tipo_evento === 'exclusao';
+    const dados = h.dados || {};
+    const changes = [];
+    if (!isExcl && dados.depois) {
+      for (const k of Object.keys(dados.depois)) {
+        if (!FIELD_LABELS[k]) continue;
+        changes.push(el('div', { class: 'text-xs' },
+          el('span', { class: 'font-semibold' }, FIELD_LABELS[k] + ': '),
+          el('span', { class: 'text-fg-muted line-through' }, fvHist(k, dados.antes?.[k])),
+          el('span', { class: 'mx-1' }, '→'),
+          el('span', {}, fvHist(k, dados.depois[k])),
+        ));
+      }
+    }
+    return el('div', { class: 'card p-3 flex flex-col gap-1' },
+      el('button', {
+        class: 'flex items-center gap-2 text-sm font-medium text-left w-full',
+        onclick: () => h.atividade_id && navigate(`/atividade/${h.atividade_id}`),
+      },
+        el('span', {}, isExcl ? '🗑️' : '✏️'),
+        el('span', { class: 'flex-1 truncate' }, h.resumo || 'Atividade'),
+        el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' }, fmt.date(h.em)),
+      ),
+      el('div', { class: 'text-xs text-fg-muted' },
+        'por ' + (h.por_nome || '?') +
+        (h.aprovado_por_nome && h.aprovado_por_nome !== h.por_nome ? ` · aprovado por ${h.aprovado_por_nome}` : '')),
+      isExcl && dados.motivo ? el('div', { class: 'text-xs italic text-fg-muted' }, '"' + dados.motivo + '"') : null,
+      changes.length ? el('div', { class: 'flex flex-col gap-0.5 mt-0.5' }, ...changes) : null,
+    );
+  }
+  async function loadHistorico() {
+    if (!isM) return;
+    const { data, error } = await supabase.from('atividades_historico').select('*').order('em', { ascending: false }).limit(300);
+    histWrap.innerHTML = '';
+    if (error) { histWrap.appendChild(el('div', { class: 'text-sm text-danger' }, 'Erro: ' + error.message)); return; }
+    if (!data || !data.length) { histWrap.appendChild(el('div', { class: 'text-sm text-fg-muted' }, 'Nenhuma edição ou exclusão registrada ainda.')); return; }
+    histWrap.appendChild(el('p', { class: 'text-xs text-fg-muted' }, `${data.length} registro(s)`));
+    data.forEach(h => histWrap.appendChild(histCard(h)));
+  }
+
   const content = el('div', { class: 'flex flex-col gap-4' },
     // Cabeçalho
     el('div', { class: 'card p-5 flex items-center gap-4' },
@@ -226,6 +271,14 @@ export async function perfilView(_params, app) {
       todasWrap,
     ),
 
+    // Histórico de edições e exclusões (só Master — auditoria)
+    isM && el('div', { class: 'card p-4' },
+      el('h2', { class: 'font-bold' }, '🗂️ Histórico de edições e exclusões'),
+      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
+        'Auditoria de tudo que foi editado ou excluído nas atividades. Toque num item para abrir a atividade.'),
+      histWrap,
+    ),
+
     // Whisper (só para master)
     isMaster() && el('div', { class: 'card p-4' },
       el('h2', { class: 'font-bold' }, 'Transcrição de áudio'),
@@ -268,7 +321,8 @@ export async function perfilView(_params, app) {
 
   app.appendChild(shell(content, { title: 'Perfil', back: true, hideBottomNav: true }));
 
-  // Carrega as sugestões depois de montar a tela
+  // Carrega as sugestões e o histórico depois de montar a tela
   loadMinhas();
   loadTodas();
+  loadHistorico();
 }
