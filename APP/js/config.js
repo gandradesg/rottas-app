@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.3.1';
+export const APP_VERSION = '1.3.2';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.3.2',
+    date: '18/06/2026',
+    changes: [
+      'CORRIGIDO: aviso de cliente duplicado (telefone/e-mail já cadastrado) voltou a funcionar — agora compara só os dígitos, independe do formato do telefone',
+      'NOVO: ao cadastrar corretor, avisa se o telefone/e-mail já existe em outra imobiliária e pede confirmação antes de duplicar (ex.: corretor que mudou de imobiliária)',
+    ],
+  },
   {
     version: '1.3.1',
     date: '18/06/2026',

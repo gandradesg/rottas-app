@@ -2,7 +2,7 @@
 import { el, icon, toast, confirmModal, modal, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { supabase, loadLists, state } from '../supabase.js';
-import { phoneInput, emailInput } from '../components/form-fields.js';
+import { phoneInput, emailInput, findCorretorDuplicates } from '../components/form-fields.js';
 
 // Cada tab pode ter `extraFields` (lista de campos além do `nome`)
 // e `displayExtra(item)` para mostrar metadado adicional na linha
@@ -420,8 +420,27 @@ export async function masterListasView(_params, app) {
     const nomeInp = el('input', { class: 'input', placeholder: 'Nome do corretor' });
     const telInp  = phoneInput({});
     const mailInp = emailInput({ placeholder: 'E-mail (opcional)' });
+    const dupBox  = el('div', {});
     const addBtn  = el('button', { class: 'btn btn-primary btn-sm' }, icon('plus', 14), 'Adicionar');
     const closeBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Fechar');
+
+    function checkCorretorDup() {
+      dupBox.innerHTML = '';
+      const matches = findCorretorDuplicates(telInp.value, mailInp.value);
+      if (!matches.length) return;
+      dupBox.appendChild(el('div', { class: 'card p-3 flex flex-col gap-1', style: { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)' } },
+        el('div', { class: 'text-xs font-bold text-warning' }, '⚠ Esse telefone/e-mail já está cadastrado:'),
+        ...matches.map(c => el('div', { class: 'text-sm' },
+          el('strong', {}, c.nome), ' — ', c.imobiliaria_nome || 'sem imobiliária',
+          c.telefone ? ` · ${c.telefone}` : '', c.email ? ` · ${c.email}` : '',
+        )),
+        el('div', { class: 'text-xs text-fg-muted mt-1' }, 'Se ele mudou de imobiliária, você pode cadastrar mesmo assim.'),
+      ));
+    }
+    let dupT;
+    const onDupLookup = () => { clearTimeout(dupT); dupT = setTimeout(checkCorretorDup, 300); };
+    telInp.addEventListener('input', onDupLookup);
+    mailInp.addEventListener('input', onDupLookup);
 
     function renderList() {
       listWrap.innerHTML = '';
@@ -457,6 +476,16 @@ export async function masterListasView(_params, app) {
     addBtn.addEventListener('click', async () => {
       const nome = nomeInp.value.trim();
       if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+      // Sinaliza duplicado (em qualquer imobiliária) e pede confirmação
+      const dups = findCorretorDuplicates(telInp.value, mailInp.value);
+      if (dups.length) {
+        const ok = await confirmModal({
+          title: 'Corretor já cadastrado',
+          message: `Já existe "${dups[0].nome}" (${dups[0].imobiliaria_nome || 'sem imobiliária'}) com esse telefone/e-mail. Cadastrar mesmo assim em "${imob.nome}"?`,
+          confirmLabel: 'Cadastrar mesmo assim',
+        });
+        if (!ok) return;
+      }
       addBtn.disabled = true;
       try {
         const payload = {
@@ -485,7 +514,7 @@ export async function masterListasView(_params, app) {
         listWrap,
         el('div', { class: 'border-t border-border pt-3 flex flex-col gap-2' },
           el('div', { class: 'text-xs font-bold text-fg-muted uppercase' }, 'Adicionar corretor'),
-          nomeInp, telInp, mailInp,
+          nomeInp, telInp, mailInp, dupBox,
           el('div', { class: 'flex justify-end' }, addBtn),
         ),
       ),
