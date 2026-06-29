@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField, corretorField, clienteField } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -133,6 +133,27 @@ export async function atividadeFormView(params, app) {
       local_visita:   agendamento.tipo === 'atendimento' ? agendamento.imobiliaria : null,
       observacoes:    agendamento.observacoes,
     };
+  }
+
+  // Proposta criada A PARTIR de um atendimento (vínculo + pré-preenchimento)
+  let atendimentoLinkId = null;
+  if (tipo === 'proposta' && !id) {
+    const fromAt = localStorage.getItem('proposta-from-atendimento');
+    if (fromAt) {
+      localStorage.removeItem('proposta-from-atendimento');
+      const { data: at } = await supabase.from('atividades').select('*').eq('id', fromAt).single();
+      if (at) {
+        atendimentoLinkId = at.id;
+        initial = {
+          ...(initial || {}),
+          cliente: at.cliente, cliente_id: at.cliente_id,
+          imobiliaria: at.imobiliaria,
+          corretor: at.corretor, corretor_id: at.corretor_id,
+          gerente_imob: at.gerente_imob, gerente_imob_id: at.gerente_imob_id,
+          empreendimento: at.produto || at.empreendimento,
+        };
+      }
+    }
   }
 
   // Gerente editando a própria atividade: pode editar TODOS os campos, mas o
@@ -314,6 +335,7 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       })) && field('Imobiliária', atImobWrap, { required: true }),
+      field('Gerente da imobiliária', gerenteImobField({ imobWrap: atImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id }), { required: true, help: 'Caso não tenha gerente, cadastre o dono da imobiliária.' }),
       field('Corretor', corretorField({ imobWrap: atImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'produto', items: getScopedEmpreendimentos(), value: initial?.produto, required: true,
@@ -349,6 +371,7 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       })) && field('Imobiliária', prImobWrap, { required: true }),
+      field('Gerente da imobiliária', gerenteImobField({ imobWrap: prImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id }), { required: true, help: 'Caso não tenha gerente, cadastre o dono da imobiliária.' }),
       field('Corretor', corretorField({ imobWrap: prImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
@@ -382,6 +405,7 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       })) && field('Imobiliária', orImobWrap, { required: true }),
+      field('Gerente da imobiliária', gerenteImobField({ imobWrap: orImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id }), { required: true, help: 'Caso não tenha gerente, cadastre o dono da imobiliária.' }),
       field('Corretor', corretorField({ imobWrap: orImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
@@ -501,10 +525,12 @@ export async function atividadeFormView(params, app) {
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
+        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim();
+        payload.gerente_imob_id = (fd.get('gerente_imob_id')||'').toString().trim() || null;
         payload.cliente = (fd.get('cliente')||'').toString().trim();
         payload.cliente_id = (fd.get('cliente_id')||'').toString().trim() || null;
         payload.termometro = (fd.get('termometro')||'').toString().trim();
-        for (const k of ['local_visita','produto','imobiliaria','corretor','cliente','termometro']) {
+        for (const k of ['local_visita','produto','imobiliaria','gerente_imob','corretor','cliente','termometro']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         loadingBtn(submitBtn, true);
@@ -512,6 +538,8 @@ export async function atividadeFormView(params, app) {
 
       if (tipo === 'proposta') {
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
+        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim();
+        payload.gerente_imob_id = (fd.get('gerente_imob_id')||'').toString().trim() || null;
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
         payload.cliente = (fd.get('cliente')||'').toString().trim();
@@ -519,7 +547,8 @@ export async function atividadeFormView(params, app) {
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();
         payload.unidade = (fd.get('unidade')||'').toString().trim();
         payload.valor = parseCurrency(fd.get('valor'));
-        for (const k of ['imobiliaria','corretor','cliente','empreendimento','unidade']) {
+        if (atendimentoLinkId) payload.atendimento_id = atendimentoLinkId;
+        for (const k of ['imobiliaria','gerente_imob','corretor','cliente','empreendimento','unidade']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         if (!payload.valor || isNaN(payload.valor)) throw new Error('Valor é obrigatório');
@@ -537,35 +566,49 @@ export async function atividadeFormView(params, app) {
         if (!plataforma) throw new Error('Selecione a plataforma (Órulo ou DWV)');
         payload.plataforma = plataforma;
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
+        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim();
+        payload.gerente_imob_id = (fd.get('gerente_imob_id')||'').toString().trim() || null;
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();
         payload.motivo_contato = (fd.get('motivo_contato')||'').toString().trim();
-        for (const k of ['imobiliaria','corretor','empreendimento','motivo_contato']) {
+        for (const k of ['imobiliaria','gerente_imob','corretor','empreendimento','motivo_contato']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         loadingBtn(submitBtn, true);
       }
 
-      // ===== GERENTE: edição vai para aprovação (não altera os dados agora) =====
+      // ===== GERENTE/SUPERVISOR editando a própria atividade =====
+      // Reserva é LIVRE (aplica direto, sem aprovação). Os demais campos vão
+      // para aprovação do gestor (a atividade só muda quando ele aprovar).
       if (gerenteEditandoPropria) {
         const { depois } = buildDiff(initial, payload);
-        if (!Object.keys(depois).length) {
-          clearTimeout(safetyTimeout);
-          toast('Nenhuma alteração para enviar', 'info');
-          loadingBtn(submitBtn, false);
-          return;
+        let reservaSalva = false;
+        if ('reserva' in depois) {
+          const rPatch = { reserva: depois.reserva, updated_at: new Date().toISOString() };
+          if (payload.reserva_data) rPatch.reserva_data = payload.reserva_data;
+          delete depois.reserva;
+          const { data: rd, error: rErr } = await supabase.from('atividades').update(rPatch).eq('id', id).select();
+          if (rErr) throw rErr;
+          if (!rd || !rd.length) throw new Error('Sem permissão para salvar a reserva (RLS rejeitou)');
+          reservaSalva = true;
         }
-        const { data, error } = await supabase.from('atividades').update({
-          solicita_edicao: true,
-          edicao_solicitada_em: new Date().toISOString(),
-          edicao_solicitada_por: state.user.id,
-          edicao_pendente: depois,
-        }).eq('id', id).select();
-        if (error) throw error;
-        if (!data || !data.length) throw new Error('Sem permissão para solicitar edição (RLS rejeitou)');
+        const temOutros = Object.keys(depois).length > 0;
+        if (temOutros) {
+          const { data, error } = await supabase.from('atividades').update({
+            solicita_edicao: true,
+            edicao_solicitada_em: new Date().toISOString(),
+            edicao_solicitada_por: state.user.id,
+            edicao_pendente: depois,
+          }).eq('id', id).select();
+          if (error) throw error;
+          if (!data || !data.length) throw new Error('Sem permissão para solicitar edição (RLS rejeitou)');
+        }
         clearTimeout(safetyTimeout);
-        toast('✓ Edição enviada para aprovação do gestor', 'success', 3500);
+        if (reservaSalva && temOutros) toast('✓ Reserva salva. As demais alterações foram enviadas para aprovação.', 'success', 4500);
+        else if (reservaSalva) toast('✓ Reserva salva!', 'success', 2500);
+        else if (temOutros) toast('✓ Edição enviada para aprovação do gestor', 'success', 3500);
+        else { toast('Nenhuma alteração para enviar', 'info'); loadingBtn(submitBtn, false); return; }
         navigate(`/atividade/${id}`, true);
         return;
       }

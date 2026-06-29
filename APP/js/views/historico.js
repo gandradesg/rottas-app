@@ -239,7 +239,7 @@ function renderFunnel(container, data) {
   const stages = [
     { label: 'Visitas', sub: 'atendimentos', count: visitas, color: '#F26B22', width: 100 },
     { label: 'Propostas', sub: 'enviadas', count: propostas, color: '#F59E0B', width: 68, conv: convVP },
-    { label: 'Vendas', sub: 'com reserva', count: vendas, color: '#10B981', width: 40, conv: convPV },
+    { label: 'Reservas', sub: 'com reserva', count: vendas, color: '#10B981', width: 40, conv: convPV },
   ];
 
   const funnelBars = [];
@@ -266,7 +266,7 @@ function renderFunnel(container, data) {
 
   container.appendChild(el('div', { class: 'card p-5' },
     el('div', { class: 'flex items-center justify-between mb-4' },
-      el('h3', { class: 'text-sm font-bold uppercase tracking-wider text-fg-subtle' }, 'Funil de Vendas'),
+      el('h3', { class: 'text-sm font-bold uppercase tracking-wider text-fg-subtle' }, 'Funil de Reservas'),
       el('span', { class: 'text-xs text-fg-muted' }, `Conversão total: ${convTotal}%`),
     ),
     el('div', { class: 'flex flex-col' }, ...funnelBars),

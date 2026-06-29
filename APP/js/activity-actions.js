@@ -11,6 +11,7 @@ export const FIELD_LABELS = {
   produto: 'Empreendimento',
   empreendimento: 'Empreendimento',
   corretor: 'Corretor',
+  gerente_imob: 'Gerente da imobiliária',
   cliente: 'Cliente',
   termometro: 'Termômetro',
   unidade: 'Unidade',

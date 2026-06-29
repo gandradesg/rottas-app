@@ -24,21 +24,32 @@ export async function agendaFormView(params, app) {
     initial = data;
   }
 
-  // Carrega supervisores subordinados ao gerente logado (RLS: gerente_supervisor_id = auth.uid())
-  // Se o user é supervisor, não carrega ninguém (supervisor não cria agendamento na agenda)
+  // Quem pode ser o "responsável" pela agenda:
+  //  - gerente: ele mesmo + seus supervisores
+  //  - superintendente/gestor_regional/gestor/master: os gerentes no seu escopo
   const meuId = state.user.id;
-  let supervisores = [];
-  if (state.profile?.role === 'gerente') {
+  const myRole = state.profile?.role;
+  let responsaveis = []; // [{ id, nome }]
+  if (myRole === 'gerente') {
+    responsaveis.push({ id: meuId, nome: (state.profile?.nome || 'Você') + ' (você)' });
     const { data: subs } = await supabase
-      .from('profiles')
-      .select('id, nome')
-      .eq('gerente_supervisor_id', meuId)
-      .eq('ativo', true)
-      .order('nome');
-    supervisores = subs || [];
+      .from('profiles').select('id, nome').eq('gerente_supervisor_id', meuId).eq('ativo', true).order('nome');
+    (subs || []).forEach(s => responsaveis.push({ id: s.id, nome: s.nome + ' (Supervisor)' }));
+  } else if (['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole)) {
+    const { data: gers } = await supabase
+      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome');
+    let list = gers || [];
+    if (myRole === 'superintendente') {
+      const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
+      list = list.filter(g => es.includes(g.estado));
+    } else if (myRole === 'gestor_regional') {
+      const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
+      list = list.filter(g => cs.includes(g.cidade));
+    }
+    list.forEach(g => responsaveis.push({ id: g.id, nome: g.nome + ' (Gerente)' }));
   }
-  // Default responsável: o próprio gerente. Se editando, mantém o gerente_id atual.
-  let responsavelId = initial?.gerente_id || meuId;
+  // Default responsável: gerente → ele mesmo; admin → forçar escolha. Editando mantém o atual.
+  let responsavelId = initial?.gerente_id || (myRole === 'gerente' ? meuId : '');
 
   // Tipo padrão (legado: proposta/orulo viram 'outro')
   const initialTipo = initial?.tipo && TIPOS.find(t => t.id === initial.tipo) ? initial.tipo : 'checkin';
@@ -149,19 +160,23 @@ export async function agendaFormView(params, app) {
   // O gerente_id do agendamento aponta pra essa pessoa, então quem é "dono"
   // executa o check-in/atividade depois.
   let responsavelField = null;
-  if (supervisores.length > 0) {
-    const meuNome = state.profile?.nome || 'Você';
+  const isAdminRole = ['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole);
+  // Mostra o seletor quando há mais de uma opção, ou quando é admin (precisa escolher o gerente)
+  if (responsaveis.length > 1 || (isAdminRole && responsaveis.length >= 1)) {
     const respSel = el('select', { class: 'select' },
-      el('option', { value: meuId, selected: responsavelId === meuId }, `${meuNome} (você)`),
-      ...supervisores.map(s =>
-        el('option', { value: s.id, selected: responsavelId === s.id }, s.nome + ' (Supervisor)')
-      )
+      isAdminRole ? el('option', { value: '', selected: !responsavelId }, 'Selecione o gerente...') : null,
+      ...responsaveis.map(r => el('option', { value: r.id, selected: responsavelId === r.id }, r.nome)),
     );
     respSel.addEventListener('change', () => { responsavelId = respSel.value; });
-    responsavelField = field('Responsável pela atividade', respSel, {
+    responsavelField = field(isAdminRole ? 'Gerente responsável' : 'Responsável pela atividade', respSel, {
       required: true,
-      help: 'Quem vai cumprir esta agenda - você ou um dos seus supervisores',
+      help: isAdminRole
+        ? 'Em qual gerente do seu time esta agenda será criada'
+        : 'Quem vai cumprir esta agenda - você ou um dos seus supervisores',
     });
+  } else if (isAdminRole && responsaveis.length === 0) {
+    responsavelField = el('div', { class: 'card p-3 text-sm text-warning' },
+      '⚠ Nenhum gerente no seu escopo para agendar. Verifique os cadastros.');
   }
 
   const form = el('form', { class: 'flex flex-col gap-4' },
@@ -180,6 +195,7 @@ export async function agendaFormView(params, app) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!responsavelId) { toast('Selecione o gerente responsável pela agenda', 'error'); return; }
     const fd = new FormData(form);
     const dataIso = new Date(fd.get('data_prevista')).toISOString();
 

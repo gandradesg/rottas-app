@@ -54,6 +54,7 @@ export async function atividadeDetailView(params, app) {
       addRow('Local da visita', a.local_visita);
       addRow('Produto', a.produto);
       addRow('Imobiliária', a.imobiliaria);
+      addRow('Gerente da imobiliária', a.gerente_imob);
       addRow('Corretor', a.corretor);
       addRow('Cliente', a.cliente);
       if (a.termometro) addRow('Termômetro', a.termometro.charAt(0).toUpperCase() + a.termometro.slice(1));
@@ -66,7 +67,7 @@ export async function atividadeDetailView(params, app) {
       addRow('Unidade', a.unidade);
       addRow('Valor', fmt.currency(a.valor));
       if (a.reserva) {
-        addRow('Reserva (CV)', a.reserva, el('span', { class: 'text-xs text-success mt-1' }, '✓ Venda fechada em ' + fmt.dateTime(a.reserva_data)));
+        addRow('Reserva (CV)', a.reserva, el('span', { class: 'text-xs text-success mt-1' }, '✓ Reserva registrada em ' + fmt.dateTime(a.reserva_data)));
       } else {
         rows.push(el('div', { class: 'card p-3 mt-3 gradient-rottas-soft text-xs text-fg-muted' },
           '⏳ Sem reserva registrada. ',
@@ -76,8 +77,9 @@ export async function atividadeDetailView(params, app) {
       break;
     case 'orulo':
     case 'dwv':
-      addRow('Corretor', a.corretor);
       addRow('Imobiliária', a.imobiliaria);
+      addRow('Gerente da imobiliária', a.gerente_imob);
+      addRow('Corretor', a.corretor);
       addRow('Empreendimento', a.empreendimento);
       addRow('Motivo do contato', a.motivo_contato);
       break;
@@ -165,6 +167,40 @@ export async function atividadeDetailView(params, app) {
   // ===== Banner de EDIÇÃO pendente (mostra o que foi proposto) =====
   const editBanner = a.solicita_edicao ? renderEdicaoPendenteBanner(a) : null;
 
+  // ===== Vínculo proposta ↔ atendimento (item 2) =====
+  const vinculoSection = el('div', { class: 'flex flex-col gap-3' });
+  if (a.tipo === 'proposta' && a.atendimento_id) {
+    vinculoSection.appendChild(el('button', {
+      class: 'card p-3 w-full text-left flex items-center gap-2 hover:border-rottas-300 transition',
+      onclick: () => navigate(`/atividade/${a.atendimento_id}`),
+    }, el('span', {}, '🔗'), el('span', { class: 'text-sm font-medium' }, 'Gerada a partir de um atendimento — ver origem')));
+  }
+  if (a.tipo === 'atendimento') {
+    if (isOwner || userIsGestor) {
+      vinculoSection.appendChild(el('button', {
+        class: 'btn btn-secondary',
+        onclick: () => { localStorage.setItem('proposta-from-atendimento', a.id); navigate('/atividade/novo/proposta'); },
+      }, icon('fileText', 16), 'Criar proposta vinculada a este atendimento'));
+    }
+    (async () => {
+      const { data: props } = await supabase
+        .from('atividades').select('id, empreendimento, unidade, reserva, created_at')
+        .eq('atendimento_id', a.id).eq('cancelada', false).order('created_at', { ascending: false });
+      if (props && props.length) {
+        vinculoSection.appendChild(el('div', { class: 'card p-3' },
+          el('div', { class: 'text-xs font-bold uppercase text-fg-subtle mb-2' }, `Propostas vinculadas (${props.length})`),
+          ...props.map(pp => el('button', {
+            class: 'w-full text-left text-sm py-1.5 flex items-center justify-between hover:text-rottas-600',
+            onclick: () => navigate(`/atividade/${pp.id}`),
+          },
+            el('span', {}, `${pp.empreendimento || '-'} · Un. ${pp.unidade || '-'}`),
+            el('span', { class: 'text-xs ' + (pp.reserva ? 'text-success' : 'text-fg-subtle') }, pp.reserva ? 'Reserva' : 'Proposta'),
+          )),
+        ));
+      }
+    })();
+  }
+
   // ===== Banner de status de aprovação (só pra propostas) =====
   const aprovacaoBanner = a.tipo === 'proposta' ? renderAprovacaoBanner(a) : null;
 
@@ -192,6 +228,7 @@ export async function atividadeDetailView(params, app) {
     pendingBanner,
     el('div', { class: 'card p-4' }, ...rows),
     fotosSection,
+    vinculoSection,
 
     // Botão de edição. Gerente: vai para aprovação. Gestor/Master: edita direto.
     (canFullEdit || canRequestEdit) && !a.solicita_edicao && el('button', {

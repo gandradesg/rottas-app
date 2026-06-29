@@ -1,8 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.3.2';
+export const APP_VERSION = '1.4.0';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.0',
+    date: '18/06/2026',
+    changes: [
+      'NOVO: campo obrigatório "Gerente da imobiliária" no atendimento/proposta/órulo (cadastro inline igual ao corretor)',
+      'NOVO: dentro de um atendimento dá pra criar uma proposta vinculada a ele (e ver as propostas geradas)',
+      'MUDANÇA: a reserva da proposta é livre — gerente/supervisor preenche direto, sem aprovação. Aprovação fica só para edição e exclusão. "Venda" passou a se chamar "Reserva" no painel',
+      'NOVO: Superintendente pode criar atividades na agenda dos gerentes do seu time',
+      'NOVO: aba 🎯 Carteira — define por gerente/mês as imobiliárias a visitar; o alerta de "sem visita" passa a considerar só essas',
+    ],
+  },
   {
     version: '1.3.2',
     date: '18/06/2026',

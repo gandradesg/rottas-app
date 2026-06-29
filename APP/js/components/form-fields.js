@@ -514,6 +514,117 @@ export function corretorField({ imobWrap, value, valueId, required = true }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// GERENTE DA IMOBILIÁRIA — dropdown filtrado pela imobiliária + cadastro inline.
+// Mesmo formato do corretor. Salva gerente_imob (nome) + gerente_imob_id.
+// ═══════════════════════════════════════════════════════════════════════════
+export function gerenteImobField({ imobWrap, value, valueId, required = true }) {
+  const wrap = el('div', { class: 'relative' });
+  const hiddenNome = el('input', { type: 'hidden', name: 'gerente_imob', value: value || '', required });
+  const hiddenId   = el('input', { type: 'hidden', name: 'gerente_imob_id', value: valueId || '' });
+  const display = el('button', { type: 'button', class: 'select text-left flex items-center justify-between' });
+  let labelSpan = el('span', { class: 'truncate ' + (value ? '' : 'text-fg-subtle') }, value || 'Selecione o gerente...');
+  display.append(labelSpan, icon('chevronDown', 16, 'text-fg-subtle flex-shrink-0'));
+
+  const popup = el('div', { class: 'absolute z-40 left-0 right-0 mt-1 card max-h-72 overflow-y-auto hidden', style: { top: '100%' } });
+  const search = el('input', { class: 'input rounded-none border-0 border-b border-border bg-transparent sticky top-0 z-10', placeholder: 'Buscar gerente...' });
+  const listEl = el('div', { class: 'flex flex-col p-1' });
+  popup.append(search, listEl);
+
+  const currentImob = () => (imobWrap?.querySelector('input[name="imobiliaria"]')?.value || '').trim();
+
+  function setValue(nome, id) {
+    hiddenNome.value = nome || '';
+    hiddenId.value = id || '';
+    const ns = el('span', { class: 'truncate ' + (nome ? '' : 'text-fg-subtle') }, nome || 'Selecione o gerente...');
+    labelSpan.replaceWith(ns); labelSpan = ns;
+    hiddenNome.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function close() { popup.classList.add('hidden'); document.removeEventListener('click', outside); search.value = ''; }
+  function outside(e) { if (!wrap.contains(e.target)) close(); }
+  function open() { popup.classList.remove('hidden'); setTimeout(() => search.focus(), 50); renderList(); document.addEventListener('click', outside); }
+
+  function renderList(filter = '') {
+    listEl.innerHTML = '';
+    const imob = currentImob();
+    const f = filter.trim().toLowerCase();
+    if (!imob) {
+      listEl.appendChild(el('div', { class: 'text-xs text-fg-muted px-3 py-3 text-center' }, 'Selecione a imobiliária primeiro.'));
+      return;
+    }
+    const matches = (state.gerentesImob || []).filter(c =>
+      (c.imobiliaria_nome || '') === imob && c.nome.toLowerCase().includes(f));
+    if (!matches.length) listEl.appendChild(el('div', { class: 'text-xs text-fg-muted px-3 py-2' }, 'Nenhum gerente desta imobiliária ainda.'));
+    matches.forEach(c => listEl.appendChild(el('button', {
+      type: 'button',
+      class: 'text-left px-3 py-2 rounded-lg hover:bg-bg-elev text-sm flex items-center justify-between',
+      onclick: () => { setValue(c.nome, c.id); close(); },
+    },
+      el('span', { class: 'truncate' }, c.nome + (c.telefone ? ` · ${c.telefone}` : '')),
+      c.id === hiddenId.value ? icon('check', 16, 'text-rottas-500') : null,
+    )));
+    listEl.appendChild(el('button', {
+      type: 'button',
+      class: 'text-left px-3 py-2 rounded-lg hover:bg-rottas-50 text-sm flex items-center gap-2 text-rottas-600 font-semibold border-t border-border mt-1 pt-2',
+      onclick: () => openAddGerente(imob, filter.trim()),
+    }, icon('plus', 16), `Cadastrar gerente${f ? ` "${filter.trim()}"` : ' nesta imobiliária'}`));
+  }
+
+  function openAddGerente(imob, presetNome) {
+    if (!imob) { toast('Selecione a imobiliária primeiro', 'error'); return; }
+    const nomeInp = el('input', { class: 'input', value: presetNome || '', placeholder: 'Nome do gerente / dono' });
+    const telInp  = phoneInput({});
+    const mailInp = emailInput({ placeholder: 'email@exemplo.com (opcional)' });
+    const saveBtn = el('button', { class: 'btn btn-primary' }, 'Cadastrar');
+    const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
+    const m = modal({
+      title: 'Novo gerente da imobiliária', size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-3' },
+        el('div', { class: 'card p-2 text-xs text-fg-muted gradient-rottas-soft' }, '🏢 Vinculado à imobiliária: ', el('strong', {}, imob)),
+        el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), nomeInp),
+        el('div', {}, el('label', { class: 'label' }, 'Telefone (opcional)'), telInp),
+        el('div', {}, el('label', { class: 'label' }, 'E-mail (opcional)'), mailInp),
+      ),
+      footer: [cancelBtn, saveBtn],
+    });
+    setTimeout(() => nomeInp.focus(), 60);
+    saveBtn.addEventListener('click', async () => {
+      const nome = nomeInp.value.trim();
+      if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+      const imobObj = (state.imobiliarias || []).find(i => i.nome === imob);
+      const payload = {
+        nome, telefone: telInp.value.trim() || null, email: mailInp.value.trim() || null,
+        imobiliaria_id: imobObj?.id || null, imobiliaria_nome: imob,
+        created_by: state.user?.id || null,
+      };
+      saveBtn.disabled = true;
+      try {
+        const { data, error } = await supabase.from('gerentes_imobiliaria').insert(payload).select().single();
+        if (error) { toast('Erro: ' + error.message, 'error', 6000); saveBtn.disabled = false; return; }
+        if (!Array.isArray(state.gerentesImob)) state.gerentesImob = [];
+        state.gerentesImob.push(data);
+        state.gerentesImob.sort((a, b) => a.nome.localeCompare(b.nome));
+        setValue(data.nome, data.id);
+        m.close(); close();
+        toast(`Gerente "${data.nome}" cadastrado`, 'success');
+      } catch (e) {
+        toast('Falha ao cadastrar gerente: ' + (e.message || e), 'error', 6000);
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  display.addEventListener('click', (e) => { e.stopPropagation(); popup.classList.contains('hidden') ? open() : close(); });
+  search.addEventListener('input', (e) => renderList(e.target.value));
+  imobWrap?.addEventListener('change', () => {
+    const sel = (state.gerentesImob || []).find(c => c.id === hiddenId.value);
+    if (sel && (sel.imobiliaria_nome || '') !== currentImob()) setValue('', '');
+  });
+
+  wrap.append(hiddenNome, hiddenId, display, popup);
+  return wrap;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CLIENTE / LEAD (item 4) — campo livre de cadastro (NÃO é lista). Ao clicar,
 // abre cadastro: nome (obrig.), telefone e e-mail (opcionais). Detecta telefone/
 // e-mail já usados e oferece reaproveitar o cadastro existente. Salva cliente

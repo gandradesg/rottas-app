@@ -26,6 +26,7 @@ export const state = {
   cidades: [],
   gerentesHouse: [],  // lista mestra de gerentes house (para visitas)
   corretores: [],     // lista mestra de corretores (vinculados a imobiliária)
+  gerentesImob: [],   // gerentes/donos das imobiliárias (vinculados a imobiliária)
   profiles: [],       // só populado para master
   // listeners
   _listeners: new Set(),
@@ -60,7 +61,7 @@ export async function loadProfile() {
 // Helper: carrega todas as listas gerenciadas pelo master
 export async function loadLists() {
   // 7 queries em paralelo (inclui gerentes_house p/ visita e corretores p/ atendimento)
-  const [imob, emp, mv, mo, lv, gh, cor] = await Promise.all([
+  const [imob, emp, mv, mo, lv, gh, cor, gim] = await Promise.all([
     supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome'),
     supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url, cidades_visiveis').order('nome'),
     supabase.from('motivos_visita').select('id, nome').order('nome'),
@@ -68,6 +69,7 @@ export async function loadLists() {
     supabase.from('locais_visita').select('id, nome').order('nome'),
     supabase.from('gerentes_house').select('id, nome, ativo').eq('ativo', true).order('nome'),
     supabase.from('corretores').select('id, nome, telefone, email, imobiliaria_id, imobiliaria_nome').order('nome'),
+    supabase.from('gerentes_imobiliaria').select('id, nome, telefone, email, imobiliaria_id, imobiliaria_nome').order('nome'),
   ]);
   state.imobiliarias    = imob.data    || [];
   state.empreendimentos = emp.data     || [];
@@ -77,6 +79,7 @@ export async function loadLists() {
   state.locaisVisita    = lv.data      || [];
   state.gerentesHouse   = gh.data      || [];
   state.corretores      = cor.data     || [];
+  state.gerentesImob    = gim.data     || [];
   state.cidades         = [];          // descontinuado
   emitStateChange();
 }

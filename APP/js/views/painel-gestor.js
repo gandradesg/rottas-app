@@ -43,6 +43,7 @@ export async function painelGestorView(_params, app) {
     { id: 'gerentes',       label: 'Gerentes' },
     { id: 'empreendimentos',label: 'Empreendimentos' },
     { id: 'imobiliarias',   label: 'Imobiliárias' },
+    { id: 'carteira',       label: '🎯 Carteira' },
     { id: 'ranking',        label: 'Ranking' },
     { id: 'feed',           label: 'Feed' },
   ];
@@ -126,8 +127,94 @@ export async function painelGestorView(_params, app) {
     if (filters.aba === 'gerentes')        renderGerentes();
     if (filters.aba === 'empreendimentos') renderEmpreendimentos();
     if (filters.aba === 'imobiliarias')    renderImobiliarias();
+    if (filters.aba === 'carteira')        renderCarteira();
     if (filters.aba === 'ranking')         renderRanking();
     if (filters.aba === 'feed')            renderFeed();
+  }
+
+  // Mês corrente no formato YYYY-MM
+  function curAnoMes() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  // Gerentes dentro do escopo do usuário (super = estado, regional = cidade)
+  function scopedGerentes() {
+    const role = state.profile?.role;
+    const list = gerentes || [];
+    if (role === 'superintendente') {
+      const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
+      return list.filter(g => es.includes(g.estado));
+    }
+    if (role === 'gestor_regional') {
+      const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
+      return list.filter(g => cs.includes(g.cidade));
+    }
+    return list;
+  }
+
+  // ===== CARTEIRA (item 5): superintendente define imobiliárias por gerente/mês =====
+  function renderCarteira() {
+    const gers = scopedGerentes();
+    const gSel = el('select', { class: 'select' },
+      el('option', { value: '' }, 'Selecione o gerente...'),
+      ...gers.map(g => el('option', { value: g.id }, g.nome)),
+    );
+    const mInput = el('input', { class: 'input', type: 'month', value: curAnoMes() });
+    const box = el('div', { class: 'flex flex-col gap-2' });
+
+    dash.append(
+      el('div', { class: 'card p-3 flex flex-col gap-2' },
+        el('div', { class: 'text-sm font-bold' }, '🎯 Carteira de visitas do mês'),
+        el('p', { class: 'text-xs text-fg-muted' }, 'Escolha o gerente e o mês e marque as imobiliárias que ele deve visitar. O alerta de "sem visita" na aba Imobiliárias passa a considerar só essas.'),
+        gSel, mInput,
+      ),
+      box,
+    );
+
+    async function load() {
+      box.innerHTML = '';
+      const gid = gSel.value, ym = mInput.value;
+      if (!gid || !ym) { box.appendChild(el('div', { class: 'card p-4 text-center text-sm text-fg-muted' }, 'Selecione o gerente e o mês.')); return; }
+      box.appendChild(el('div', { class: 'card p-4 text-center text-sm text-fg-muted' }, 'Carregando...'));
+      const { data } = await supabase.from('carteira_visitas').select('imobiliaria_nome').eq('gerente_id', gid).eq('ano_mes', ym);
+      const set = new Set((data || []).map(r => r.imobiliaria_nome));
+      box.innerHTML = '';
+      const search = el('input', { class: 'input', type: 'search', placeholder: 'Buscar imobiliária...' });
+      const counter = el('div', { class: 'text-xs text-fg-muted' }, `${set.size} imobiliária(s) na carteira`);
+      const list = el('div', { class: 'flex flex-col gap-1' });
+      const imobs = state.imobiliarias || [];
+      function renderList(f) {
+        list.innerHTML = '';
+        const ff = (f || '').trim().toLowerCase();
+        imobs.filter(im => !ff || im.nome.toLowerCase().includes(ff)).forEach(im => {
+          const cb = el('input', { type: 'checkbox' });
+          cb.checked = set.has(im.nome);
+          cb.addEventListener('change', async () => {
+            cb.disabled = true;
+            if (cb.checked) {
+              const { error } = await supabase.from('carteira_visitas').insert({ gerente_id: gid, imobiliaria_nome: im.nome, ano_mes: ym, created_by: state.user?.id || null });
+              if (error) { toast(error.message, 'error', 5000); cb.checked = false; } else { set.add(im.nome); }
+            } else {
+              const { error } = await supabase.from('carteira_visitas').delete().eq('gerente_id', gid).eq('imobiliaria_nome', im.nome).eq('ano_mes', ym);
+              if (error) { toast(error.message, 'error', 5000); cb.checked = true; } else { set.delete(im.nome); }
+            }
+            counter.textContent = `${set.size} imobiliária(s) na carteira`;
+            cb.disabled = false;
+          });
+          list.appendChild(el('label', { class: 'card p-2 flex items-center gap-2 cursor-pointer text-sm' },
+            cb,
+            el('span', { class: 'flex-1' }, im.nome,
+              (im.cidade || im.estado) ? el('span', { class: 'text-xs text-fg-muted ml-2' }, '· ' + [im.cidade, im.estado].filter(Boolean).join(' · ')) : null),
+          ));
+        });
+      }
+      search.addEventListener('input', () => renderList(search.value));
+      box.append(el('div', { class: 'card p-2' }, search), counter, list);
+      renderList('');
+    }
+    gSel.addEventListener('change', load);
+    mInput.addEventListener('change', load);
+    load();
   }
 
   const fv = (k, v) => (v == null || v === '') ? '—' : (k === 'valor' ? fmt.currencyMillions(v) : Array.isArray(v) ? (v.join(', ') || '—') : String(v));
@@ -264,15 +351,15 @@ export async function painelGestorView(_params, app) {
       kpi('Check-ins', c.checkin, 'mapPin', '#3B82F6'),
       kpi('Atendimentos', c.atend, 'users', '#8B5CF6'),
       kpi('Propostas', c.prop, 'fileText', '#F59E0B'),
-      kpi('Vendas fechadas', c.vendas, 'trendingUp', '#10B981'),
+      kpi('Reservas', c.vendas, 'trendingUp', '#10B981'),
       kpi('Órulo/DWV', c.orulo, 'globe', '#10B981'),
       kpi('VGV propostas', fmt.currencyMillions(valorPropostas), 'dollarSign', '#F26B22'),
     );
 
     const vendasCard = el('div', { class: 'card p-4' },
-      el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' }, 'Vendas fechadas (VGV)'),
+      el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' }, 'Reservas (VGV)'),
       el('div', { class: 'text-3xl font-extrabold' }, fmt.currencyMillions(valorVendas)),
-      el('div', { class: 'text-sm text-fg-muted mt-1' }, `${c.vendas} venda${c.vendas !== 1 ? 's' : ''} no período`),
+      el('div', { class: 'text-sm text-fg-muted mt-1' }, `${c.vendas} reserva${c.vendas !== 1 ? 's' : ''} no período`),
     );
 
     const ativosCard = el('div', { class: 'card p-4' },
@@ -311,7 +398,7 @@ export async function painelGestorView(_params, app) {
     const stages = [
       { label: 'Visitas',   count: visitas,   color: '#F26B22', width: 100 },
       { label: 'Propostas', count: propostas, color: '#F59E0B', width: 68, conv: convVP },
-      { label: 'Vendas',    count: vendas,    color: '#10B981', width: 40, conv: convPV },
+      { label: 'Reservas',  count: vendas,    color: '#10B981', width: 40, conv: convPV },
     ];
     const bars = [];
     stages.forEach((s, i) => {
@@ -336,7 +423,7 @@ export async function painelGestorView(_params, app) {
     });
     return el('div', { class: 'card p-5' },
       el('div', { class: 'flex items-center justify-between mb-4' },
-        el('h3', { class: 'text-sm font-bold uppercase tracking-wider text-fg-subtle' }, 'Funil de Vendas'),
+        el('h3', { class: 'text-sm font-bold uppercase tracking-wider text-fg-subtle' }, 'Funil de Reservas'),
         el('span', { class: 'text-xs text-fg-muted' }, `Conversão total: ${convTotal}%`),
       ),
       el('div', { class: 'flex flex-col' }, ...bars),
@@ -386,7 +473,7 @@ export async function painelGestorView(_params, app) {
           miniStat('Check-in', g.checkin, '#3B82F6'),
           miniStat('Atend.', g.atend, '#8B5CF6'),
           miniStat('Prop.', g.prop, '#F59E0B'),
-          miniStat('Vendas', g.vendas, '#10B981'),
+          miniStat('Reservas', g.vendas, '#10B981'),
           miniStat('Órulo/DWV', g.orulo, '#10B981'),
         ),
         g.vgv > 0 && el('div', { class: 'mt-3 pt-3 border-t border-border text-sm' },
@@ -421,7 +508,7 @@ export async function painelGestorView(_params, app) {
         el('div', { class: 'grid grid-cols-4 gap-2 text-center' },
           miniStat('Atend.', e.atend, '#8B5CF6'),
           miniStat('Prop.', e.prop, '#F59E0B'),
-          miniStat('Vendas', e.vendas, '#10B981'),
+          miniStat('Reservas', e.vendas, '#10B981'),
           miniStat('Órulo/DWV', e.orulo, '#10B981'),
         ),
         el('div', { class: 'mt-3 pt-3 border-t border-border text-sm' },
@@ -438,8 +525,12 @@ export async function painelGestorView(_params, app) {
   //  - mostra checkins, atend, prop, vendas, vgv
   //  - calcula "última visita" (max created_at) e dias desde então
   //  - alerta visual (laranja) quando última visita > 7 dias
-  function renderImobiliarias() {
+  async function renderImobiliarias() {
     const allAtividades = baseAtividades.filter(hay);
+    // Carteira do mês: se houver imobiliárias atribuídas, o alerta só considera essas
+    const { data: cartData } = await supabase.from('carteira_visitas').select('imobiliaria_nome').eq('ano_mes', curAnoMes());
+    const carteiraSet = new Set((cartData || []).map(r => r.imobiliaria_nome));
+    const usandoCarteira = carteiraSet.size > 0;
     const byImob = {};
     allAtividades.forEach(a => {
       const nome = a.imobiliaria;
@@ -455,15 +546,20 @@ export async function painelGestorView(_params, app) {
       const at = new Date(a.created_at);
       if (!x.lastAt || at > x.lastAt) x.lastAt = at;
     });
-    // Inclui imobiliárias cadastradas SEM atividades no período (pra acender alerta)
+    // Inclui imobiliárias cadastradas SEM atividades no período (pra acender alerta).
+    // Com carteira ativa, só injeta as que estão na carteira do mês.
     state.imobiliarias.forEach(im => {
       if (!hay(im)) return;
+      if (usandoCarteira && !carteiraSet.has(im.nome)) return;
       if (!byImob[im.nome]) byImob[im.nome] = {
         nome: im.nome, checkin: 0, atend: 0, prop: 0, vendas: 0, vgv: 0, orulo: 0, lastAt: null,
       };
     });
 
-    const list = Object.values(byImob).sort((a,b) => {
+    let list = Object.values(byImob);
+    // Com carteira ativa, mostra/alerta só as imobiliárias atribuídas no mês
+    if (usandoCarteira) list = list.filter(x => carteiraSet.has(x.nome));
+    list.sort((a,b) => {
       // Sem visita primeiro (alerta), depois mais antiga, depois VGV maior
       const aDays = a.lastAt ? Math.floor((Date.now() - a.lastAt.getTime()) / 86400000) : 999;
       const bDays = b.lastAt ? Math.floor((Date.now() - b.lastAt.getTime()) / 86400000) : 999;
@@ -474,8 +570,15 @@ export async function painelGestorView(_params, app) {
 
     if (!list.length) {
       dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' },
-        'Cadastre imobiliárias na aba Listas para acompanhar visitas.'));
+        usandoCarteira
+          ? 'Nenhuma imobiliária na carteira deste mês. Defina a carteira na aba 🎯 Carteira.'
+          : 'Cadastre imobiliárias na aba Listas para acompanhar visitas.'));
       return;
+    }
+
+    if (usandoCarteira) {
+      dash.appendChild(el('div', { class: 'card p-2 text-xs text-fg-muted' },
+        '🎯 Mostrando só a carteira do mês. Para alertar sobre outras, ajuste na aba Carteira.'));
     }
 
     // Banner de alerta consolidado (lista completa visível abaixo nos cards)
@@ -518,7 +621,7 @@ export async function painelGestorView(_params, app) {
           miniStat('Check-in', im.checkin, '#3B82F6'),
           miniStat('Atend.', im.atend, '#8B5CF6'),
           miniStat('Prop.', im.prop, '#F59E0B'),
-          miniStat('Vendas', im.vendas, '#10B981'),
+          miniStat('Reservas', im.vendas, '#10B981'),
           miniStat('Órulo/DWV', im.orulo, '#10B981'),
         ),
         im.vgv > 0 && el('div', { class: 'mt-3 pt-3 border-t border-border text-sm' },
@@ -626,7 +729,7 @@ export async function painelGestorView(_params, app) {
           ),
           el('div', { class: 'flex items-center gap-1.5 flex-wrap mt-1' },
             el('span', { class: `chip chip-${a.tipo === 'checkin' ? 'blue' : a.tipo === 'atendimento' ? 'purple' : a.tipo === 'proposta' ? (a.reserva ? 'green' : 'yellow') : 'green'}` },
-              a.reserva && a.tipo==='proposta' ? 'Venda' : t.label),
+              a.reserva && a.tipo==='proposta' ? 'Reserva' : t.label),
             a.profiles?.nome && el('span', { class: 'chip chip-orange' }, a.profiles.nome),
             detail && el('span', { class: 'text-xs text-fg-muted truncate' }, detail),
           ),
