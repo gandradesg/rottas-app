@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.1';
+export const APP_VERSION = '1.4.2';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.2',
+    date: '18/06/2026',
+    changes: [
+      'CORRIGIDO: Superintendente e Gestor Regional editam atividades direto (sem cair na regra de aprovação). Aprovação de edição fica só para gerente/supervisor',
+    ],
+  },
   {
     version: '1.4.1',
     date: '18/06/2026',

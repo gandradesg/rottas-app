@@ -7,7 +7,7 @@ import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { audioField } from '../components/audio-field.js';
-import { isGestor } from '../auth.js';
+import { isGestor, isAdmin } from '../auth.js';
 import { buildDiff, auditarEdicaoDireta } from '../activity-actions.js';
 
 const TITLES = {
@@ -158,7 +158,7 @@ export async function atividadeFormView(params, app) {
 
   // Gerente editando a própria atividade: pode editar TODOS os campos, mas o
   // resultado vai para aprovação do gestor (os dados só mudam após aprovado).
-  const gerenteEditandoPropria = !!id && !isGestor() && initial?.gerente_id === state.user.id;
+  const gerenteEditandoPropria = !!id && !isAdmin() && initial?.gerente_id === state.user.id;
 
   const form = el('form', { class: 'flex flex-col gap-4' });
 

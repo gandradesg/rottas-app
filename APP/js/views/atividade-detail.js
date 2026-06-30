@@ -24,9 +24,10 @@ export async function atividadeDetailView(params, app) {
   const isOwner = a.gerente_id === state.user.id;
   const userIsGestor = isGestor();
   const userIsAdmin = isAdmin();
-  // Gestor/Master edita direto. Gerente edita tudo, mas com aprovação do gestor.
-  const canFullEdit = userIsGestor;
-  const canRequestEdit = isOwner && !userIsGestor && !a.solicita_edicao;
+  // Admin (gestor/master/superintendente/regional) edita direto.
+  // Só gerente/supervisor edita com aprovação do gestor.
+  const canFullEdit = userIsAdmin;
+  const canRequestEdit = isOwner && !userIsAdmin && !a.solicita_edicao;
   const canApproveEdit = userIsAdmin && !isOwner && a.solicita_edicao;
   const canApproveDeletion = userIsGestor && a.solicita_exclusao;
   const canRequestDeletion = isOwner && !a.solicita_exclusao;
