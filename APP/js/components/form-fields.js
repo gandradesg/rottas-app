@@ -17,6 +17,15 @@ export function findCorretorDuplicates(tel, email) {
     (td && normDigits(c.telefone) === td) || (em && (c.email || '').toLowerCase() === em));
 }
 
+// Mesma ideia para gerentes da imobiliária
+export function findGerenteImobDuplicates(tel, email) {
+  const td = normDigits(tel);
+  const em = (email || '').trim().toLowerCase();
+  if (!td && !em) return [];
+  return (state.gerentesImob || []).filter(c =>
+    (td && normDigits(c.telefone) === td) || (em && (c.email || '').toLowerCase() === em));
+}
+
 // Campo wrapper com label
 export function field(labelText, control, opts = {}) {
   const { required, help } = opts;
@@ -574,8 +583,28 @@ export function gerenteImobField({ imobWrap, value, valueId, required = true }) 
     const nomeInp = el('input', { class: 'input', value: presetNome || '', placeholder: 'Nome do gerente / dono' });
     const telInp  = phoneInput({});
     const mailInp = emailInput({ placeholder: 'email@exemplo.com (opcional)' });
+    const dupBox  = el('div', {});
     const saveBtn = el('button', { class: 'btn btn-primary' }, 'Cadastrar');
     const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
+
+    function checkGerenteDup() {
+      dupBox.innerHTML = '';
+      const matches = findGerenteImobDuplicates(telInp.value, mailInp.value);
+      if (!matches.length) return;
+      dupBox.appendChild(el('div', { class: 'card p-3 flex flex-col gap-1', style: { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)' } },
+        el('div', { class: 'text-xs font-bold text-warning' }, '⚠ Esse telefone/e-mail já está cadastrado:'),
+        ...matches.map(c => el('div', { class: 'text-sm' },
+          el('strong', {}, c.nome), ' — ', c.imobiliaria_nome || 'sem imobiliária',
+          c.telefone ? ` · ${c.telefone}` : '', c.email ? ` · ${c.email}` : '',
+        )),
+        el('div', { class: 'text-xs text-fg-muted mt-1' }, 'Se ele mudou de imobiliária, você pode cadastrar mesmo assim ao salvar.'),
+      ));
+    }
+    let dupT;
+    const onDupLookup = () => { clearTimeout(dupT); dupT = setTimeout(checkGerenteDup, 300); };
+    telInp.addEventListener('input', onDupLookup);
+    mailInp.addEventListener('input', onDupLookup);
+
     const m = modal({
       title: 'Novo gerente da imobiliária', size: 'sm',
       content: el('div', { class: 'flex flex-col gap-3' },
@@ -583,6 +612,7 @@ export function gerenteImobField({ imobWrap, value, valueId, required = true }) 
         el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), nomeInp),
         el('div', {}, el('label', { class: 'label' }, 'Telefone (opcional)'), telInp),
         el('div', {}, el('label', { class: 'label' }, 'E-mail (opcional)'), mailInp),
+        dupBox,
       ),
       footer: [cancelBtn, saveBtn],
     });
@@ -590,6 +620,15 @@ export function gerenteImobField({ imobWrap, value, valueId, required = true }) 
     saveBtn.addEventListener('click', async () => {
       const nome = nomeInp.value.trim();
       if (!nome) { toast('Nome é obrigatório', 'error'); return; }
+      const dups = findGerenteImobDuplicates(telInp.value, mailInp.value);
+      if (dups.length) {
+        const ok = await confirmModal({
+          title: 'Gerente já cadastrado',
+          message: `Já existe "${dups[0].nome}" (${dups[0].imobiliaria_nome || 'sem imobiliária'}) com esse telefone/e-mail. Cadastrar mesmo assim em "${imob}"?`,
+          confirmLabel: 'Cadastrar mesmo assim',
+        });
+        if (!ok) return;
+      }
       const imobObj = (state.imobiliarias || []).find(i => i.nome === imob);
       const payload = {
         nome, telefone: telInp.value.trim() || null, email: mailInp.value.trim() || null,

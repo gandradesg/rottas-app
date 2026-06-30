@@ -1,5 +1,5 @@
 // Detalhe de uma atividade (com edição se for da gerente, ou só leitura para master ver)
-import { el, icon, fmt, toast, confirmModal } from '../ui.js';
+import { el, icon, fmt, toast, confirmModal, modal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
 import { isMaster, isGestor, isAdmin, can, canApproveLevel, roleLevel } from '../auth.js';
@@ -71,8 +71,7 @@ export async function atividadeDetailView(params, app) {
         addRow('Reserva (CV)', a.reserva, el('span', { class: 'text-xs text-success mt-1' }, '✓ Reserva registrada em ' + fmt.dateTime(a.reserva_data)));
       } else {
         rows.push(el('div', { class: 'card p-3 mt-3 gradient-rottas-soft text-xs text-fg-muted' },
-          '⏳ Sem reserva registrada. ',
-          (canFullEdit || canRequestEdit) ? 'Edite a atividade para informar a reserva quando ela for efetivada no CV.' : ''
+          '⏳ Sem reserva registrada. Use o botão "Informar reserva" abaixo quando ela for efetivada no CV (livre, sem aprovação).'
         ));
       }
       break;
@@ -171,10 +170,16 @@ export async function atividadeDetailView(params, app) {
   // ===== Vínculo proposta ↔ atendimento (item 2) =====
   const vinculoSection = el('div', { class: 'flex flex-col gap-3' });
   if (a.tipo === 'proposta' && a.atendimento_id) {
+    const origemLabel = el('span', { class: 'text-sm font-medium' }, 'Gerada a partir de um atendimento — ver origem');
     vinculoSection.appendChild(el('button', {
       class: 'card p-3 w-full text-left flex items-center gap-2 hover:border-rottas-300 transition',
       onclick: () => navigate(`/atividade/${a.atendimento_id}`),
-    }, el('span', {}, '🔗'), el('span', { class: 'text-sm font-medium' }, 'Gerada a partir de um atendimento — ver origem')));
+    }, el('span', {}, '🔗'), origemLabel));
+    // Busca o número do atendimento de origem para exibir "atendimento #X"
+    (async () => {
+      const { data: src } = await supabase.from('atividades').select('numero_sequencial').eq('id', a.atendimento_id).single();
+      if (src?.numero_sequencial) origemLabel.textContent = `Gerada a partir do atendimento #${src.numero_sequencial} — ver origem`;
+    })();
   }
   if (a.tipo === 'atendimento') {
     if (isOwner || userIsGestor) {
@@ -202,8 +207,54 @@ export async function atividadeDetailView(params, app) {
     })();
   }
 
-  // ===== Banner de status de aprovação (só pra propostas) =====
-  const aprovacaoBanner = a.tipo === 'proposta' ? renderAprovacaoBanner(a) : null;
+  // ===== Reserva (item 4): campo livre, salva direto SEM aprovação. =====
+  // Ao ter reserva, a proposta vira "Reservada".
+  const reservaSection = el('div', { class: 'flex flex-col gap-3' });
+  if (a.tipo === 'proposta') {
+    if (a.reserva) {
+      reservaSection.appendChild(el('div', { class: 'card p-3 border-2', style: { borderColor: '#10B981', background: 'rgba(16,185,129,0.08)' } },
+        el('div', { class: 'font-bold text-success text-sm' }, '✓ Reservada'),
+        el('div', { class: 'text-xs text-fg-muted mt-0.5' }, 'Reserva ' + a.reserva + (a.reserva_data ? ' · ' + fmt.dateTime(a.reserva_data) : '')),
+      ));
+    }
+    if (isOwner || userIsAdmin) {
+      reservaSection.appendChild(el('button', {
+        class: 'btn btn-primary',
+        onclick: () => openReservaModal(a),
+      }, icon('check', 16), a.reserva ? 'Atualizar reserva' : 'Informar reserva (livre, sem aprovação)'));
+    }
+  }
+
+  function openReservaModal(at) {
+    const inp = el('input', { class: 'input', value: at.reserva || '', placeholder: 'Código/número da reserva no CV' });
+    const saveBtn = el('button', { class: 'btn btn-primary' }, 'Salvar reserva');
+    const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
+    const m = modal({
+      title: 'Reserva da proposta', size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-2' },
+        el('p', { class: 'text-xs text-fg-muted' }, 'Preencha quando a reserva for efetivada no CV. É livre e não precisa de aprovação — ao salvar, a proposta fica Reservada.'),
+        inp,
+      ),
+      footer: [cancelBtn, saveBtn],
+    });
+    setTimeout(() => inp.focus(), 60);
+    saveBtn.addEventListener('click', async () => {
+      const reserva = inp.value.trim();
+      saveBtn.disabled = true;
+      const patch = {
+        reserva: reserva || null,
+        reserva_data: reserva ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await supabase.from('atividades').update(patch).eq('id', at.id).select();
+      if (error || !data || !data.length) { toast(error?.message || 'Sem permissão para salvar a reserva', 'error', 6000); saveBtn.disabled = false; return; }
+      toast(reserva ? '✓ Reserva salva — proposta Reservada' : 'Reserva removida', 'success');
+      location.reload();
+    });
+  }
+
+  // Proposta NÃO passa mais por aprovação (só edição e exclusão são aprovadas).
+  const aprovacaoBanner = null;
 
   // ===== Histórico de auditoria (edições + exclusões) desta atividade =====
   const histSection = el('div', {});
@@ -360,8 +411,8 @@ export async function atividadeDetailView(params, app) {
       }
     }, icon('trash', 16), 'Excluir'),
 
-    // ===== AÇÕES DE WORKFLOW DE PROPOSTA (Aprovar / Escalar / Rejeitar) =====
-    ...(a.tipo === 'proposta' ? renderPropostaActions(a) : []),
+    // Reserva (livre, sem aprovação) + selo "Reservada"
+    reservaSection,
 
     // Histórico de auditoria desta atividade
     histSection,

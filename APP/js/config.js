@@ -1,8 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.2';
+export const APP_VERSION = '1.4.3';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.3',
+    date: '18/06/2026',
+    changes: [
+      'MUDANÇA: proposta NÃO passa mais por aprovação — só edição e exclusão precisam de aprovação. Removido o "Aguardando aprovação" da proposta',
+      'NOVO: botão "Informar reserva" na proposta — livre e direto (sem aprovação). Ao informar, a proposta fica "Reservada"',
+      'NOVO: o vínculo mostra "Gerada a partir do atendimento #N"',
+      'NOVO: cadastro de Gerente da imobiliária avisa se o telefone/e-mail já existe (igual corretor/cliente)',
+    ],
+  },
   {
     version: '1.4.2',
     date: '18/06/2026',
