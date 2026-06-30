@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.4.1';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.1',
+    date: '18/06/2026',
+    changes: [
+      'Carteira: a lista de imobiliárias agora respeita o escopo do usuário (Superintendente vê só os estados que controla)',
+      'Carteira: botão "Nova" para cadastrar uma imobiliária na hora e já incluí-la na carteira do gerente',
+    ],
+  },
   {
     version: '1.4.0',
     date: '18/06/2026',

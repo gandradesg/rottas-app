@@ -1,7 +1,8 @@
 // Painel do Gestor (Master) - visão consolidada de todos os gerentes
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias } from '../supabase.js';
+import { addImobiliaria } from '../components/form-fields.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, ESTADOS_BR } from '../config.js';
 import { exportAtividadesExcel, exportElementPNG } from '../exports.js';
@@ -179,14 +180,16 @@ export async function painelGestorView(_params, app) {
       const { data } = await supabase.from('carteira_visitas').select('imobiliaria_nome').eq('gerente_id', gid).eq('ano_mes', ym);
       const set = new Set((data || []).map(r => r.imobiliaria_nome));
       box.innerHTML = '';
-      const search = el('input', { class: 'input', type: 'search', placeholder: 'Buscar imobiliária...' });
+      const search = el('input', { class: 'input flex-1', type: 'search', placeholder: 'Buscar imobiliária...' });
+      const novaBtn = el('button', { class: 'btn btn-secondary btn-sm flex-shrink-0' }, icon('plus', 14), 'Nova');
       const counter = el('div', { class: 'text-xs text-fg-muted' }, `${set.size} imobiliária(s) na carteira`);
       const list = el('div', { class: 'flex flex-col gap-1' });
-      const imobs = state.imobiliarias || [];
+      // Só imobiliárias do escopo do usuário (superintendente = seus estados)
+      const getImobs = () => getScopedImobiliarias();
       function renderList(f) {
         list.innerHTML = '';
         const ff = (f || '').trim().toLowerCase();
-        imobs.filter(im => !ff || im.nome.toLowerCase().includes(ff)).forEach(im => {
+        getImobs().filter(im => !ff || im.nome.toLowerCase().includes(ff)).forEach(im => {
           const cb = el('input', { type: 'checkbox' });
           cb.checked = set.has(im.nome);
           cb.addEventListener('change', async () => {
@@ -209,7 +212,20 @@ export async function painelGestorView(_params, app) {
         });
       }
       search.addEventListener('input', () => renderList(search.value));
-      box.append(el('div', { class: 'card p-2' }, search), counter, list);
+      // Criar imobiliária nova na hora (ex.: gerente vai visitar uma imob ainda não cadastrada)
+      novaBtn.addEventListener('click', async () => {
+        try {
+          const nova = await addImobiliaria(search.value.trim());
+          if (nova?.nome) {
+            // já marca na carteira do gerente/mês
+            const { error } = await supabase.from('carteira_visitas').insert({ gerente_id: gid, imobiliaria_nome: nova.nome, ano_mes: ym, created_by: state.user?.id || null });
+            if (!error) { set.add(nova.nome); counter.textContent = `${set.size} imobiliária(s) na carteira`; }
+            search.value = '';
+            renderList('');
+          }
+        } catch (e) { /* cancelado */ }
+      });
+      box.append(el('div', { class: 'card p-2 flex gap-2 items-center' }, search, novaBtn), counter, list);
       renderList('');
     }
     gSel.addEventListener('change', load);
