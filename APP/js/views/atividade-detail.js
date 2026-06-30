@@ -132,7 +132,7 @@ export async function atividadeDetailView(params, app) {
 
   // Número sequencial formatado
   const numLabel = a.numero_sequencial ? `#${a.numero_sequencial}` : '';
-  const vendaLabel = a.numero_venda ? ` · Venda #${a.numero_venda}` : '';
+  const vendaLabel = a.numero_venda ? ` · Reserva #${a.numero_venda}` : '';
 
   // Header com gerente (visível para master)
   const header = el('div', { class: 'card p-4 flex items-center gap-3' },

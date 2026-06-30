@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.3';
+export const APP_VERSION = '1.4.4';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.4',
+    date: '18/06/2026',
+    changes: [
+      'Terminologia: "Venda #N" virou "Reserva #N" no detalhe da atividade e na exportação (coluna "Nº Reserva")',
+    ],
+  },
   {
     version: '1.4.3',
     date: '18/06/2026',

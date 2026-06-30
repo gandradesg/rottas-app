@@ -31,7 +31,7 @@ export async function exportAtividadesExcel(atividades, filename = null) {
   // Aba consolidada
   const all = atividades.map(a => ({
     'Nº':              a.numero_sequencial || '',
-    'Nº Venda':        a.numero_venda || '',
+    'Nº Reserva':      a.numero_venda || '',
     'Data':            fmt.dateTime(a.created_at),
     'Tipo':            a.tipo,
     'Gerente':         a.profiles?.nome || '',
