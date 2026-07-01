@@ -108,46 +108,44 @@ export async function agendaFormView(params, app) {
   const tituloInput = el('input', { class: 'input', name: 'titulo', placeholder: 'Ex: Treinamento de tarde', value: initial?.titulo || '' });
   const obsInput = el('textarea', { class: 'textarea', name: 'observacoes', placeholder: 'Observações livres...' }, initial?.observacoes || '');
 
-  // Containers para campos contextuais
-  const imobWrap = el('div', {});
-  const localWrap = el('div', {});
-  const empWrap = el('div', {});
-  const cliWrap = el('div', {});
-  const corWrap = el('div', {});
-  const motivoWrap = el('div', {});
+  // Campos contextuais por tipo, em um único container (ordem correta).
+  // Título/descrição só existe em "Outro". Observações + Ditar em todos.
+  const ctx = el('div', { class: 'flex flex-col gap-4' });
+  const audioEl = audioField({ targetTextarea: obsInput });
 
   function updateContextualFields() {
-    imobWrap.innerHTML = '';
-    localWrap.innerHTML = '';
-    empWrap.innerHTML = '';
-    cliWrap.innerHTML = '';
-    corWrap.innerHTML = '';
-    motivoWrap.innerHTML = '';
-
-    // CHECK-IN: imobiliária + motivo da visita
+    ctx.innerHTML = '';
     if (chosenTipo === 'checkin') {
-      imobWrap.appendChild(field('Imobiliária', creatableSelect({
-        name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
-        allowAdd: true, onAdd: addImobiliaria,
-      })));
-      motivoWrap.appendChild(field('Motivo da visita', creatableSelect({
-        name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita,
-      })));
+      // CHECK-IN: Imobiliária → Motivo da visita
+      ctx.append(
+        field('Imobiliária', creatableSelect({
+          name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+          allowAdd: true, onAdd: addImobiliaria,
+        })),
+        field('Motivo da visita', creatableSelect({
+          name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita,
+        })),
+      );
+    } else if (chosenTipo === 'atendimento') {
+      // ATENDIMENTO: Local da visita → Imobiliária → Corretor → Cliente
+      ctx.append(
+        field('Local da visita', creatableSelect({
+          name: 'local_visita_disp', items: state.locaisVisita, value: initial?.local_visita,
+          allowAdd: true, onAdd: addLocalVisita,
+        }), { help: 'Onde o atendimento vai acontecer' }),
+        field('Imobiliária', creatableSelect({
+          name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+          allowAdd: true, onAdd: addImobiliaria,
+        }), { help: 'Imobiliária vinculada ao atendimento' }),
+        field('Corretor', el('input', { class: 'input', name: 'corretor', placeholder: 'Nome do corretor', value: initial?.corretor || '' })),
+        field('Cliente', el('input', { class: 'input', name: 'cliente', placeholder: 'Nome do cliente', value: initial?.cliente || '' })),
+      );
+    } else {
+      // OUTRO: Título/descrição
+      ctx.append(field('Título / descrição', tituloInput, { help: 'Texto livre para identificar o agendamento' }));
     }
-    // ATENDIMENTO: local da visita + cliente + corretor (Empreendimento só no momento do registro real)
-    if (chosenTipo === 'atendimento') {
-      localWrap.appendChild(field('Local da visita', creatableSelect({
-        name: 'local_visita_disp', items: state.locaisVisita, value: initial?.imobiliaria,
-        allowAdd: true, onAdd: addLocalVisita,
-      }), { help: 'Onde o atendimento vai acontecer' }));
-      cliWrap.appendChild(field('Cliente',
-        el('input', { class: 'input', name: 'cliente', placeholder: 'Nome do cliente', value: initial?.cliente || '' })
-      ));
-      corWrap.appendChild(field('Corretor',
-        el('input', { class: 'input', name: 'corretor', placeholder: 'Nome do corretor', value: initial?.corretor || '' })
-      ));
-    }
-    // OUTRO: só título + observações (já estão no rodapé do form)
+    // Observações + Ditar em todos os tipos
+    ctx.append(field('Observações', obsInput), audioEl);
   }
 
   const submitBtn = el('button', { class: 'btn btn-primary btn-lg w-full mt-2', type: 'submit' },
@@ -183,11 +181,7 @@ export async function agendaFormView(params, app) {
     field('Tipo', el('div', { class: 'flex gap-2' }, ...tipoButtons), { required: true }),
     field('Data e hora prevista', dataInput, { required: true }),
     responsavelField,
-    imobWrap, motivoWrap,         // check-in
-    localWrap, empWrap, cliWrap, corWrap, // atendimento
-    field('Título / descrição', tituloInput, { help: 'Texto livre para identificar o agendamento' }),
-    field('Observações', obsInput),
-    audioField({ targetTextarea: obsInput }),
+    ctx,
     submitBtn, cancelBtn,
   );
 
@@ -199,17 +193,15 @@ export async function agendaFormView(params, app) {
     const fd = new FormData(form);
     const dataIso = new Date(fd.get('data_prevista')).toISOString();
 
-    // Atendimento: o "Local da visita" mapeia pro campo `imobiliaria` do agendamento
-    // (não temos coluna separada no schema; o que importa é prefilar atividade depois)
-    const localAtend = (fd.get('local_visita_disp') || '').toString().trim();
-
+    // Local da visita e Imobiliária são campos SEPARADOS (colunas distintas).
     const payload = {
       gerente_id: responsavelId, // Próprio gerente OU um supervisor escolhido
       tipo: chosenTipo,
       data_prevista: dataIso,
       titulo: (fd.get('titulo') || '').toString().trim() || null,
       observacoes: (fd.get('observacoes') || '').toString().trim() || null,
-      imobiliaria: (fd.get('imobiliaria') || '').toString().trim() || localAtend || null,
+      imobiliaria: (fd.get('imobiliaria') || '').toString().trim() || null,       // só do campo Imobiliária
+      local_visita: (fd.get('local_visita_disp') || '').toString().trim() || null, // coluna dedicada
       empreendimento: (fd.get('empreendimento') || '').toString().trim() || null,
       cliente: (fd.get('cliente') || '').toString().trim() || null,
       corretor: (fd.get('corretor') || '').toString().trim() || null,

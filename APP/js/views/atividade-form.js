@@ -1,5 +1,5 @@
 // Formulário unificado de atividade - discriminado por tipo
-import { el, icon, toast, loadingBtn, fmt } from '../ui.js';
+import { el, icon, toast, loadingBtn, fmt, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField } from '../components/form-fields.js';
@@ -128,9 +128,8 @@ export async function atividadeFormView(params, app) {
       cliente:        agendamento.cliente,
       corretor:       agendamento.corretor,
       motivo_visita:  agendamento.motivo_visita,
-      // Atendimento: se o agendamento tinha "imobiliaria" preenchida, foi a partir do
-      // local da visita. Pré-preenche local_visita também
-      local_visita:   agendamento.tipo === 'atendimento' ? agendamento.imobiliaria : null,
+      // Local da visita e Imobiliária agora são campos separados no agendamento
+      local_visita:   agendamento.local_visita || null,
       observacoes:    agendamento.observacoes,
     };
   }
@@ -576,6 +575,38 @@ export async function atividadeFormView(params, app) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         loadingBtn(submitBtn, true);
+      }
+
+      // ===== AVISO: corretor/cliente sem telefone/e-mail cadastrado =====
+      // (telefone/e-mail não são obrigatórios; ao executar um agendamento os
+      // contatos vêm automáticos, então avisamos se o cadastro está incompleto.)
+      if (['atendimento', 'proposta', 'orulo'].includes(tipo)) {
+        const faltando = [];
+        if (payload.corretor) {
+          let tem = false;
+          if (payload.corretor_id) {
+            const c = (state.corretores || []).find(x => x.id === payload.corretor_id);
+            tem = !!(c && (c.telefone || c.email));
+          }
+          if (!tem) faltando.push('corretor');
+        }
+        if (payload.cliente) {
+          let tem = false;
+          if (payload.cliente_id) {
+            const { data: cli } = await supabase.from('clientes').select('telefone, email').eq('id', payload.cliente_id).maybeSingle();
+            tem = !!(cli && (cli.telefone || cli.email));
+          }
+          if (!tem) faltando.push('cliente');
+        }
+        if (faltando.length) {
+          const ok = await confirmModal({
+            title: 'Contato incompleto',
+            message: `Você não cadastrou telefone/e-mail de: ${faltando.join(' e ')}. Você pode incluir agora ou continuar mesmo assim.`,
+            confirmLabel: 'Continuar mesmo assim',
+            cancelLabel: 'Incluir agora',
+          });
+          if (!ok) { clearTimeout(safetyTimeout); loadingBtn(submitBtn, false); return; }
+        }
       }
 
       // ===== GERENTE/SUPERVISOR editando a própria atividade =====

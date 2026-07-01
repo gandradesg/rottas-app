@@ -4,9 +4,12 @@
 // - Update automatico: quando novo SW e detectado, ativa imediatamente e recarrega
 // - Bypassa cache do WebAPK Android porque o SW intercepta TODAS as requisicoes
 //
-// IMPORTANTE: nao bumpar versao do CACHE_NAME entre updates de codigo da app
-// (a estrategia network-first ja garante codigo fresh; cache so como fallback offline)
-const CACHE_NAME = 'imob-rottas-v1';
+// IMPORTANTE: SW_VERSION deve casar com APP_VERSION (js/config.js) a cada deploy.
+// Mudar esta string faz o navegador detectar um SW novo, ativar na hora, PURGAR o
+// cache antigo (no 'activate') e recarregar — garantindo que nunca fique um mix de
+// versoes de JS em cache (causa raiz de "app nao abre / versao velha").
+const SW_VERSION = '1.4.6';
+const CACHE_NAME = 'imob-rottas-' + SW_VERSION;
 
 self.addEventListener('install', (event) => {
   // Pula a fase "waiting" - novo SW ativa imediatamente

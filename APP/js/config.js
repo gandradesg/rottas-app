@@ -1,8 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.5';
+export const APP_VERSION = '1.4.6';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.6',
+    date: '18/06/2026',
+    changes: [
+      'NOVO: agendamento de Atendimento agora tem campo próprio de Imobiliária (ordem: Data → Gerente → Local da visita → Imobiliária → Corretor → Cliente → Observações). Imobiliária não puxa mais do "Local da visita"',
+      'MUDANÇA: campo "Título/descrição" no agendamento só aparece no tipo "Outro" (não em Check-in nem Atendimento)',
+      'NOVO: ao salvar atendimento/proposta, avisa se o corretor/cliente está sem telefone/e-mail — com opção de incluir agora ou continuar',
+      'CONFIABILIDADE: cache do app agora é versionado por release — cada atualização limpa a versão anterior, evitando o app abrir com versão velha/misturada',
+    ],
+  },
   {
     version: '1.4.5',
     date: '18/06/2026',
