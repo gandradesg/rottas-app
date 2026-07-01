@@ -601,7 +601,7 @@ export async function atividadeFormView(params, app) {
         if (faltando.length) {
           const ok = await confirmModal({
             title: 'Contato incompleto',
-            message: `Você não cadastrou telefone/e-mail de: ${faltando.join(' e ')}. Você pode incluir agora ou continuar mesmo assim.`,
+            message: `Você não cadastrou telefone/e-mail de: ${faltando.join(' e ')}. Você pode incluir agora (clicando no nome do ${faltando.join('/')}) ou continuar mesmo assim.`,
             confirmLabel: 'Continuar mesmo assim',
             cancelLabel: 'Incluir agora',
           });

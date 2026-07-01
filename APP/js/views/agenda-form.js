@@ -1,7 +1,7 @@
 // Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
 import { el, icon, toast, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
@@ -119,7 +119,7 @@ export async function agendaFormView(params, app) {
       // CHECK-IN: Imobiliária → Motivo da visita
       ctx.append(
         field('Imobiliária', creatableSelect({
-          name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+          name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
           allowAdd: true, onAdd: addImobiliaria,
         })),
         field('Motivo da visita', creatableSelect({
@@ -134,7 +134,7 @@ export async function agendaFormView(params, app) {
           allowAdd: true, onAdd: addLocalVisita,
         }), { help: 'Onde o atendimento vai acontecer' }),
         field('Imobiliária', creatableSelect({
-          name: 'imobiliaria', items: state.imobiliarias, value: initial?.imobiliaria,
+          name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
           allowAdd: true, onAdd: addImobiliaria,
         }), { help: 'Imobiliária vinculada ao atendimento' }),
         field('Corretor', el('input', { class: 'input', name: 'corretor', placeholder: 'Nome do corretor', value: initial?.corretor || '' })),

@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.6';
+export const APP_VERSION = '1.4.7';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.7',
+    date: '18/06/2026',
+    changes: [
+      'Agenda: a lista de imobiliárias agora respeita a regional do usuário (só dá pra agendar em imobiliárias do seu escopo, igual ao registro de atividade)',
+      'Aviso de contato incompleto explica como incluir (clicando no nome do corretor/cliente)',
+    ],
+  },
   {
     version: '1.4.6',
     date: '18/06/2026',
