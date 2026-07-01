@@ -70,7 +70,7 @@ export async function homeGerenteView(_params, app) {
       kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin'),
       kpiCard('Visitas', counts.atendimento, 'clientes', 'purple', 'users'),
       kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText'),
-      kpiCard('Vendas', counts.venda, 'fechadas', 'green', 'trendingUp'),
+      kpiCard('Reservas', counts.venda, 'reservadas', 'green', 'trendingUp'),
     );
   }
   renderKPIs({ checkin: 0, atendimento: 0, proposta: 0, venda: 0 });
@@ -323,7 +323,7 @@ function activityRow(a) {
       break;
     case 'proposta':
       title = a.empreendimento || '-';
-      chips.push({ label: a.reserva ? 'Venda' : 'Proposta', cls: a.reserva ? 'chip-green' : 'chip-yellow' });
+      chips.push({ label: a.reserva ? 'Reservada' : 'Proposta', cls: a.reserva ? 'chip-green' : 'chip-yellow' });
       if (a.valor) meta = fmt.currency(a.valor);
       if (a.unidade) meta = `Un. ${a.unidade}` + (meta ? ` · ${meta}`:'');
       break;

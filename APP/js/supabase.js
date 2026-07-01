@@ -2,6 +2,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
 
+// Lock à prova de deadlock: o supabase-js usa navigator.locks pra serializar o
+// refresh de token entre abas, mas essa trava pode ficar PRESA (deadlock) e
+// travar getSession()/todas as queries — deixando o app no "Carregando..." e
+// congelando cadastros. Aqui usamos o lock só se estiver livre (ifAvailable);
+// se estiver ocupado/preso, seguimos em frente em vez de esperar pra sempre.
+async function safeLock(name, _acquireTimeout, fn) {
+  try {
+    if (!navigator?.locks?.request) return await fn();
+    return await navigator.locks.request(name, { ifAvailable: true }, async () => await fn());
+  } catch (e) {
+    // qualquer falha na trava não pode impedir a operação
+    return await fn();
+  }
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
     persistSession: true,
@@ -9,6 +24,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
     detectSessionInUrl: true,
     storage: window.localStorage,
     storageKey: 'rottas-app-auth',
+    lock: safeLock,
   },
 });
 

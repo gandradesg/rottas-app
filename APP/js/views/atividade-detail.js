@@ -231,10 +231,7 @@ export async function atividadeDetailView(params, app) {
     const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
     const m = modal({
       title: 'Reserva da proposta', size: 'sm',
-      content: el('div', { class: 'flex flex-col gap-2' },
-        el('p', { class: 'text-xs text-fg-muted' }, 'Preencha quando a reserva for efetivada no CV. É livre e não precisa de aprovação — ao salvar, a proposta fica Reservada.'),
-        inp,
-      ),
+      content: el('div', { class: 'flex flex-col gap-2' }, inp),
       footer: [cancelBtn, saveBtn],
     });
     setTimeout(() => inp.focus(), 60);

@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.4';
+export const APP_VERSION = '1.4.5';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.5',
+    date: '18/06/2026',
+    changes: [
+      'CORRIGIDO: app travando ao salvar/seguir (cadastro de cliente, aviso de duplicado, telas paradas). Era um travamento na trava de sessão do Supabase — agora à prova de deadlock',
+      'Terminologia "Reservas" aplicada também na home do gerente (card e etiqueta "Reservada") e no menu de registro',
+      'Removido o texto explicativo da janela de reserva',
+    ],
+  },
   {
     version: '1.4.4',
     date: '18/06/2026',
