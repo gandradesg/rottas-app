@@ -747,16 +747,18 @@ export function clienteField({ value, valueId, required = true }) {
       // Se escolheu um cadastro existente, usa ele direto
       if (chosen) { setValue(chosen.nome, chosen.id); m.close(); toast('Cliente vinculado', 'success'); return; }
       saveBtn.disabled = true;
-      const payload = {
-        nome, telefone: telInp.value.trim() || null, email: mailInp.value.trim() || null,
-        created_by: state.user?.id || null,
-      };
       try {
-        const { data, error } = await supabase.from('clientes').insert(payload).select().single();
-        if (error) { toast('Erro: ' + error.message, 'error', 6000); saveBtn.disabled = false; return; }
-        setValue(data.nome, data.id);
+        // Cria via função no banco (não exige permissão de leitura da tabela clientes)
+        const { data, error } = await supabase.rpc('criar_cliente', {
+          p_nome: nome,
+          p_tel: telInp.value.trim() || null,
+          p_email: mailInp.value.trim() || null,
+        });
+        const row = Array.isArray(data) ? data[0] : data;
+        if (error || !row) { toast('Erro: ' + (error?.message || 'falha ao cadastrar'), 'error', 6000); saveBtn.disabled = false; return; }
+        setValue(row.nome, row.id);
         m.close();
-        toast(`Cliente "${data.nome}" cadastrado`, 'success');
+        toast(`Cliente "${row.nome}" cadastrado`, 'success');
       } catch (e) {
         toast('Falha ao cadastrar cliente: ' + (e.message || e), 'error', 6000);
         saveBtn.disabled = false;

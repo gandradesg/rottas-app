@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.8';
+export const APP_VERSION = '1.4.9';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.9',
+    date: '18/06/2026',
+    changes: [
+      'CORRIGIDO: gerente voltou a conseguir cadastrar cliente (a privacidade da v1.4.8 estava bloqueando o cadastro por engano). Agora cadastra normalmente e continua sem poder listar a base',
+    ],
+  },
   {
     version: '1.4.8',
     date: '18/06/2026',
