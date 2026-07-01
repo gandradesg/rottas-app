@@ -183,13 +183,13 @@ function openEditModal(p) {
   // Master principal NUNCA pode ser excluído (nem pelo próprio). Outros masters podem por outro master.
   const canDelete = isMaster() && !isPrincipalMaster(p);
   if (canDelete) {
-    const deleteSection = el('div', { class: 'mt-3 pt-3', style: { borderTop: '1px solid var(--border)' } },
+    const deleteSection = el('div', { class: 'mt-3 pt-3', style: { borderTop: '1px solid rgb(var(--border))' } },
       el('button', {
         class: 'btn w-full',
         style: {
           background: 'transparent',
-          color: 'var(--danger, #ef4444)',
-          border: '1px solid var(--danger, #ef4444)',
+          color: 'rgb(var(--danger))',
+          border: '1px solid rgb(var(--danger))',
           fontWeight: '600',
           fontSize: '0.85rem',
         },

@@ -60,8 +60,8 @@ export function shell(content, opts = {}) {
   const header = el('header', { class: 'sticky top-0 z-30 glass border-b border-border' },
     el('div', { class: 'max-w-screen-md mx-auto px-4 py-3 flex items-center gap-3' },
       back
-        ? el('button', { class: 'p-2 -ml-2 rounded-lg hover:bg-bg-elev transition', onclick: () => history.back() }, icon('arrowLeft', 22))
-        : el('img', { src: '/assets/logo-icon.png', class: 'w-9 h-9 object-contain' }),
+        ? el('button', { class: 'p-2 -ml-2 rounded-lg hover:bg-bg-elev transition', 'aria-label': 'Voltar', onclick: () => history.back() }, icon('arrowLeft', 22))
+        : el('img', { src: '/assets/logo-icon.png', alt: 'Rottas', class: 'w-9 h-9 object-contain' }),
       el('div', { class: 'flex-1 min-w-0' },
         title
           ? el('h1', { class: 'text-base font-bold truncate' }, title)

@@ -29,10 +29,13 @@ export function findGerenteImobDuplicates(tel, email) {
 // Campo wrapper com label
 export function field(labelText, control, opts = {}) {
   const { required, help } = opts;
-  const wrap = el('div', { class: 'flex flex-col gap-1' },
-    el('label', { class: 'label ' + (required ? 'label-required' : '') }, labelText),
-    control,
-  );
+  const lbl = el('label', { class: 'label ' + (required ? 'label-required' : '') }, labelText);
+  // Acessibilidade: associa o <label> ao controle quando é um campo de formulário
+  if (control && /^(INPUT|SELECT|TEXTAREA)$/.test(control.tagName || '')) {
+    if (!control.id) control.id = 'f-' + Math.random().toString(36).slice(2, 9);
+    lbl.htmlFor = control.id;
+  }
+  const wrap = el('div', { class: 'flex flex-col gap-1' }, lbl, control);
   if (help) wrap.appendChild(el('p', { class: 'text-xs text-fg-subtle mt-1' }, help));
   return wrap;
 }
@@ -693,26 +696,16 @@ export function clienteField({ value, valueId, required = true }) {
     const saveBtn = el('button', { class: 'btn btn-primary' }, 'Usar este cliente');
     const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
     let chosen = null; // cliente existente escolhido
-    let cacheClientes = null;
-    async function ensureClientes() {
-      if (cacheClientes) return cacheClientes;
-      const { data } = await supabase.from('clientes').select('id, nome, telefone, email').limit(5000);
-      cacheClientes = data || [];
-      return cacheClientes;
-    }
 
     async function checkDup() {
-      const telD = normDigits(telInp.value);
-      const mail = mailInp.value.trim().toLowerCase();
+      const tel = telInp.value.trim();
+      const mail = mailInp.value.trim();
       dupBox.innerHTML = '';
       chosen = null;
-      if (!telD && !mail) return;
-      // Comparação por dígitos normalizados (independe do formato salvo) e e-mail
-      const all = await ensureClientes();
-      const data = all.filter(c =>
-        (telD && normDigits(c.telefone) === telD) || (mail && (c.email || '').toLowerCase() === mail)
-      ).slice(0, 5);
-      if (!data.length) return;
+      if (!normDigits(tel) && !mail) return;
+      // Busca por contato via função no banco (não lista a base — só o que casa)
+      const { data } = await supabase.rpc('cliente_por_contato', { p_tel: tel || null, p_email: mail || null });
+      if (!data || !data.length) return;
       dupBox.appendChild(el('div', { class: 'card p-3 flex flex-col gap-2', style: { background: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)' } },
         el('div', { class: 'text-xs font-bold text-warning' }, '⚠ Já existe cadastro com esse telefone/e-mail:'),
         ...data.map(c => el('button', {

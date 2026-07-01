@@ -593,8 +593,8 @@ export async function atividadeFormView(params, app) {
         if (payload.cliente) {
           let tem = false;
           if (payload.cliente_id) {
-            const { data: cli } = await supabase.from('clientes').select('telefone, email').eq('id', payload.cliente_id).maybeSingle();
-            tem = !!(cli && (cli.telefone || cli.email));
+            const { data: tc } = await supabase.rpc('cliente_tem_contato', { p_id: payload.cliente_id });
+            tem = !!tc;
           }
           if (!tem) faltando.push('cliente');
         }

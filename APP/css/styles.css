@@ -12,6 +12,11 @@
   --fg-muted: 100 105 120;
   --fg-subtle:160 164 178;
   --border:   232 226 218;
+  /* Cores semânticas (triplets p/ usar como rgb(var(--danger)); iguais nos 2 temas) */
+  --danger:  239  68  68;
+  --success:  16 185 129;
+  --warning: 245 158  11;
+  --info:     59 130 246;
 }
 
 .dark {
@@ -236,4 +241,14 @@ body {
 /* Print: ocultar nav etc */
 @media print {
   .no-print { display: none !important; }
+}
+
+/* Safe area do iOS (evita a barra inferior ficar sob a barra de gestos do iPhone) */
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Foco visível para navegação por teclado (acessibilidade) */
+:focus-visible { outline: 2px solid #F26B22; outline-offset: 2px; border-radius: 4px; }
+/* Respeita quem pede menos animação */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }

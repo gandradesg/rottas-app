@@ -13,6 +13,13 @@ import { field, locationField, creatableSelect } from '../components/form-fields
 import { VISITA_PERIODOS, VISITA_FORMAS, VISITA_CANAIS } from '../config.js';
 import { isRecepcao } from '../auth.js';
 
+// Escapa texto vindo do arquivo importado antes de injetar via innerHTML (anti-XSS)
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
 // ─── SHEETJS (apenas LEITURA do upload) + ExcelJS (ESCRITA com validation) ──
 let _xlsxPromise = null;
 async function loadXLSX() {
@@ -824,12 +831,12 @@ function openImportModal(onSuccess) {
       });
 
       if (errors.length) {
-        const html = `<div style="color:var(--red);font-weight:700;margin-bottom:6px;">⚠ Verifique seu arquivo — ${errors.length} erro(s) encontrado(s). Nenhum registro foi salvo.</div>
+        const html = `<div style="color:rgb(var(--danger));font-weight:700;margin-bottom:6px;">⚠ Verifique seu arquivo — ${errors.length} erro(s) encontrado(s). Nenhum registro foi salvo.</div>
           <table style="font-size:11px;width:100%;border-collapse:collapse;">
             <thead><tr><th style="text-align:left;padding:4px;">Linha</th><th style="text-align:left;padding:4px;">Coluna</th><th style="text-align:left;padding:4px;">Motivo</th></tr></thead>
-            <tbody>${errors.slice(0,100).map(e => `<tr><td style="padding:3px 4px;">${e.linha}</td><td style="padding:3px 4px;">${e.coluna}</td><td style="padding:3px 4px;">${e.motivo}</td></tr>`).join('')}</tbody>
+            <tbody>${errors.slice(0,100).map(e => `<tr><td style="padding:3px 4px;">${escHtml(e.linha)}</td><td style="padding:3px 4px;">${escHtml(e.coluna)}</td><td style="padding:3px 4px;">${escHtml(e.motivo)}</td></tr>`).join('')}</tbody>
           </table>
-          ${errors.length > 100 ? `<p style="font-size:11px;color:var(--fg-muted);margin-top:6px;">+ ${errors.length - 100} erros não exibidos…</p>` : ''}`;
+          ${errors.length > 100 ? `<p style="font-size:11px;color:rgb(var(--fg-muted));margin-top:6px;">+ ${errors.length - 100} erros não exibidos…</p>` : ''}`;
         resultBox.innerHTML = html;
         submitBtn.disabled = true;
         parsedRows = null;
@@ -837,11 +844,11 @@ function openImportModal(onSuccess) {
       }
 
       parsedRows = normalized;
-      resultBox.innerHTML = `<div style="color:var(--green);font-weight:700;">✓ Arquivo válido — ${normalized.length} visita(s) prontas para importar.</div>
-        <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;">Localização será derivada do seu dispositivo no momento do upload.</div>`;
+      resultBox.innerHTML = `<div style="color:rgb(var(--success));font-weight:700;">✓ Arquivo válido — ${normalized.length} visita(s) prontas para importar.</div>
+        <div style="font-size:11px;color:rgb(var(--fg-muted));margin-top:4px;">Localização será derivada do seu dispositivo no momento do upload.</div>`;
       submitBtn.disabled = false;
     } catch (err) {
-      resultBox.innerHTML = `<div style="color:var(--red);font-weight:700;">Erro: ${err.message}</div>`;
+      resultBox.innerHTML = `<div style="color:rgb(var(--danger));font-weight:700;">Erro: ${escHtml(err.message)}</div>`;
       submitBtn.disabled = true;
       parsedRows = null;
     }

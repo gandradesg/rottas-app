@@ -1,8 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.7';
+export const APP_VERSION = '1.4.8';
 export const APP_BUILD_DATE = '2026-06-18';
 
 export const CHANGELOG = [
+  {
+    version: '1.4.8',
+    date: '18/06/2026',
+    changes: [
+      'PRIVACIDADE: lista de clientes deixa de ser visível para usuários comuns (só admin). O aviso de cliente já cadastrado ao registrar continua funcionando. Corretor e Gerente da imobiliária seguem visíveis',
+      'SEGURANÇA: importação de visitas agora escapa o conteúdo do arquivo (proteção contra código malicioso na planilha)',
+      'CORRIGIDO: cores/bordas que sumiam por uso incorreto de variáveis de tema (importação de visitas, excluir usuário, botão + da agenda)',
+      'iPhone: barra inferior respeita a área segura (não fica mais sob a barra de gestos)',
+      'Acessibilidade: rótulos ligados aos campos, foco visível no teclado, descrições em ícones/filtros; segurança extra de cabeçalhos (anti-clickjacking)',
+    ],
+  },
   {
     version: '1.4.7',
     date: '18/06/2026',

@@ -300,7 +300,7 @@ async function agendaGerenteView(app) {
           top: '-8px', right: '-8px',
           background: 'linear-gradient(135deg, #F26B22, #D5530F)',
           color: 'white',
-          border: '2px solid var(--bg, #fff)',
+          border: '2px solid rgb(var(--bg))',
         },
         title: 'Adicionar agendamento',
         onclick: (ev) => { ev.stopPropagation(); newOnDate(dayCapture); },

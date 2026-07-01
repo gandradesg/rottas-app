@@ -62,18 +62,18 @@ export async function painelGestorView(_params, app) {
 
   // Filter bar (collapsable)
   const filterBar = el('div', { class: 'card p-3 grid grid-cols-2 gap-2' });
-  const periodoSel = el('select', { class: 'select' },
+  const periodoSel = el('select', { class: 'select', 'aria-label': 'Período' },
     el('option', { value: 'hoje' }, 'Hoje'),
     el('option', { value: 'semana' }, 'Últimos 7 dias'),
     el('option', { value: 'mes', selected: true }, 'Últimos 30 dias'),
     el('option', { value: 'tudo' }, 'Tudo'),
   );
-  const empSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos empreendimentos'));
+  const empSel = el('select', { class: 'select', 'aria-label': 'Empreendimento' }, el('option', { value: 'todos' }, 'Todos empreendimentos'));
   state.empreendimentos.forEach(e => empSel.appendChild(el('option', { value: e.nome }, e.nome)));
-  const imobSel = el('select', { class: 'select' }, el('option', { value: 'todas' }, 'Todas imobiliárias'));
+  const imobSel = el('select', { class: 'select', 'aria-label': 'Imobiliária' }, el('option', { value: 'todas' }, 'Todas imobiliárias'));
   state.imobiliarias.forEach(i => imobSel.appendChild(el('option', { value: i.nome }, i.nome)));
-  const gerSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos gerentes'));
-  const estSel = el('select', { class: 'select' }, el('option', { value: 'todos' }, 'Todos estados'));
+  const gerSel = el('select', { class: 'select', 'aria-label': 'Gerente' }, el('option', { value: 'todos' }, 'Todos gerentes'));
+  const estSel = el('select', { class: 'select', 'aria-label': 'Estado' }, el('option', { value: 'todos' }, 'Todos estados'));
   ESTADOS_BR.forEach(uf => estSel.appendChild(el('option', { value: uf }, uf)));
 
   filterBar.append(periodoSel, empSel, imobSel, gerSel, estSel);
