@@ -2,7 +2,7 @@
 import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
 import { supabase, loadAllProfiles, state } from '../supabase.js';
-import { ESTADOS_BR, PERMISSOES, ROLES } from '../config.js';
+import { ESTADOS_BR, PERMISSOES, ROLES, SUPABASE_URL } from '../config.js';
 import { phoneInput, emailInput } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
 
@@ -141,7 +141,7 @@ async function inviteUserBackground(v) {
   const { data: { session: masterSession } } = await supabase.auth.getSession();
   if (!masterSession) throw new Error('Sessão master não encontrada');
 
-  const fnUrl = `${supabase.supabaseUrl}/functions/v1/invite-user`;
+  const fnUrl = `${SUPABASE_URL}/functions/v1/invite-user`;
   const resp = await fetch(fnUrl, {
     method: 'POST',
     headers: {
@@ -163,8 +163,10 @@ async function inviteUserBackground(v) {
   });
 
   const result = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error(result.error || `Erro ${resp.status} ao convidar`);
+  // Exige resposta real da função (success). Evita falso "enviado" se a URL cair
+  // no index.html (SPA) e voltar 200 com HTML em vez de chamar a Edge Function.
+  if (!resp.ok || !result.success) {
+    throw new Error(result.error || `Erro ${resp.status} ao convidar (resposta inesperada)`);
   }
 }
 
@@ -207,7 +209,7 @@ function openEditModal(p) {
             // Chama Edge Function delete-user que apaga em auth.users (cascateia profile)
             // - garante que email pode ser reconvidado depois sem "already registered"
             const { data: { session } } = await supabase.auth.getSession();
-            const fnUrl = `${supabase.supabaseUrl}/functions/v1/delete-user`;
+            const fnUrl = `${SUPABASE_URL}/functions/v1/delete-user`;
             const resp = await fetch(fnUrl, {
               method: 'POST',
               headers: {
@@ -243,7 +245,7 @@ function openEditModal(p) {
       try {
         // Reenvia via Edge Function (mesmo fluxo do convite original - dispara template INVITE)
         const { data: { session } } = await supabase.auth.getSession();
-        const fnUrl = `${supabase.supabaseUrl}/functions/v1/invite-user`;
+        const fnUrl = `${SUPABASE_URL}/functions/v1/invite-user`;
         const resp = await fetch(fnUrl, {
           method: 'POST',
           headers: {

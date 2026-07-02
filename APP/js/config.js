@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.4.9';
-export const APP_BUILD_DATE = '2026-06-18';
+export const APP_VERSION = '1.5.0';
+export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.5.0',
+    date: '02/07/2026',
+    changes: [
+      'CORRIGIDO: convite de usuário não enviava (dizia "convidando" mas não criava o usuário nem o e-mail). A URL da função estava sendo montada errada e caía na própria página; agora usa o endereço correto do servidor',
+      'Proteção extra: se a função de convite não responder de verdade, o app avisa erro em vez de fingir sucesso',
+      'Convite/exclusão de usuário e limite de e-mails ajustados para o onboarding',
+    ],
+  },
   {
     version: '1.4.9',
     date: '18/06/2026',
