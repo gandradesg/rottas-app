@@ -21,16 +21,31 @@ const TIPO_ICON = {
 const DAY_NAMES = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-// ===== Indicador de performance da semana =====
-// Considera os agendamentos cuja data prevista cai na semana corrente (Dom→Sáb).
+// ===== Indicador de performance por período =====
+// O período acompanha o modo do calendário: dia → o dia, semana → a semana,
+// mês → o mês inteiro (usa o cursor de navegação como referência).
 function startOfWeekDate(d) {
   const x = new Date(d); x.setHours(0,0,0,0);
   x.setDate(x.getDate() - x.getDay());
   return x;
 }
-function computeWeekStats(items, refDate) {
-  const start = startOfWeekDate(refDate);
+function periodBounds(mode, cursor) {
+  if (mode === 'dia') {
+    const start = new Date(cursor); start.setHours(0,0,0,0);
+    const end = new Date(start); end.setDate(end.getDate() + 1);
+    return { start, end, label: 'do dia' };
+  }
+  if (mode === 'mes') {
+    const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+    const end   = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    return { start, end, label: 'do mês' };
+  }
+  const start = startOfWeekDate(cursor);
   const end = new Date(start); end.setDate(end.getDate() + 7);
+  return { start, end, label: 'da semana' };
+}
+function computePeriodStats(items, mode, cursor) {
+  const { start, end, label } = periodBounds(mode, cursor);
   const wk = (items || []).filter(it => {
     const d = new Date(it.data_prevista);
     return d >= start && d < end;
@@ -39,11 +54,16 @@ function computeWeekStats(items, refDate) {
   const concl  = wk.filter(x => x.status === 'realizado').length;
   const canc   = wk.filter(x => x.status === 'cancelado').length;
   const remarc = wk.filter(x => x.remarcada).length;
+  // Pendentes = tudo que ainda não aconteceu nem foi cancelado (inclui 'adiado').
+  const pend = Math.max(0, total - concl - canc);
   const pct = n => total ? Math.round((n / total) * 100) : 0;
-  return { total, concl, canc, remarc, pctConcl: pct(concl), pctCanc: pct(canc), pctRemarc: pct(remarc) };
+  const pctConcl = pct(concl), pctCanc = pct(canc);
+  // Fecha a conta em 100% (Pendentes + Concluídas + Canceladas), sem erro de arredondamento.
+  const pctPend = total ? Math.max(0, 100 - pctConcl - pctCanc) : 0;
+  return { total, concl, canc, pend, remarc, pctConcl, pctCanc, pctPend, pctRemarc: pct(remarc), label };
 }
-function renderWeekStats(box, items, refDate) {
-  const s = computeWeekStats(items, refDate);
+function renderPeriodStats(box, items, mode, cursor) {
+  const s = computePeriodStats(items, mode, cursor);
   box.innerHTML = '';
   const stat = (value, label, color, sub) => el('div', {
     class: 'flex flex-col items-center justify-center text-center px-1 py-2 rounded-xl',
@@ -55,11 +75,14 @@ function renderWeekStats(box, items, refDate) {
   );
   box.appendChild(el('div', { class: 'card p-3' },
     el('div', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
-      '📊 Performance da semana'),
+      `📊 Performance ${s.label}`,
+      el('span', { class: 'text-fg-muted font-normal normal-case' },
+        ` · ${s.total} agendada${s.total !== 1 ? 's' : ''}`),
+    ),
     el('div', { class: 'grid grid-cols-4 gap-2' },
-      stat(String(s.total), 'Agendadas', '#F26B22'),
-      stat(s.pctConcl + '%', 'Concluídas', '#10B981', `${s.concl}/${s.total}`),
-      stat(s.pctCanc + '%', 'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
+      stat(s.pctPend + '%',   'Pendentes',  '#F26B22', `${s.pend}/${s.total}`),
+      stat(s.pctConcl + '%',  'Concluídas', '#10B981', `${s.concl}/${s.total}`),
+      stat(s.pctCanc + '%',   'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
       stat(s.pctRemarc + '%', 'Remarcadas', '#F59E0B', `${s.remarc}/${s.total}`),
     ),
   ));
@@ -204,7 +227,7 @@ async function agendaGerenteView(app) {
   }
 
   function render() {
-    renderWeekStats(statsBox, allItems, today);
+    renderPeriodStats(statsBox, allItems, mode, cursor);
     renderToolbar();
     cal.innerHTML = '';
     if (mode === 'dia')    renderDay();
@@ -615,7 +638,7 @@ async function agendaGestorView(app) {
   function itemsOnDay(d) { return allItems.filter(it => isSameDay(new Date(it.data_prevista), d)); }
 
   function render() {
-    renderWeekStats(statsBox, allItems, today);
+    renderPeriodStats(statsBox, allItems, mode, cursor);
     renderToolbar();
     cal.innerHTML = '';
     if (mode === 'dia')    renderDay();

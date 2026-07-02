@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.6.1';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.6.1',
+    date: '02/07/2026',
+    changes: [
+      'MELHORADO: o painel de performance agora acompanha o modo do calendário — no Dia mostra a performance do dia, na Semana a da semana e no Mês a do mês inteiro',
+      'MELHORADO: o card antes chamado "Agendadas" virou "Pendentes" e mostra a % que ainda não aconteceu. Agora Pendentes + Concluídas + Canceladas fecham 100% (o total aparece no título do painel). Remarcadas segue como indicador à parte',
+    ],
+  },
   {
     version: '1.6.0',
     date: '02/07/2026',
