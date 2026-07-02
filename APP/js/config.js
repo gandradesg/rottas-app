@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '1.5.1';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.5.1',
+    date: '02/07/2026',
+    changes: [
+      'CORRIGIDO: app abria sempre na tela "Defina sua senha" para quem já tinha senha. Agora, quem entra com senha tem esse status corrigido automaticamente (nunca mais fica preso nessa tela)',
+    ],
+  },
   {
     version: '1.5.0',
     date: '02/07/2026',

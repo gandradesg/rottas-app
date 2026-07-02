@@ -37,6 +37,16 @@ export async function signIn(email, password) {
     if (error) throw error;
     state.user = data.user;
     await Promise.all([loadProfile(), loadLists()]);
+    // AUTO-CURA: quem loga com senha JÁ tem senha definida. Se a flag primeiro_acesso
+    // ficou presa em true (perfis antigos/seed), limpa aqui pra não cair em loop
+    // eterno na tela "Defina sua senha". Usuários realmente novos (só convite, sem
+    // senha) não conseguem chegar aqui — signInWithPassword falharia antes.
+    if (state.profile?.primeiro_acesso === true) {
+      try {
+        await supabase.from('profiles').update({ primeiro_acesso: false }).eq('id', state.profile.id);
+        state.profile.primeiro_acesso = false;
+      } catch (e) { console.warn('[signIn] falha ao limpar primeiro_acesso:', e); }
+    }
     emitStateChange();
     return data;
   } finally {
