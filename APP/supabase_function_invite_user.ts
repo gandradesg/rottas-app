@@ -136,19 +136,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    // CONVITE NOVO: cria usuario via inviteUserByEmail (Supabase manda email com template INVITE)
-    const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { nome, role, invited_pending: true },
-      redirectTo,
+    // CONVITE NOVO: cria o usuario via generateLink (type invite) — isso NAO envia
+    // email pelo Supabase; nós mesmos enviamos via Brevo (mesmo caminho confiável do
+    // reconvite). Antes usávamos inviteUserByEmail (email interno do Supabase), que
+    // frequentemente não era entregue.
+    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: { redirectTo, data: { nome, role, invited_pending: true } },
     });
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
+    if (linkErr || !linkData?.properties?.action_link) {
+      return new Response(JSON.stringify({ error: 'Falha ao gerar convite: ' + (linkErr?.message || 'sem link') }), {
         status: 400, headers: corsHeaders,
       });
     }
 
-    if (data.user) {
-      await admin.from('profiles').update({
+    const newUserId = linkData.user?.id;
+    if (newUserId) {
+      await admin.from('profiles').upsert({
+        id: newUserId,
+        email,
         nome,
         telefone: telefone || null,
         cidade: cidade || null,
@@ -160,10 +167,33 @@ Deno.serve(async (req) => {
         gerente_supervisor_id: gerente_supervisor_id || null,
         ativo: true,
         primeiro_acesso: true,
-      }).eq('id', data.user.id);
+      }, { onConflict: 'id' });
     }
 
-    return new Response(JSON.stringify({ success: true, user_id: data.user?.id, mode: 'new' }), {
+    // Envia o email de convite via Brevo SMTP (template INVITE) — mesmo do reconvite
+    try {
+      const transporter = nodemailer.createTransport({
+        host: 'smtp-relay.brevo.com',
+        port: 587,
+        secure: false,
+        auth: {
+          user: Deno.env.get('BREVO_SMTP_USER')!,
+          pass: Deno.env.get('BREVO_SMTP_PASS')!,
+        },
+      });
+      await transporter.sendMail({
+        from: `"Imob Rottas" <${Deno.env.get('SENDER_EMAIL')}>`,
+        to: email,
+        subject: 'Você foi convidado - cadastre sua senha de acesso à Plataforma Rottas',
+        html: inviteEmailHtml(linkData.properties.action_link),
+      });
+    } catch (mailErr) {
+      return new Response(JSON.stringify({ error: 'Usuário criado, mas falha ao enviar o email: ' + (mailErr as Error).message }), {
+        status: 500, headers: corsHeaders,
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true, user_id: newUserId, mode: 'new' }), {
       status: 200, headers: corsHeaders,
     });
   } catch (err) {
