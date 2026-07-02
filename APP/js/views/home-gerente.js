@@ -68,7 +68,7 @@ export async function homeGerenteView(_params, app) {
     kpiGrid.innerHTML = '';
     kpiGrid.append(
       kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin'),
-      kpiCard('Visitas', counts.atendimento, 'clientes', 'purple', 'users'),
+      kpiCard('Atendimentos', counts.atendimento, 'clientes', 'purple', 'users'),
       kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText'),
       kpiCard('Reservas', counts.venda, 'reservadas', 'green', 'trendingUp'),
     );

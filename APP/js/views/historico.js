@@ -237,7 +237,7 @@ function renderFunnel(container, data) {
   const convTotal = visitas ? ((vendas / visitas) * 100).toFixed(1) : '0.0';
 
   const stages = [
-    { label: 'Visitas', sub: 'atendimentos', count: visitas, color: '#F26B22', width: 100 },
+    { label: 'Atendimentos', sub: 'clientes', count: visitas, color: '#F26B22', width: 100 },
     { label: 'Propostas', sub: 'enviadas', count: propostas, color: '#F59E0B', width: 68, conv: convVP },
     { label: 'Reservas', sub: 'com reserva', count: vendas, color: '#10B981', width: 40, conv: convPV },
   ];

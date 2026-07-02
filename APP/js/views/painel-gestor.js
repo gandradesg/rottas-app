@@ -412,7 +412,7 @@ export async function painelGestorView(_params, app) {
     const convPV = propostas ? ((vendas / propostas) * 100).toFixed(1) : '0.0';
     const convTotal = visitas ? ((vendas / visitas) * 100).toFixed(1) : '0.0';
     const stages = [
-      { label: 'Visitas',   count: visitas,   color: '#F26B22', width: 100 },
+      { label: 'Atendimentos', count: visitas,   color: '#F26B22', width: 100 },
       { label: 'Propostas', count: propostas, color: '#F59E0B', width: 68, conv: convVP },
       { label: 'Reservas',  count: vendas,    color: '#10B981', width: 40, conv: convPV },
     ];

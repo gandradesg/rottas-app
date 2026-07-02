@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.5.1';
+export const APP_VERSION = '1.5.2';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.5.2',
+    date: '02/07/2026',
+    changes: [
+      'AJUSTE: o KPI "Visitas" (que na verdade conta atendimentos) foi renomeado para "Atendimentos" na home do gerente, no funil do Painel e no funil do Histórico. As Visitas da Recepção Rottas continuam iguais',
+    ],
+  },
   {
     version: '1.5.1',
     date: '02/07/2026',
