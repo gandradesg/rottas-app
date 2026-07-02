@@ -334,7 +334,7 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       })) && field('Imobiliária', atImobWrap, { required: true }),
-      field('Gerente da imobiliária', gerenteImobField({ imobWrap: atImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id }), { required: true, help: 'Caso não tenha gerente, cadastre o dono da imobiliária.' }),
+      field('Gerente da imobiliária', gerenteImobField({ imobWrap: atImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id, required: false }), { help: 'Opcional. Caso tenha, você pode cadastrar o gerente ou dono da imobiliária.' }),
       field('Corretor', corretorField({ imobWrap: atImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'produto', items: getScopedEmpreendimentos(), value: initial?.produto, required: true,
@@ -370,7 +370,7 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       })) && field('Imobiliária', prImobWrap, { required: true }),
-      field('Gerente da imobiliária', gerenteImobField({ imobWrap: prImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id }), { required: true, help: 'Caso não tenha gerente, cadastre o dono da imobiliária.' }),
+      field('Gerente da imobiliária', gerenteImobField({ imobWrap: prImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id, required: false }), { help: 'Opcional. Caso tenha, você pode cadastrar o gerente ou dono da imobiliária.' }),
       field('Corretor', corretorField({ imobWrap: prImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
@@ -404,7 +404,7 @@ export async function atividadeFormView(params, app) {
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       })) && field('Imobiliária', orImobWrap, { required: true }),
-      field('Gerente da imobiliária', gerenteImobField({ imobWrap: orImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id }), { required: true, help: 'Caso não tenha gerente, cadastre o dono da imobiliária.' }),
+      field('Gerente da imobiliária', gerenteImobField({ imobWrap: orImobWrap, value: initial?.gerente_imob, valueId: initial?.gerente_imob_id, required: false }), { help: 'Opcional. Caso tenha, você pode cadastrar o gerente ou dono da imobiliária.' }),
       field('Corretor', corretorField({ imobWrap: orImobWrap, value: initial?.corretor, valueId: initial?.corretor_id }), { required: true, help: 'Vinculado à imobiliária. Pode cadastrar um novo.' }),
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
@@ -524,12 +524,12 @@ export async function atividadeFormView(params, app) {
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
-        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim();
+        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim() || null;
         payload.gerente_imob_id = (fd.get('gerente_imob_id')||'').toString().trim() || null;
         payload.cliente = (fd.get('cliente')||'').toString().trim();
         payload.cliente_id = (fd.get('cliente_id')||'').toString().trim() || null;
         payload.termometro = (fd.get('termometro')||'').toString().trim();
-        for (const k of ['local_visita','produto','imobiliaria','gerente_imob','corretor','cliente','termometro']) {
+        for (const k of ['local_visita','produto','imobiliaria','corretor','cliente','termometro']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         loadingBtn(submitBtn, true);
@@ -537,7 +537,7 @@ export async function atividadeFormView(params, app) {
 
       if (tipo === 'proposta') {
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
-        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim();
+        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim() || null;
         payload.gerente_imob_id = (fd.get('gerente_imob_id')||'').toString().trim() || null;
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
@@ -547,7 +547,7 @@ export async function atividadeFormView(params, app) {
         payload.unidade = (fd.get('unidade')||'').toString().trim();
         payload.valor = parseCurrency(fd.get('valor'));
         if (atendimentoLinkId) payload.atendimento_id = atendimentoLinkId;
-        for (const k of ['imobiliaria','gerente_imob','corretor','cliente','empreendimento','unidade']) {
+        for (const k of ['imobiliaria','corretor','cliente','empreendimento','unidade']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         if (!payload.valor || isNaN(payload.valor)) throw new Error('Valor é obrigatório');
@@ -565,13 +565,13 @@ export async function atividadeFormView(params, app) {
         if (!plataforma) throw new Error('Selecione a plataforma (Órulo ou DWV)');
         payload.plataforma = plataforma;
         payload.imobiliaria = (fd.get('imobiliaria')||'').toString().trim();
-        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim();
+        payload.gerente_imob = (fd.get('gerente_imob')||'').toString().trim() || null;
         payload.gerente_imob_id = (fd.get('gerente_imob_id')||'').toString().trim() || null;
         payload.corretor = (fd.get('corretor')||'').toString().trim();
         payload.corretor_id = (fd.get('corretor_id')||'').toString().trim() || null;
         payload.empreendimento = (fd.get('empreendimento')||'').toString().trim();
         payload.motivo_contato = (fd.get('motivo_contato')||'').toString().trim();
-        for (const k of ['imobiliaria','gerente_imob','corretor','empreendimento','motivo_contato']) {
+        for (const k of ['imobiliaria','corretor','empreendimento','motivo_contato']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         loadingBtn(submitBtn, true);
@@ -610,19 +610,27 @@ export async function atividadeFormView(params, app) {
       }
 
       // ===== GERENTE/SUPERVISOR editando a própria atividade =====
-      // Reserva é LIVRE (aplica direto, sem aprovação). Os demais campos vão
+      // Campos de BAIXO IMPACTO (não afetam o funil/valores) são aplicados DIRETO,
+      // sem aprovação: reserva, termômetro e observações. Os demais campos vão
       // para aprovação do gestor (a atividade só muda quando ele aprovar).
       if (gerenteEditandoPropria) {
         const { depois } = buildDiff(initial, payload);
-        let reservaSalva = false;
-        if ('reserva' in depois) {
-          const rPatch = { reserva: depois.reserva, updated_at: new Date().toISOString() };
-          if (payload.reserva_data) rPatch.reserva_data = payload.reserva_data;
-          delete depois.reserva;
-          const { data: rd, error: rErr } = await supabase.from('atividades').update(rPatch).eq('id', id).select();
-          if (rErr) throw rErr;
-          if (!rd || !rd.length) throw new Error('Sem permissão para salvar a reserva (RLS rejeitou)');
-          reservaSalva = true;
+        const LIVRES = ['reserva', 'termometro', 'observacoes'];
+        const diretas = {};
+        for (const k of LIVRES) {
+          if (k in depois) { diretas[k] = depois[k]; delete depois[k]; }
+        }
+        let aplicouDireto = false;
+        if (Object.keys(diretas).length) {
+          const patch = { ...diretas, updated_at: new Date().toISOString() };
+          if ('reserva' in diretas && payload.reserva_data) patch.reserva_data = payload.reserva_data;
+          const { data: dd, error: dErr } = await supabase.from('atividades').update(patch).eq('id', id).select();
+          if (dErr) throw dErr;
+          if (!dd || !dd.length) throw new Error('Sem permissão para salvar (RLS rejeitou)');
+          aplicouDireto = true;
+          const antesDiretas = {};
+          for (const k of Object.keys(diretas)) antesDiretas[k] = initial[k] ?? null;
+          auditarEdicaoDireta({ ...initial, id }, antesDiretas, diretas).catch(() => {});
         }
         const temOutros = Object.keys(depois).length > 0;
         if (temOutros) {
@@ -636,8 +644,8 @@ export async function atividadeFormView(params, app) {
           if (!data || !data.length) throw new Error('Sem permissão para solicitar edição (RLS rejeitou)');
         }
         clearTimeout(safetyTimeout);
-        if (reservaSalva && temOutros) toast('✓ Reserva salva. As demais alterações foram enviadas para aprovação.', 'success', 4500);
-        else if (reservaSalva) toast('✓ Reserva salva!', 'success', 2500);
+        if (aplicouDireto && temOutros) toast('✓ Alterações salvas. As demais foram enviadas para aprovação.', 'success', 4500);
+        else if (aplicouDireto) toast('✓ Alterações salvas!', 'success', 2500);
         else if (temOutros) toast('✓ Edição enviada para aprovação do gestor', 'success', 3500);
         else { toast('Nenhuma alteração para enviar', 'info'); loadingBtn(submitBtn, false); return; }
         navigate(`/atividade/${id}`, true);

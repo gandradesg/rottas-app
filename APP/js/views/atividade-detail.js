@@ -4,7 +4,7 @@ import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
 import { isMaster, isGestor, isAdmin, can, canApproveLevel, roleLevel } from '../auth.js';
 import { navigate } from '../router.js';
-import { TIPO_ATIVIDADE, PROPOSTA_STATUS, NEXT_APPROVER, ROLES } from '../config.js';
+import { TIPO_ATIVIDADE, PROPOSTA_STATUS, NEXT_APPROVER, ROLES, TERMOMETRO_OPTIONS } from '../config.js';
 import { gmapsLink } from '../geo.js';
 import { aplicarEdicao, rejeitarEdicao, excluirAtividade, FIELD_LABELS } from '../activity-actions.js';
 
@@ -207,6 +207,81 @@ export async function atividadeDetailView(params, app) {
     })();
   }
 
+  // ===== Atendimentos adicionais (mesmo cliente/registro) — NÃO contam no funil =====
+  // Ficam guardados dentro da própria atividade (coluna JSONB atendimentos_extras).
+  // São só registros complementares (ex.: 2ª visita em outro local).
+  const extrasSection = el('div', {});
+  if (a.tipo === 'atendimento') {
+    const extras = Array.isArray(a.atendimentos_extras) ? a.atendimentos_extras : [];
+    const box = el('div', { class: 'card p-3' },
+      el('div', { class: 'text-xs font-bold uppercase text-fg-subtle' }, `Atendimentos adicionais (${extras.length})`),
+      el('div', { class: 'text-[11px] text-fg-muted mt-0.5 mb-2' },
+        'Outros atendimentos do mesmo cliente. Ficam dentro deste registro e não contam no funil.'),
+    );
+    if (extras.length) {
+      extras.forEach((ex, i) => box.appendChild(renderExtra(ex, i)));
+    } else {
+      box.appendChild(el('div', { class: 'text-sm text-fg-subtle italic' }, 'Nenhum ainda.'));
+    }
+    if (isOwner || userIsAdmin) {
+      box.appendChild(el('button', {
+        class: 'btn btn-secondary btn-sm mt-2 flex items-center gap-1.5',
+        onclick: () => openExtraModal(a),
+      }, icon('plus', 14), 'Registrar outro atendimento'));
+    }
+    extrasSection.appendChild(box);
+  }
+
+  function openExtraModal(at) {
+    const localInp = el('input', { class: 'input', placeholder: 'Onde foi o atendimento' });
+    const corretorInp = el('input', { class: 'input', placeholder: 'Corretor (opcional)' });
+    const termSel = el('select', { class: 'select' },
+      el('option', { value: '' }, 'Termômetro (opcional)'),
+      ...TERMOMETRO_OPTIONS.map(o => el('option', { value: o.value }, `${o.icon} ${o.label}`)),
+    );
+    const obsInp = el('textarea', { class: 'textarea', placeholder: 'Observações...' });
+    const saveBtn = el('button', { class: 'btn btn-primary' }, 'Salvar');
+    const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Cancelar');
+    const m = modal({
+      title: 'Novo atendimento (mesmo registro)', size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-2' },
+        el('div', { class: 'card p-2 text-xs text-fg-muted gradient-rottas-soft' },
+          '💡 Registra outro atendimento do mesmo cliente. Não gera nova atividade nem entra no funil.'),
+        el('div', {}, el('label', { class: 'label' }, 'Local da visita'), localInp),
+        el('div', {}, el('label', { class: 'label' }, 'Corretor'), corretorInp),
+        el('div', {}, el('label', { class: 'label' }, 'Termômetro'), termSel),
+        el('div', {}, el('label', { class: 'label' }, 'Observações'), obsInp),
+      ),
+      footer: [cancelBtn, saveBtn],
+    });
+    setTimeout(() => localInp.focus(), 60);
+    saveBtn.addEventListener('click', async () => {
+      const novo = {
+        data: new Date().toISOString(),
+        por_id: state.user.id,
+        por_nome: state.profile?.nome || null,
+        local_visita: localInp.value.trim() || null,
+        corretor: corretorInp.value.trim() || null,
+        termometro: termSel.value || null,
+        observacoes: obsInp.value.trim() || null,
+      };
+      if (!novo.local_visita && !novo.observacoes) {
+        toast('Informe ao menos o local ou uma observação', 'error'); return;
+      }
+      saveBtn.disabled = true;
+      const arr = Array.isArray(at.atendimentos_extras) ? [...at.atendimentos_extras] : [];
+      arr.push(novo);
+      const { data, error } = await supabase.from('atividades')
+        .update({ atendimentos_extras: arr, updated_at: new Date().toISOString() })
+        .eq('id', at.id).select();
+      if (error || !data || !data.length) {
+        toast(error?.message || 'Sem permissão para salvar', 'error', 6000); saveBtn.disabled = false; return;
+      }
+      toast('✓ Atendimento adicional registrado', 'success');
+      location.reload();
+    });
+  }
+
   // ===== Reserva (item 4): campo livre, salva direto SEM aprovação. =====
   // Ao ter reserva, a proposta vira "Reservada".
   const reservaSection = el('div', { class: 'flex flex-col gap-3' });
@@ -278,6 +353,7 @@ export async function atividadeDetailView(params, app) {
     el('div', { class: 'card p-4' }, ...rows),
     fotosSection,
     vinculoSection,
+    extrasSection,
 
     // Botão de edição. Gerente: vai para aprovação. Gestor/Master: edita direto.
     (canFullEdit || canRequestEdit) && !a.solicita_edicao && el('button', {
@@ -418,6 +494,22 @@ export async function atividadeDetailView(params, app) {
   app.appendChild(shell(content, {
     title: t.label, back: true, hideBottomNav: true, headerActions
   }));
+}
+
+// Card de um atendimento adicional (dentro do registro principal).
+// Numera a partir de #2 porque o atendimento principal é o #1.
+function renderExtra(ex, i) {
+  const term = ex.termometro ? TERMOMETRO_OPTIONS.find(o => o.value === ex.termometro) : null;
+  return el('div', { class: 'border-l-2 border-border pl-3 py-1.5 mt-1' },
+    el('div', { class: 'text-xs text-fg-subtle' },
+      `#${i + 2} · ${fmt.dateTime(ex.data)}` + (ex.por_nome ? ` · ${ex.por_nome}` : '')),
+    ex.local_visita && el('div', { class: 'text-sm font-medium mt-0.5' }, ex.local_visita),
+    (ex.corretor || term) && el('div', { class: 'text-xs text-fg-muted flex flex-wrap gap-2 mt-0.5' },
+      ex.corretor && el('span', {}, '👤 ' + ex.corretor),
+      term && el('span', {}, term.icon + ' ' + term.label),
+    ),
+    ex.observacoes && el('div', { class: 'text-xs italic text-fg-muted mt-0.5' }, '"' + ex.observacoes + '"'),
+  );
 }
 
 function fmtFieldValue(k, v) {

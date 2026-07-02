@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.6.3';
+export const APP_VERSION = '1.7.0';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.0',
+    date: '02/07/2026',
+    changes: [
+      'MUDANÇA: campo "Gerente da imobiliária" deixou de ser obrigatório no atendimento, proposta e Órulo/DWV — preencha só se tiver',
+      'NOVO: dentro de um atendimento dá para registrar "atendimentos adicionais" do mesmo cliente (2ª visita, outro local etc). Ficam dentro do próprio registro e NÃO contam no funil — é só um registro complementar',
+      'MELHORADO: na edição pelo gerente, alterações de baixo impacto (termômetro, observações e reserva) passam a valer na hora, sem precisar de aprovação. Os demais campos seguem indo para aprovação do gestor',
+    ],
+  },
   {
     version: '1.6.3',
     date: '02/07/2026',
