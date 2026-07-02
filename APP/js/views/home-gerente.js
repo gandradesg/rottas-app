@@ -317,7 +317,7 @@ function activityRow(a) {
       break;
     case 'atendimento':
       title = a.local_visita || a.produto || '-';
-      chips.push({ label: 'Visita', cls: 'chip-purple' });
+      chips.push({ label: 'Atendimento', cls: 'chip-purple' });
       if (a.cliente) meta = a.cliente;
       if (a.corretor) meta = (meta ? meta+' · ' : '') + a.corretor;
       break;

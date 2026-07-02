@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.5.2';
+export const APP_VERSION = '1.5.3';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.5.3',
+    date: '02/07/2026',
+    changes: [
+      'AJUSTE: no feed de atividades da home do gerente, a etiqueta do atendimento aparecia como "Visita" — agora aparece como "Atendimento"',
+    ],
+  },
   {
     version: '1.5.2',
     date: '02/07/2026',
