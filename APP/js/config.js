@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.5.4';
+export const APP_VERSION = '1.6.0';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.6.0',
+    date: '02/07/2026',
+    changes: [
+      'NOVO: painel "Performance da semana" no topo da Agenda (do gerente e da equipe) — mostra Agendadas, % Concluídas, % Canceladas e % Remarcadas da semana atual',
+      'NOVO: ao editar um agendamento e mudar a data/hora, ele é sinalizado como "Remarcada" (com contador de quantas vezes) — um chip aparece no card e entra no indicador de remarcação',
+    ],
+  },
   {
     version: '1.5.4',
     date: '02/07/2026',

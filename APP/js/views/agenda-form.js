@@ -209,6 +209,17 @@ export async function agendaFormView(params, app) {
       updated_at: new Date().toISOString(),
     };
 
+    // Remarcação: numa EDIÇÃO, se a data/hora prevista mudou, sinaliza como remarcada
+    // e incrementa o contador (preservando a 1ª data em data_prevista_original).
+    if (id && initial) {
+      const mudouDataHora = new Date(initial.data_prevista).getTime() !== new Date(dataIso).getTime();
+      if (mudouDataHora) {
+        payload.remarcada = true;
+        payload.remarcacoes = (initial.remarcacoes || 0) + 1;
+        payload.data_prevista_original = initial.data_prevista_original || initial.data_prevista;
+      }
+    }
+
     loadingBtn(submitBtn, true);
     try {
       const { data, error } = id

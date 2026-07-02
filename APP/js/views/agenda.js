@@ -21,6 +21,50 @@ const TIPO_ICON = {
 const DAY_NAMES = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
+// ===== Indicador de performance da semana =====
+// Considera os agendamentos cuja data prevista cai na semana corrente (Dom→Sáb).
+function startOfWeekDate(d) {
+  const x = new Date(d); x.setHours(0,0,0,0);
+  x.setDate(x.getDate() - x.getDay());
+  return x;
+}
+function computeWeekStats(items, refDate) {
+  const start = startOfWeekDate(refDate);
+  const end = new Date(start); end.setDate(end.getDate() + 7);
+  const wk = (items || []).filter(it => {
+    const d = new Date(it.data_prevista);
+    return d >= start && d < end;
+  });
+  const total  = wk.length;
+  const concl  = wk.filter(x => x.status === 'realizado').length;
+  const canc   = wk.filter(x => x.status === 'cancelado').length;
+  const remarc = wk.filter(x => x.remarcada).length;
+  const pct = n => total ? Math.round((n / total) * 100) : 0;
+  return { total, concl, canc, remarc, pctConcl: pct(concl), pctCanc: pct(canc), pctRemarc: pct(remarc) };
+}
+function renderWeekStats(box, items, refDate) {
+  const s = computeWeekStats(items, refDate);
+  box.innerHTML = '';
+  const stat = (value, label, color, sub) => el('div', {
+    class: 'flex flex-col items-center justify-center text-center px-1 py-2 rounded-xl',
+    style: { background: color + '14' },
+  },
+    el('div', { class: 'text-xl font-extrabold leading-none', style: { color } }, value),
+    el('div', { class: 'text-[10px] font-semibold uppercase tracking-wide text-fg-muted mt-1' }, label),
+    sub ? el('div', { class: 'text-[10px] text-fg-subtle' }, sub) : null,
+  );
+  box.appendChild(el('div', { class: 'card p-3' },
+    el('div', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
+      '📊 Performance da semana'),
+    el('div', { class: 'grid grid-cols-4 gap-2' },
+      stat(String(s.total), 'Agendadas', '#F26B22'),
+      stat(s.pctConcl + '%', 'Concluídas', '#10B981', `${s.concl}/${s.total}`),
+      stat(s.pctCanc + '%', 'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
+      stat(s.pctRemarc + '%', 'Remarcadas', '#F59E0B', `${s.remarc}/${s.total}`),
+    ),
+  ));
+}
+
 export async function agendaView(_params, app) {
   const view = activeViewRole();
   if (view === 'gestor') return agendaGestorView(app);
@@ -44,6 +88,10 @@ async function agendaGerenteView(app) {
     el('h1', { class: 'text-2xl font-extrabold' }, 'Minha agenda'),
     el('p', { class: 'text-sm text-fg-muted' }, 'Toque em um dia para ver e adicionar atividades'),
   ));
+
+  // Painel de performance da semana (preenchido após carregar os itens)
+  const statsBox = el('div', {});
+  content.appendChild(statsBox);
 
   // Helper: navega para criar agendamento prefilando a data
   function newOnDate(date) {
@@ -156,6 +204,7 @@ async function agendaGerenteView(app) {
   }
 
   function render() {
+    renderWeekStats(statsBox, allItems, today);
     renderToolbar();
     cal.innerHTML = '';
     if (mode === 'dia')    renderDay();
@@ -383,6 +432,8 @@ async function agendaGerenteView(app) {
         el('div', { class: 'flex items-center gap-2 flex-wrap' },
           el('span', { class: 'font-semibold truncate' }, titulo),
           el('span', { class: `chip ${status.chip}` }, status.icon, ' ', status.label),
+          item.remarcada && el('span', { class: 'chip chip-yellow text-[10px]' },
+            '↻ Remarcada' + (item.remarcacoes > 1 ? ` ${item.remarcacoes}x` : '')),
           respChip,
         ),
         el('div', { class: 'text-xs text-fg-muted mt-0.5' },
@@ -454,6 +505,10 @@ async function agendaGestorView(app) {
     el('h1', { class: 'text-2xl font-extrabold' }, 'Agenda da equipe'),
     el('p', { class: 'text-sm text-fg-muted' }, 'Planejamento consolidado de todos os Gerentes'),
   ));
+
+  // Painel de performance da semana (respeita os filtros aplicados)
+  const statsBox = el('div', {});
+  content.appendChild(statsBox);
 
   // Filtros
   const filterBar = el('div', { class: 'card p-3 grid grid-cols-3 gap-2' });
@@ -560,6 +615,7 @@ async function agendaGestorView(app) {
   function itemsOnDay(d) { return allItems.filter(it => isSameDay(new Date(it.data_prevista), d)); }
 
   function render() {
+    renderWeekStats(statsBox, allItems, today);
     renderToolbar();
     cal.innerHTML = '';
     if (mode === 'dia')    renderDay();
@@ -666,6 +722,8 @@ async function agendaGestorView(app) {
           el('div', { class: 'flex items-center gap-2 flex-wrap' },
             el('span', { class: 'font-semibold truncate' }, titulo),
             el('span', { class: `chip ${status.chip}` }, status.icon, ' ', status.label),
+            item.remarcada && el('span', { class: 'chip chip-yellow text-[10px]' },
+              '↻ Remarcada' + (item.remarcacoes > 1 ? ` ${item.remarcacoes}x` : '')),
           ),
           el('div', { class: 'text-xs text-fg-muted mt-0.5' },
             fmt.time(item.data_prevista), ' · ', tipo.label,
