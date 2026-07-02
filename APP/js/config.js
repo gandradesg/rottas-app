@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.6.2';
+export const APP_VERSION = '1.6.3';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.6.3',
+    date: '02/07/2026',
+    changes: [
+      'AJUSTE VISUAL: no painel de performance, "Remarcadas" voltou a ser um card lateral (com a quantidade em destaque e o % embaixo), separado dos outros três por um divisor vertical',
+    ],
+  },
   {
     version: '1.6.2',
     date: '02/07/2026',

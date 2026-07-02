@@ -79,20 +79,25 @@ function renderPeriodStats(box, items, mode, cursor) {
       el('span', { class: 'text-fg-muted font-normal normal-case' },
         ` · ${s.total} agendada${s.total !== 1 ? 's' : ''}`),
     ),
-    // Os 3 estados que fecham 100% do total
-    el('div', { class: 'grid grid-cols-3 gap-2' },
-      stat(s.pctPend + '%',  'Pendentes',  '#F26B22', `${s.pend}/${s.total}`),
-      stat(s.pctConcl + '%', 'Concluídas', '#10B981', `${s.concl}/${s.total}`),
-      stat(s.pctCanc + '%',  'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
-    ),
-    // Remarcadas: indicador separado (quantidade) — não entra na soma dos 100%,
-    // pois uma agenda pendente ou concluída também pode ter sido remarcada.
-    el('div', { class: 'flex items-center justify-between mt-3 pt-2.5 border-t border-border' },
-      el('div', { class: 'flex items-center gap-1.5 text-xs font-semibold text-fg-muted' },
-        el('span', { style: { color: '#F59E0B' } }, '↻'), 'Remarcadas'),
-      el('div', { class: 'text-sm font-extrabold', style: { color: '#F59E0B' } },
-        String(s.remarc),
-        el('span', { class: 'text-fg-subtle font-normal ml-1' }, `(${s.pctRemarc}% do total)`),
+    // Linha única: os 3 estados que fecham 100% + divisor + Remarcadas (separado).
+    // Remarcadas é indicador à parte (quantidade), pois uma agenda pendente ou
+    // concluída também pode ter sido remarcada — por isso não entra na soma.
+    el('div', { class: 'flex items-stretch gap-2' },
+      el('div', { class: 'grid grid-cols-3 gap-2', style: { flex: '3' } },
+        stat(s.pctPend + '%',  'Pendentes',  '#F26B22', `${s.pend}/${s.total}`),
+        stat(s.pctConcl + '%', 'Concluídas', '#10B981', `${s.concl}/${s.total}`),
+        stat(s.pctCanc + '%',  'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
+      ),
+      el('div', { class: 'self-stretch', style: { width: '1px', background: 'rgb(var(--border))' } }),
+      el('div', {
+        class: 'flex flex-col items-center justify-center text-center px-1 py-2 rounded-xl',
+        style: { flex: '1', background: '#F59E0B14' },
+      },
+        el('div', { class: 'text-xl font-extrabold leading-none', style: { color: '#F59E0B' } },
+          String(s.remarc)),
+        el('div', { class: 'text-[10px] font-semibold uppercase tracking-wide text-fg-muted mt-1 flex items-center gap-0.5' },
+          el('span', { style: { color: '#F59E0B' } }, '↻'), 'Remarcadas'),
+        el('div', { class: 'text-[10px] text-fg-subtle' }, `${s.pctRemarc}%`),
       ),
     ),
   ));
