@@ -79,11 +79,21 @@ function renderPeriodStats(box, items, mode, cursor) {
       el('span', { class: 'text-fg-muted font-normal normal-case' },
         ` · ${s.total} agendada${s.total !== 1 ? 's' : ''}`),
     ),
-    el('div', { class: 'grid grid-cols-4 gap-2' },
-      stat(s.pctPend + '%',   'Pendentes',  '#F26B22', `${s.pend}/${s.total}`),
-      stat(s.pctConcl + '%',  'Concluídas', '#10B981', `${s.concl}/${s.total}`),
-      stat(s.pctCanc + '%',   'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
-      stat(s.pctRemarc + '%', 'Remarcadas', '#F59E0B', `${s.remarc}/${s.total}`),
+    // Os 3 estados que fecham 100% do total
+    el('div', { class: 'grid grid-cols-3 gap-2' },
+      stat(s.pctPend + '%',  'Pendentes',  '#F26B22', `${s.pend}/${s.total}`),
+      stat(s.pctConcl + '%', 'Concluídas', '#10B981', `${s.concl}/${s.total}`),
+      stat(s.pctCanc + '%',  'Canceladas', '#EF4444', `${s.canc}/${s.total}`),
+    ),
+    // Remarcadas: indicador separado (quantidade) — não entra na soma dos 100%,
+    // pois uma agenda pendente ou concluída também pode ter sido remarcada.
+    el('div', { class: 'flex items-center justify-between mt-3 pt-2.5 border-t border-border' },
+      el('div', { class: 'flex items-center gap-1.5 text-xs font-semibold text-fg-muted' },
+        el('span', { style: { color: '#F59E0B' } }, '↻'), 'Remarcadas'),
+      el('div', { class: 'text-sm font-extrabold', style: { color: '#F59E0B' } },
+        String(s.remarc),
+        el('span', { class: 'text-fg-subtle font-normal ml-1' }, `(${s.pctRemarc}% do total)`),
+      ),
     ),
   ));
 }

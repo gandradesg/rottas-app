@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.6.1';
+export const APP_VERSION = '1.6.2';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.6.2',
+    date: '02/07/2026',
+    changes: [
+      'MELHORADO: no painel de performance, "Remarcadas" saiu do grupo dos 100% e virou um indicador separado (quantidade + % do total) abaixo de um divisor. Assim não confunde mais com Pendentes/Concluídas/Canceladas, que continuam somando 100%',
+    ],
+  },
   {
     version: '1.6.1',
     date: '02/07/2026',
