@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.5.3';
+export const APP_VERSION = '1.5.4';
 export const APP_BUILD_DATE = '2026-07-02';
 
 export const CHANGELOG = [
+  {
+    version: '1.5.4',
+    date: '02/07/2026',
+    changes: [
+      'AJUSTE: cores padronizadas por tipo de atividade — no funil (Painel e Histórico) o Atendimento passou de laranja para roxo, a mesma cor usada nos KPIs e etiquetas. Agora cada tipo tem uma cor única: Check-in azul, Atendimento roxo, Proposta amarelo, Reserva verde',
+    ],
+  },
   {
     version: '1.5.3',
     date: '02/07/2026',
