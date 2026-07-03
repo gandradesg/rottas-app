@@ -182,54 +182,14 @@ export async function masterListasView(_params, app) {
     renderItems('');
   }
 
-  // Helper: renderiza um campo extra (input/select/cidade-select) e retorna {wrapper, getValue, getExtras}
-  // cidade-select: dropdown puxando de state.cidades; ao selecionar, retorna {cidade, estado}
+  // Helper: renderiza um campo extra (input/select/cidades-multi/...) e retorna {wrapper, getValue, getExtras}
   function renderExtraField(extraDef, initial) {
     let inputEl;
-    let extraGetter = null;
     if (extraDef.type === 'select') {
       inputEl = el('select', { class: 'select' },
         el('option', { value: '' }, '—'),
         ...extraDef.options.map(o => el('option', { value: o, selected: initial === o }, o))
       );
-    } else if (extraDef.type === 'cidade-select') {
-      // Input texto livre + autocomplete via datalist (HTML5).
-      // - Sugere cidades de state.cidades (com indicador de UF)
-      // - Aceita qualquer texto digitado (ex: "Ponta Grossa" mesmo se não cadastrada)
-      // - Ao salvar, busca o estado da cidade em state.cidades; se não achar, estado=null
-      const listId = 'cidades-dl-' + Math.random().toString(36).slice(2, 8);
-      inputEl = el('input', {
-        class: 'input',
-        type: 'text',
-        placeholder: extraDef.placeholder || 'Digite ou escolha uma cidade',
-        value: initial || '',
-        list: listId,
-        autocomplete: 'off',
-      });
-      const dl = el('datalist', { id: listId },
-        ...(state.cidades || []).map(c =>
-          el('option', { value: c.nome }, `${c.nome} (${c.estado})`)
-        )
-      );
-      // Função pra inferir estado pelo nome digitado
-      extraGetter = () => {
-        const v = (inputEl.value || '').trim();
-        if (!v) return { estado: null };
-        const match = (state.cidades || []).find(c =>
-          c.nome.toLowerCase() === v.toLowerCase()
-        );
-        return { estado: match?.estado || null };
-      };
-      // Anexa o datalist depois do input
-      const orig = el('div', {}, inputEl, dl);
-      return {
-        wrapper: el('div', {},
-          el('label', { class: 'label ' + (extraDef.required ? 'label-required' : '') }, extraDef.label),
-          orig,
-        ),
-        getValue: () => (inputEl.value || '').trim() || null,
-        getExtras: extraGetter,
-      };
     } else if (extraDef.type === 'cidades-multi') {
       // Editor de tags: lista de cidades extras onde o empreendimento aparece.
       // Sugestões = SÓ cidades onde já temos empreendimentos cadastrados
@@ -296,15 +256,8 @@ export async function masterListasView(_params, app) {
         el('label', { class: 'label ' + (extraDef.required ? 'label-required' : '') }, extraDef.label),
         inputEl,
       ),
-      getValue: () => {
-        if (extraDef.type === 'cidade-select') {
-          const v = inputEl.value;
-          if (!v) return null;
-          return v.split('|')[0]; // só o nome da cidade
-        }
-        return inputEl.value.trim() || null;
-      },
-      getExtras: extraGetter,
+      getValue: () => inputEl.value.trim() || null,
+      getExtras: null,
     };
   }
 
@@ -335,7 +288,6 @@ export async function masterListasView(_params, app) {
           return;
         }
         extraData[ef.key] = v;
-        // Cidade-select retorna `estado` automaticamente em getExtras()
         if (extras[i].getExtras) Object.assign(extraData, extras[i].getExtras());
       });
       const payload = { nome, ...extraData };
@@ -551,7 +503,6 @@ export async function masterListasView(_params, app) {
     // Parser: cada linha vira um objeto baseado em tab.importColumns
     // - Single column: { nome: "Nome" }
     // - Multi column:  { nome, cidade, ... } - aceita ; , TAB como separadores
-    // Bonus: pra empreendimentos, faz lookup da cidade em state.cidades pra pegar estado automaticamente
     function parseLines() {
       const lines = textArea.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       const cols = tab.importColumns || ['nome'];

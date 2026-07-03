@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.8.1';
 export const APP_BUILD_DATE = '2026-07-03';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.1',
+    date: '03/07/2026',
+    changes: [
+      'LIMPEZA: removida a tabela "cidades" (legado, sem uso) e o código órfão que a referenciava. As cidades continuam vindo dinamicamente dos empreendimentos cadastrados',
+    ],
+  },
   {
     version: '1.8.0',
     date: '03/07/2026',

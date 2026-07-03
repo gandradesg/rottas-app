@@ -39,7 +39,6 @@ export const state = {
   motivosOrulo: [],
   motivosDwv: [],
   locaisVisita: [],
-  cidades: [],
   gerentesHouse: [],  // lista mestra de gerentes house (para visitas)
   corretores: [],     // lista mestra de corretores (vinculados a imobiliária)
   gerentesImob: [],   // gerentes/donos das imobiliárias (vinculados a imobiliária)
@@ -96,7 +95,6 @@ export async function loadLists() {
   state.gerentesHouse   = gh.data      || [];
   state.corretores      = cor.data     || [];
   state.gerentesImob    = gim.data     || [];
-  state.cidades         = [];          // descontinuado
   emitStateChange();
 }
 
