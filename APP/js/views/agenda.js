@@ -2,7 +2,7 @@
 import { el, icon, fmt, toast, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
-import { activeViewRole } from '../auth.js';
+import { activeViewRole, isAdmin } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { calendarButton } from '../calendar-sync.js';
@@ -177,9 +177,15 @@ async function agendaGerenteView(app) {
     teamIds = [meuId, state.profile.gerente_supervisor_id];
   }
 
-  // Gerentes da mesma praça (para o filtro) — via RPC SECURITY DEFINER
+  // Gerentes disponíveis no filtro "Ver agenda de":
+  // - Admin (master/gestor/etc.) na visão Gerente: TODOS os gerentes (inspeção/teste)
+  // - Gerente comum: gerentes da mesma praça (cidade), via RPC SECURITY DEFINER
   let outrosGerentes = [];
-  if (role === 'gerente') {
+  if (isAdmin()) {
+    const { data } = await supabase
+      .from('profiles').select('id, nome').eq('role', 'gerente').eq('ativo', true).order('nome');
+    outrosGerentes = data || [];
+  } else if (role === 'gerente') {
     const { data: mesmos } = await supabase.rpc('gerentes_mesma_praca');
     outrosGerentes = mesmos || [];
   }
@@ -520,8 +526,9 @@ async function agendaGerenteView(app) {
     ));
 
     const actions = el('div', { class: 'flex gap-1.5 flex-wrap' });
-    // Ações só na própria agenda/equipe. Ao ver outro gerente da praça, é só leitura.
-    if (viewFilter === 'minha') {
+    // Ações na própria agenda/equipe. Admin (ex.: Master na visão Gerente) age em
+    // qualquer agenda (inspeção/teste). Gerente comum só lê a agenda de colega.
+    if (viewFilter === 'minha' || isAdmin()) {
     if (item.status === 'pendente') {
       actions.appendChild(el('button', {
         class: 'btn btn-primary btn-sm flex items-center gap-1.5',
