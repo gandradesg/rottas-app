@@ -2,7 +2,7 @@
 import { el, icon, toast, confirmModal, modal, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { supabase, loadLists, state } from '../supabase.js';
-import { phoneInput, emailInput, findCorretorDuplicates } from '../components/form-fields.js';
+import { phoneInput, emailInput, findCorretorDuplicates, cidadeEstadoField } from '../components/form-fields.js';
 
 // Cada tab pode ter `extraFields` (lista de campos além do `nome`)
 // e `displayExtra(item)` para mostrar metadado adicional na linha
@@ -10,8 +10,7 @@ const TABS = [
   {
     id: 'imobiliarias',    table: 'imobiliarias',    label: 'Imobiliárias',      stateKey: 'imobiliarias',
     extraFields: [
-      { key: 'cidade', label: 'Cidade', type: 'text', placeholder: 'Ex: Curitiba', required: true },
-      { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'], required: true },
+      { key: 'cidade', label: 'Cidade', type: 'cidade-auto', required: true },
     ],
     // Import CSV: "Nome;Cidade;Estado"
     importColumns: ['nome', 'cidade', 'estado'],
@@ -24,8 +23,7 @@ const TABS = [
   {
     id: 'empreendimentos', table: 'empreendimentos', label: 'Empreendimentos',   stateKey: 'empreendimentos',
     extraFields: [
-      { key: 'cidade', label: 'Cidade-sede', type: 'text', placeholder: 'Ex: Ponta Grossa' },
-      { key: 'estado', label: 'Estado', type: 'select', options: ['PR','SC'] },
+      { key: 'cidade', label: 'Cidade-sede', type: 'cidade-auto' },
       { key: 'cidades_visiveis', label: 'Aparece também em (outras cidades)', type: 'cidades-multi',
         placeholder: 'Ex: Curitiba — adicionar cidade' },
       { key: 'link_url', label: 'Link do produto (opcional)', type: 'url', placeholder: 'https://...' }
@@ -185,7 +183,22 @@ export async function masterListasView(_params, app) {
   // Helper: renderiza um campo extra (input/select/cidades-multi/...) e retorna {wrapper, getValue, getExtras}
   function renderExtraField(extraDef, initial) {
     let inputEl;
-    if (extraDef.type === 'select') {
+    if (extraDef.type === 'cidade-auto') {
+      // Cidade com autocomplete (IBGE) + UF automática. getExtras devolve o estado.
+      const cef = cidadeEstadoField({ cidade: initial, estado: null });
+      return {
+        wrapper: el('div', { class: 'flex flex-col gap-2' },
+          el('div', {},
+            el('label', { class: 'label ' + (extraDef.required ? 'label-required' : '') }, extraDef.label),
+            cef.cidadeInput, cef.datalist),
+          el('div', {},
+            el('label', { class: 'label' }, 'Estado (automático)'),
+            cef.estadoSelect),
+        ),
+        getValue: () => cef.getCidade(),
+        getExtras: () => ({ estado: cef.getEstado() }),
+      };
+    } else if (extraDef.type === 'select') {
       inputEl = el('select', { class: 'select' },
         el('option', { value: '' }, '—'),
         ...extraDef.options.map(o => el('option', { value: o, selected: initial === o }, o))

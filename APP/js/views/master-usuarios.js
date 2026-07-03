@@ -3,7 +3,7 @@ import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js'
 import { shell } from './shell.js';
 import { supabase, loadAllProfiles, state } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES, ROLES, SUPABASE_URL } from '../config.js';
-import { phoneInput, emailInput } from '../components/form-fields.js';
+import { phoneInput, emailInput, cidadeEstadoField } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
 
 let listEl = null;
@@ -309,11 +309,10 @@ function userFormFields(p) {
     ? el('input', { class: 'input', type: 'email', value: p.email || '', disabled: true })
     : emailInput({ value: p.email || '', placeholder: 'email@rottasconstrutora.com.br' });
   const tel = phoneInput({ value: p.telefone || '' });
-  const cidade = el('input', { class: 'input', value: p.cidade || '', placeholder: 'Cidade' });
-  const estado = el('select', { class: 'select' },
-    el('option', { value: '' }, 'UF'),
-    ...ESTADOS_BR.map(u => el('option', { value: u, selected: p.estado === u }, u)),
-  );
+  const _cef = cidadeEstadoField({ cidade: p.cidade, estado: p.estado });
+  const cidade = _cef.cidadeInput;      // UF preenche automática ao escolher a cidade
+  const estado = _cef.estadoSelect;
+  const cidadeDL = _cef.datalist;
 
   // Seletor de role lendo TODOS os roles do config.ROLES (assim novos roles
   // aparecem automaticamente — ex: recepcao_rottas).
@@ -503,7 +502,7 @@ function userFormFields(p) {
     permsCard,
     el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
     el('div', { class: 'grid grid-cols-3 gap-2' },
-      el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade base'), cidade),
+      el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade base'), cidade, cidadeDL),
       el('div', {}, el('label', { class: 'label' }, 'UF base'), estado),
     ),
   );

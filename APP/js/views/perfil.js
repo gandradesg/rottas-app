@@ -5,7 +5,7 @@ import { state, supabase } from '../supabase.js';
 import { signOut, setPassword, isMaster } from '../auth.js';
 import { ESTADOS_BR, APP_VERSION, ROLES } from '../config.js';
 import { navigate } from '../router.js';
-import { phoneInput } from '../components/form-fields.js';
+import { phoneInput, cidadeEstadoField } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { FIELD_LABELS } from '../activity-actions.js';
 
@@ -15,11 +15,10 @@ export async function perfilView(_params, app) {
 
   const nome = el('input', { class: 'input', value: p.nome });
   const tel = phoneInput({ value: p.telefone || '' });
-  const cidade = el('input', { class: 'input', value: p.cidade || '' });
-  const estado = el('select', { class: 'select' },
-    el('option', { value: '' }, 'UF'),
-    ...ESTADOS_BR.map(u => el('option', { value: u, selected: p.estado === u }, u)),
-  );
+  const _cef = cidadeEstadoField({ cidade: p.cidade, estado: p.estado });
+  const cidade = _cef.cidadeInput;   // UF preenche automática ao escolher a cidade
+  const estado = _cef.estadoSelect;
+  const cidadeDL = _cef.datalist;
 
   const saveBtn = el('button', { class: 'btn btn-primary w-full mt-2' }, 'Salvar dados');
   saveBtn.addEventListener('click', async () => {
@@ -239,7 +238,7 @@ export async function perfilView(_params, app) {
         el('div', {}, el('label', { class: 'label' }, 'Nome'), nome),
         el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
         el('div', { class: 'grid grid-cols-3 gap-2' },
-          el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade'), cidade),
+          el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade'), cidade, cidadeDL),
           el('div', {}, el('label', { class: 'label' }, 'UF'), estado),
         ),
         saveBtn,

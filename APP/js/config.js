@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.8.2';
+export const APP_VERSION = '1.9.0';
 export const APP_BUILD_DATE = '2026-07-03';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.0',
+    date: '03/07/2026',
+    changes: [
+      'NOVO: cidade agora tem autocomplete com a lista oficial de municípios (IBGE) de PR e SC — e o Estado (UF) é preenchido automaticamente ao escolher a cidade',
+      'Aplicado em todos os cadastros com cidade/estado: nova imobiliária (no registro e nas Listas), empreendimentos, usuários e perfil. Ainda é possível digitar uma cidade fora da lista',
+    ],
+  },
   {
     version: '1.8.2',
     date: '03/07/2026',

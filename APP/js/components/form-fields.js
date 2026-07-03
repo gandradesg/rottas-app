@@ -2,6 +2,49 @@
 import { el, icon, toast, modal, confirmModal } from '../ui.js';
 import { supabase, state, loadLists } from '../supabase.js';
 import { MAX_PHOTOS_PER_ACTIVITY, ESTADOS_BR } from '../config.js';
+import { loadCidadesBR, mapaCidadeUf } from '../cidades-br.js';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CIDADE + ESTADO com autocomplete (lista automática do IBGE) e UF automática.
+// Retorna { cidadeInput, estadoSelect, datalist, getCidade, getEstado }.
+// - cidadeInput: input texto com datalist das cidades de PR/SC (aceita digitar livre)
+// - estadoSelect: <select> UF que é preenchido SOZINHO ao escolher uma cidade conhecida
+// - datalist: precisa ser inserido no DOM (o input aponta pra ele via list=)
+// ═══════════════════════════════════════════════════════════════════════════
+export function cidadeEstadoField({ cidade, estado } = {}) {
+  const listId = 'cidades-br-' + Math.random().toString(36).slice(2, 9);
+  const cidadeInput = el('input', {
+    class: 'input', type: 'text', value: cidade || '',
+    placeholder: 'Cidade', list: listId, autocomplete: 'off',
+  });
+  const datalist = el('datalist', { id: listId });
+  const estadoSelect = el('select', { class: 'select' },
+    el('option', { value: '' }, 'UF'),
+    ...ESTADOS_BR.map(u => el('option', { value: u, selected: estado === u }, u)),
+  );
+
+  let cidadeUf = new Map();
+  loadCidadesBR().then(list => {
+    cidadeUf = mapaCidadeUf(list);
+    datalist.innerHTML = '';
+    list.forEach(c => datalist.appendChild(el('option', { value: c.nome })));
+    // Se já veio uma cidade preenchida e sem UF, tenta inferir
+    if (cidadeInput.value && !estadoSelect.value) aplicarUf();
+  }).catch(() => {});
+
+  function aplicarUf() {
+    const uf = cidadeUf.get((cidadeInput.value || '').trim().toLowerCase());
+    if (uf) estadoSelect.value = uf; // só sobrescreve quando reconhece a cidade
+  }
+  cidadeInput.addEventListener('input', aplicarUf);
+  cidadeInput.addEventListener('change', aplicarUf);
+
+  return {
+    cidadeInput, estadoSelect, datalist,
+    getCidade: () => (cidadeInput.value || '').trim() || null,
+    getEstado: () => estadoSelect.value || null,
+  };
+}
 
 // Só os dígitos de um telefone (ignora +55, parênteses, espaços, traços).
 // Usado pra detectar duplicado independente do formato em que foi salvo.
@@ -151,13 +194,7 @@ export async function addImobiliaria(nome) {
   const nomeUpper = (nome || '').trim().toUpperCase();
   if (!nomeUpper) throw new Error('Nome obrigatório');
   return new Promise((resolve, reject) => {
-    const cidadeInput = el('input', {
-      class: 'input', type: 'text', placeholder: 'Ex: Curitiba',
-    });
-    const estadoSel = el('select', { class: 'select' },
-      el('option', { value: '' }, 'Selecione...'),
-      ...ESTADOS_BR.map(uf => el('option', { value: uf }, uf))
-    );
+    const cef = cidadeEstadoField({});
     const submitBtn = el('button', { class: 'btn btn-primary' }, 'Cadastrar');
     const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => { m.close(); reject(new Error('Cancelado')); } }, 'Cancelar');
     const m = modal({
@@ -165,23 +202,23 @@ export async function addImobiliaria(nome) {
       size: 'sm',
       content: el('div', { class: 'flex flex-col gap-3' },
         el('p', { class: 'text-sm text-fg-muted' },
-          'Pra cadastrar a imobiliária, informe a cidade e o estado dela.'),
+          'Escolha a cidade (a UF é preenchida automaticamente).'),
         el('div', {},
           el('label', { class: 'label label-required' }, 'Cidade'),
-          cidadeInput,
+          cef.cidadeInput, cef.datalist,
         ),
         el('div', {},
           el('label', { class: 'label label-required' }, 'Estado'),
-          estadoSel,
+          cef.estadoSelect,
         ),
       ),
       footer: [cancelBtn, submitBtn],
     });
-    setTimeout(() => cidadeInput.focus(), 80);
+    setTimeout(() => cef.cidadeInput.focus(), 80);
 
     submitBtn.addEventListener('click', async () => {
-      const cidade = cidadeInput.value.trim();
-      const estado = estadoSel.value;
+      const cidade = cef.getCidade();
+      const estado = cef.getEstado();
       if (!cidade) { toast('Cidade é obrigatória', 'error'); return; }
       if (!estado) { toast('Estado é obrigatório', 'error'); return; }
       submitBtn.disabled = true;
