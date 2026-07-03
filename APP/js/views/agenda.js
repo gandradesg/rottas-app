@@ -197,7 +197,7 @@ async function agendaGerenteView(app) {
     if (!outrosGerentes.length) return;
     const sel = el('select', { class: 'select' },
       el('option', { value: 'minha', selected: viewFilter === 'minha' },
-        teamIds.length > 1 ? 'Minha agenda (e equipe)' : 'Minha agenda'),
+        isAdmin() ? 'Todos os gerentes' : (teamIds.length > 1 ? 'Minha agenda (e equipe)' : 'Minha agenda')),
       ...outrosGerentes.map(g => el('option', { value: g.id, selected: viewFilter === g.id }, '👤 ' + g.nome)),
     );
     sel.addEventListener('change', () => { viewFilter = sel.value; loadItems(); });
@@ -216,7 +216,13 @@ async function agendaGerenteView(app) {
       .gte('data_prevista', from.toISOString())
       .lte('data_prevista', to.toISOString())
       .order('data_prevista', { ascending: true });
-    q = (viewFilter === 'minha') ? q.in('gerente_id', teamIds) : q.eq('gerente_id', viewFilter);
+    if (viewFilter !== 'minha') {
+      q = q.eq('gerente_id', viewFilter);
+    } else if (!isAdmin()) {
+      // Gerente/supervisor: só a própria equipe. Admin (master/gestor/etc.) na visão
+      // Gerente vê TUDO de todos por padrão (inspeção e testes) — sem filtro.
+      q = q.in('gerente_id', teamIds);
+    }
     const { data, error } = await q;
     if (error) {
       cal.innerHTML = '';

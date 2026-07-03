@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.1';
+export const APP_VERSION = '1.9.2';
 export const APP_BUILD_DATE = '2026-07-03';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.2',
+    date: '03/07/2026',
+    changes: [
+      'CORRIGIDO: Master/admin na visão Gerente agora abre a agenda já mostrando TUDO de todos por padrão (antes vinha vazia, mostrando só a própria). Continua podendo filtrar por um gerente específico',
+    ],
+  },
   {
     version: '1.9.1',
     date: '03/07/2026',
