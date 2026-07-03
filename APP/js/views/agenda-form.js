@@ -30,11 +30,20 @@ export async function agendaFormView(params, app) {
   const meuId = state.user.id;
   const myRole = state.profile?.role;
   let responsaveis = []; // [{ id, nome }]
-  if (myRole === 'gerente') {
-    responsaveis.push({ id: meuId, nome: (state.profile?.nome || 'Você') + ' (você)' });
-    const { data: subs } = await supabase
-      .from('profiles').select('id, nome').eq('gerente_supervisor_id', meuId).eq('ativo', true).order('nome');
-    (subs || []).forEach(s => responsaveis.push({ id: s.id, nome: s.nome + ' (Supervisor)' }));
+  if (myRole === 'gerente' || myRole === 'supervisor') {
+    // Gerente e supervisor podem marcar a si e a gerentes/supervisores da MESMA
+    // cidade (agenda compartilhada), além do gerente superior do supervisor.
+    const { data: pessoas } = await supabase.rpc('pessoas_agenda_mesma_praca');
+    (pessoas || []).forEach(p => {
+      const isSelf = p.id === meuId;
+      const rl = p.role === 'gerente' ? 'Gerente' : 'Supervisor';
+      responsaveis.push({ id: p.id, nome: isSelf ? ((p.nome || 'Você') + ' (você)') : `${p.nome} (${rl})` });
+    });
+    if (!responsaveis.some(r => r.id === meuId)) {
+      responsaveis.unshift({ id: meuId, nome: (state.profile?.nome || 'Você') + ' (você)' });
+    }
+    // Eu sempre no topo
+    responsaveis.sort((a, b) => (a.id === meuId ? -1 : b.id === meuId ? 1 : 0));
   } else if (['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole)) {
     const { data: gers } = await supabase
       .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome');
@@ -49,7 +58,7 @@ export async function agendaFormView(params, app) {
     list.forEach(g => responsaveis.push({ id: g.id, nome: g.nome + ' (Gerente)' }));
   }
   // Default responsável: gerente → ele mesmo; admin → forçar escolha. Editando mantém o atual.
-  let responsavelId = initial?.gerente_id || (myRole === 'gerente' ? meuId : '');
+  let responsavelId = initial?.gerente_id || (['gerente','supervisor'].includes(myRole) ? meuId : '');
 
   // Tipo padrão (legado: proposta/orulo viram 'outro')
   const initialTipo = initial?.tipo && TIPOS.find(t => t.id === initial.tipo) ? initial.tipo : 'checkin';
@@ -171,7 +180,7 @@ export async function agendaFormView(params, app) {
       required: true,
       help: isAdminRole
         ? 'Em qual gerente do seu time esta agenda será criada'
-        : 'Quem vai cumprir esta agenda - você ou um dos seus supervisores',
+        : 'Você, ou um gerente/supervisor da sua cidade (vocês compartilham agenda)',
     });
   } else if (isAdminRole && responsaveis.length === 0) {
     responsavelField = el('div', { class: 'card p-3 text-sm text-warning' },

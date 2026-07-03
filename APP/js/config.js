@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.8.1';
+export const APP_VERSION = '1.8.2';
 export const APP_BUILD_DATE = '2026-07-03';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.2',
+    date: '03/07/2026',
+    changes: [
+      'NOVO: agenda compartilhada — ao agendar, gerentes e supervisores da MESMA cidade podem marcar atividade um para o outro. O supervisor também pode agendar para o gerente superior dele',
+      'No formulário de agendamento, o campo "Responsável" agora lista você + os gerentes/supervisores da sua cidade',
+    ],
+  },
   {
     version: '1.8.1',
     date: '03/07/2026',
