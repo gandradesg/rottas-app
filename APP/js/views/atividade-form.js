@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn, fmt, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -202,10 +202,26 @@ export async function atividadeFormView(params, app) {
     if (!id) locationFieldEl = locationField();
     photoPickerEl = photoPicker({});
 
-    // Motivo da visita - quando "Treinamento", abre campos extras (item 3)
-    const motivoSel = creatableSelect({
-      name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita, required: true,
-    });
+    // Motivo da visita - lista aberta: o gerente pode DIGITAR um novo motivo ao
+    // criar (fica salvo na lista pra mapearmos as necessidades). Só pode escolher/
+    // adicionar no PRIMEIRO cadastro; ao editar, o gerente não altera (fica travado);
+    // admin pode trocar. Quando "Treinamento", abre campos extras.
+    const motivoLocked = !!id && !isAdmin();
+    let motivoSel;
+    if (motivoLocked) {
+      motivoSel = el('div', {},
+        el('input', { type: 'hidden', name: 'motivo_visita', value: initial?.motivo_visita || '' }),
+        el('div', { class: 'select flex items-center justify-between', style: { opacity: '0.7' } },
+          el('span', {}, initial?.motivo_visita || '—'),
+          el('span', { class: 'text-[10px] text-fg-subtle' }, '🔒 não editável'),
+        ),
+      );
+    } else {
+      motivoSel = creatableSelect({
+        name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita, required: true,
+        allowAdd: !id, onAdd: addMotivoVisita,
+      });
+    }
 
     // === Campos extras de treinamento ===
     const localTreinamentoSel = creatableSelect({
@@ -397,6 +413,20 @@ export async function atividadeFormView(params, app) {
       el('option', { value: 'Órulo', selected: (initial?.plataforma || '') === 'Órulo' }, 'Órulo (PR)'),
       el('option', { value: 'DWV', selected: (initial?.plataforma || '') === 'DWV' }, 'DWV (SC)'),
     );
+    // Motivo do contato - lista aberta (mesma regra do motivo da visita):
+    // digitável/adicionável só no primeiro cadastro; travado ao editar (gerente).
+    const motivoContatoLocked = !!id && !isAdmin();
+    const motivoContatoControl = motivoContatoLocked
+      ? el('div', {},
+          el('input', { type: 'hidden', name: 'motivo_contato', value: initial?.motivo_contato || '' }),
+          el('div', { class: 'select flex items-center justify-between', style: { opacity: '0.7' } },
+            el('span', {}, initial?.motivo_contato || '—'),
+            el('span', { class: 'text-[10px] text-fg-subtle' }, '🔒 não editável')))
+      : creatableSelect({
+          name: 'motivo_contato', items: state.motivosOrulo, value: initial?.motivo_contato, required: true,
+          allowAdd: !id, onAdd: addMotivoOrulo,
+        });
+
     let orImobWrap;
     form.append(
       field('Plataforma', plataformaSel, { required: true, help: 'Por qual plataforma o contato veio' }),
@@ -409,9 +439,7 @@ export async function atividadeFormView(params, app) {
       field('Empreendimento', creatableSelect({
         name: 'empreendimento', items: getScopedEmpreendimentos(), value: initial?.empreendimento, required: true,
       }), { required: true }),
-      field('Motivo do contato', creatableSelect({
-        name: 'motivo_contato', items: state.motivosOrulo, value: initial?.motivo_contato, required: true,
-      }), { required: true }),
+      field('Motivo do contato', motivoContatoControl, { required: true }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
     );

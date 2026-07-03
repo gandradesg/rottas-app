@@ -131,6 +131,10 @@ async function agendaGerenteView(app) {
   const statsBox = el('div', {});
   content.appendChild(statsBox);
 
+  // Filtro "Ver agenda de" — gerentes da mesma praça (preenchido depois)
+  const pracaBar = el('div', {});
+  content.appendChild(pracaBar);
+
   // Helper: navega para criar agendamento prefilando a data
   function newOnDate(date) {
     if (date) {
@@ -158,33 +162,64 @@ async function agendaGerenteView(app) {
 
   cal.innerHTML = '<div class="skeleton h-32"></div>';
 
-  // Carrega IDs do "meu time": eu + supervisores que reportam pra mim
-  // (gerente vê tudo do supervisor pra acompanhar; supervisor vê só dele)
+  // ===== Time e visibilidade =====
+  // - Gerente: vê a própria agenda + a dos seus supervisores; e pode filtrar para
+  //   ver a agenda de outro gerente da MESMA PRAÇA (cidade).
+  // - Supervisor: vê a própria + a do seu gerente (ligados).
   const meuId = state.user.id;
+  const role = state.profile?.role;
   let teamIds = [meuId];
-  if (state.profile?.role === 'gerente') {
+  if (role === 'gerente') {
     const { data: subs } = await supabase
-      .from('profiles')
-      .select('id, nome')
-      .eq('gerente_supervisor_id', meuId)
-      .eq('ativo', true);
+      .from('profiles').select('id').eq('gerente_supervisor_id', meuId).eq('ativo', true);
     if (subs?.length) teamIds = [meuId, ...subs.map(s => s.id)];
+  } else if (role === 'supervisor' && state.profile?.gerente_supervisor_id) {
+    teamIds = [meuId, state.profile.gerente_supervisor_id];
   }
 
-  const { data, error } = await supabase
-    .from('agendamentos')
-    .select('*, profiles!agendamentos_gerente_id_fkey(nome, role)')
-    .in('gerente_id', teamIds)
-    .gte('data_prevista', from.toISOString())
-    .lte('data_prevista', to.toISOString())
-    .order('data_prevista', { ascending: true });
-
-  if (error) {
-    cal.innerHTML = '';
-    cal.appendChild(el('div', { class: 'card p-4 text-danger text-sm' }, 'Erro: ' + error.message));
-    return;
+  // Gerentes da mesma praça (para o filtro) — via RPC SECURITY DEFINER
+  let outrosGerentes = [];
+  if (role === 'gerente') {
+    const { data: mesmos } = await supabase.rpc('gerentes_mesma_praca');
+    outrosGerentes = mesmos || [];
   }
-  allItems = data || [];
+
+  let viewFilter = 'minha'; // 'minha' (eu + equipe) | <id de gerente da praça>
+
+  function renderPracaBar() {
+    pracaBar.innerHTML = '';
+    if (!outrosGerentes.length) return;
+    const sel = el('select', { class: 'select' },
+      el('option', { value: 'minha', selected: viewFilter === 'minha' },
+        teamIds.length > 1 ? 'Minha agenda (e equipe)' : 'Minha agenda'),
+      ...outrosGerentes.map(g => el('option', { value: g.id, selected: viewFilter === g.id }, '👤 ' + g.nome)),
+    );
+    sel.addEventListener('change', () => { viewFilter = sel.value; loadItems(); });
+    pracaBar.appendChild(el('div', { class: 'card p-2' },
+      el('label', { class: 'text-[10px] font-bold uppercase tracking-wider text-fg-subtle block mb-1' }, 'Ver agenda de'),
+      sel,
+    ));
+  }
+  renderPracaBar();
+
+  async function loadItems() {
+    cal.innerHTML = '<div class="skeleton h-32"></div>';
+    let q = supabase
+      .from('agendamentos')
+      .select('*, profiles!agendamentos_gerente_id_fkey(nome, role)')
+      .gte('data_prevista', from.toISOString())
+      .lte('data_prevista', to.toISOString())
+      .order('data_prevista', { ascending: true });
+    q = (viewFilter === 'minha') ? q.in('gerente_id', teamIds) : q.eq('gerente_id', viewFilter);
+    const { data, error } = await q;
+    if (error) {
+      cal.innerHTML = '';
+      cal.appendChild(el('div', { class: 'card p-4 text-danger text-sm' }, 'Erro: ' + error.message));
+      return;
+    }
+    allItems = data || [];
+    render();
+  }
 
   function renderToolbar() {
     toolbar.innerHTML = '';
@@ -485,6 +520,8 @@ async function agendaGerenteView(app) {
     ));
 
     const actions = el('div', { class: 'flex gap-1.5 flex-wrap' });
+    // Ações só na própria agenda/equipe. Ao ver outro gerente da praça, é só leitura.
+    if (viewFilter === 'minha') {
     if (item.status === 'pendente') {
       actions.appendChild(el('button', {
         class: 'btn btn-primary btn-sm flex items-center gap-1.5',
@@ -521,11 +558,12 @@ async function agendaGerenteView(app) {
         }
       }, '↻ Reagendar'));
     }
+    }
     if (actions.children.length) card.appendChild(actions);
     return card;
   }
 
-  render();
+  loadItems();
 }
 
 // ============================================================

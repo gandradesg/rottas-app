@@ -205,6 +205,30 @@ export async function addImobiliaria(nome) {
   });
 }
 
+// Padroniza texto de motivo: primeira letra maiúscula (mantém o resto como digitado)
+function capitalizeFirst(s) {
+  const t = (s || '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+// Cria novo motivo da visita (lista compartilhada) - qualquer usuário pode adicionar
+export async function addMotivoVisita(nome) {
+  const n = capitalizeFirst(nome);
+  if (!n) throw new Error('Informe o motivo');
+  const { data, error } = await supabase.from('motivos_visita').insert({ nome: n }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+// Cria novo motivo do contato (Órulo/DWV) - qualquer usuário pode adicionar
+export async function addMotivoOrulo(nome) {
+  const n = capitalizeFirst(nome);
+  if (!n) throw new Error('Informe o motivo');
+  const { data, error } = await supabase.from('motivos_orulo').insert({ nome: n }).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // Cria novo local de visita no banco
 export async function addLocalVisita(nome) {
   const { data, error } = await supabase.from('locais_visita').insert({ nome }).select().single();

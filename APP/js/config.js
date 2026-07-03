@@ -1,8 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.7.0';
-export const APP_BUILD_DATE = '2026-07-02';
+export const APP_VERSION = '1.8.0';
+export const APP_BUILD_DATE = '2026-07-03';
 
 export const CHANGELOG = [
+  {
+    version: '1.8.0',
+    date: '03/07/2026',
+    changes: [
+      'NOVO: "Motivo da visita" (check-in) e "Motivo do contato" (Órulo/DWV) viraram listas abertas — o gerente pode digitar um motivo novo na hora, que fica salvo pra irmos mapeando as necessidades de campo. Padroniza a primeira letra em maiúscula',
+      'MUDANÇA: o motivo só pode ser digitado/escolhido no primeiro cadastro. Ao editar depois, o gerente não altera (fica travado); admin ainda pode ajustar',
+      'NOVO: supervisor e gerente ligados agora enxergam a agenda um do outro',
+      'NOVO: na "Minha agenda", filtro "Ver agenda de" para visualizar (somente leitura) a agenda de outro gerente da mesma praça (cidade) — útil para parcerias',
+    ],
+  },
   {
     version: '1.7.0',
     date: '02/07/2026',

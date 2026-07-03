@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
 
@@ -124,6 +124,7 @@ export async function agendaFormView(params, app) {
         })),
         field('Motivo da visita', creatableSelect({
           name: 'motivo_visita', items: state.motivosVisita, value: initial?.motivo_visita,
+          allowAdd: true, onAdd: addMotivoVisita,
         })),
       );
     } else if (chosenTipo === 'atendimento') {
