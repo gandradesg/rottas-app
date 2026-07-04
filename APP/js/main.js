@@ -219,6 +219,25 @@ async function boot() {
   initTheme();
   splash();
 
+  // Watchdog: se depois de 15s ainda estiver na tela de carregamento (boot travou
+  // em rede/auth), oferece recarregar em vez de deixar o usuário preso no splash.
+  const bootTimer = setTimeout(() => {
+    const app = document.getElementById('app');
+    if (app && app.querySelector('.animate-pulse-soft')) {
+      const box = app.querySelector('div') || app;
+      box.appendChild(el('div', { class: 'flex flex-col items-center gap-2 mt-4' },
+        el('span', { class: 'text-xs text-fg-muted' }, 'Está demorando mais que o normal.'),
+        el('button', {
+          class: 'btn btn-primary btn-sm',
+          onclick: () => {
+            try { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
+            location.reload();
+          },
+        }, '↻ Recarregar'),
+      ));
+    }
+  }, 15000);
+
   // Limpa o cache-buster ?_logout=... que o signOut adiciona à URL.
   // Ele só serve pra forçar reload limpo no logout; depois do boot fica preso
   // na barra de endereço (mesmo já logado). Remove preservando o hash da rota.
@@ -269,6 +288,7 @@ async function boot() {
     }
   }
 
+  clearTimeout(bootTimer);
   startRouter();
 }
 

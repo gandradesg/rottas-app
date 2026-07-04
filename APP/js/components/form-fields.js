@@ -248,6 +248,30 @@ function capitalizeFirst(s) {
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
 }
 
+// Garante que um corretor informado por NOME (sem cadastro) exista na lista,
+// vinculado à imobiliária. Retorna o id (existente ou recém-criado) ou null.
+// Evita o caso de atendimentos com corretor digitado livre (ex.: vindo do
+// agendamento) que não apareciam na lista de corretores da imobiliária.
+export async function ensureCorretorCadastro(nome, imobiliaria) {
+  const n = (nome || '').trim();
+  const imob = (imobiliaria || '').trim();
+  if (!n || !imob) return null;
+  const existing = (state.corretores || []).find(c =>
+    (c.nome || '').trim().toLowerCase() === n.toLowerCase() &&
+    (c.imobiliaria_nome || '') === imob);
+  if (existing) return existing.id;
+  const imobObj = (state.imobiliarias || []).find(i => i.nome === imob);
+  try {
+    const { data, error } = await supabase.from('corretores').insert({
+      nome: n, imobiliaria_nome: imob, imobiliaria_id: imobObj?.id || null,
+      created_by: state.user?.id || null,
+    }).select().single();
+    if (error || !data) return null;
+    (state.corretores || (state.corretores = [])).push(data);
+    return data.id;
+  } catch (e) { return null; }
+}
+
 // Cria novo motivo da visita (lista compartilhada) - qualquer usuário pode adicionar
 export async function addMotivoVisita(nome) {
   const n = capitalizeFirst(nome);

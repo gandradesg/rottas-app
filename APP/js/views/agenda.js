@@ -182,9 +182,24 @@ async function agendaGerenteView(app) {
   // - Gerente comum: gerentes da mesma praça (cidade), via RPC SECURITY DEFINER
   let outrosGerentes = [];
   if (isAdmin()) {
+    // Admin na visão Gerente: lista de gerentes conforme o ESCOPO do usuário.
+    //  - superintendente: só gerentes dos seus estados
+    //  - gestor_regional: só gerentes das suas cidades
+    //  - master: todos (ou, se tiver estados designados, só desses)
+    //  - gestor: todos
     const { data } = await supabase
-      .from('profiles').select('id, nome').eq('role', 'gerente').eq('ativo', true).order('nome');
-    outrosGerentes = data || [];
+      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome');
+    let list = data || [];
+    const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
+    const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
+    if (role === 'superintendente') {
+      list = list.filter(g => es.includes(g.estado));
+    } else if (role === 'gestor_regional') {
+      list = list.filter(g => cs.includes(g.cidade));
+    } else if (role === 'master' && es.length) {
+      list = list.filter(g => es.includes(g.estado));
+    }
+    outrosGerentes = list;
   } else if (role === 'gerente') {
     const { data: mesmos } = await supabase.rpc('gerentes_mesma_praca');
     outrosGerentes = mesmos || [];
@@ -223,10 +238,23 @@ async function agendaGerenteView(app) {
       // Gerente vê TUDO de todos por padrão (inspeção e testes) — sem filtro.
       q = q.in('gerente_id', teamIds);
     }
-    const { data, error } = await q;
+    // Timeout de segurança: se a rede/consulta travar, mostra erro com "tentar de novo"
+    // em vez de ficar no skeleton pra sempre (bug de tela carregando eterna).
+    let data, error;
+    try {
+      const res = await Promise.race([
+        q,
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
+      ]);
+      data = res.data; error = res.error;
+    } catch (e) { error = e; }
     if (error) {
       cal.innerHTML = '';
-      cal.appendChild(el('div', { class: 'card p-4 text-danger text-sm' }, 'Erro: ' + error.message));
+      cal.appendChild(el('div', { class: 'card p-4 text-sm text-fg-muted flex flex-col gap-2' },
+        el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar a agenda.'),
+        el('div', {}, (error.message || 'Falha de rede') + '.'),
+        el('button', { class: 'btn btn-secondary btn-sm self-start', onclick: () => loadItems() }, '↻ Tentar de novo'),
+      ));
       return;
     }
     allItems = data || [];

@@ -1,8 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.2';
-export const APP_BUILD_DATE = '2026-07-03';
+export const APP_VERSION = '1.9.3';
+export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.3',
+    date: '04/07/2026',
+    changes: [
+      'CORRIGIDO: corretor digitado sem cadastro (ex.: vindo do agendamento) não aparecia na lista de corretores da imobiliária. Agora, ao salvar, o corretor é cadastrado automaticamente e vinculado à imobiliária (e os que já existiam foram regularizados)',
+      'AGENDA: o filtro "Ver agenda de" respeita o escopo — Superintendente vê só gerentes do seu estado, Gestor Regional das suas cidades, Master conforme o estado designado (ou todos)',
+      'ESTABILIDADE: tela de carregamento não fica mais presa pra sempre — a agenda tem "tentar de novo" se a rede travar, e o app oferece "Recarregar" se o carregamento inicial demorar demais',
+    ],
+  },
   {
     version: '1.9.2',
     date: '03/07/2026',

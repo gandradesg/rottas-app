@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn, fmt, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -603,6 +603,15 @@ export async function atividadeFormView(params, app) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
         loadingBtn(submitBtn, true);
+      }
+
+      // ===== Garante o cadastro do corretor (quando veio por nome livre) =====
+      // Ex.: corretor digitado no agendamento e trazido ao "realizar" fica sem
+      // corretor_id; aqui criamos o cadastro vinculado à imobiliária pra ele
+      // aparecer na lista de corretores da imobiliária.
+      if (['atendimento', 'proposta', 'orulo'].includes(tipo)
+          && payload.corretor && !payload.corretor_id && payload.imobiliaria) {
+        payload.corretor_id = await ensureCorretorCadastro(payload.corretor, payload.imobiliaria);
       }
 
       // ===== AVISO: corretor/cliente sem telefone/e-mail cadastrado =====
