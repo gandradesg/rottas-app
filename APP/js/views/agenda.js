@@ -1,5 +1,5 @@
 // Agenda - calendário dia/semana/mês com itens vinculados a atividades
-import { el, icon, fmt, toast, confirmModal } from '../ui.js';
+import { el, icon, fmt, toast, confirmModal, modal, dictationButton } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase } from '../supabase.js';
 import { activeViewRole, isAdmin } from '../auth.js';
@@ -524,6 +524,39 @@ async function agendaGerenteView(app) {
 
   // (emptyState não é mais usado - substituído por dayHeaderWithAdd + mensagem inline)
 
+  // Cancelamento com motivo livre + botão de ditado (voz → texto).
+  function openCancelModal(item) {
+    const ta = el('textarea', {
+      class: 'input', rows: 3,
+      placeholder: 'Motivo do cancelamento (ex.: cliente remarcou, imprevisto...)',
+    });
+    const micBtn = dictationButton(ta);
+    const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => m.close() }, 'Voltar');
+    const okBtn = el('button', { class: 'btn btn-danger' }, 'Cancelar agendamento');
+    const m = modal({
+      title: 'Cancelar agendamento?',
+      size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-2' },
+        el('p', { class: 'text-sm text-fg-muted' }, 'Você poderá reagendar depois. Registre o motivo:'),
+        ta,
+        micBtn ? el('div', { class: 'flex' }, micBtn)
+               : el('p', { class: 'text-xs text-fg-subtle' }, 'Ditado por voz indisponível neste navegador.'),
+      ),
+      footer: [cancelBtn, okBtn],
+    });
+    setTimeout(() => ta.focus(), 60);
+    okBtn.addEventListener('click', async () => {
+      okBtn.disabled = true;
+      const motivo = (ta.value || '').trim() || null;
+      const { error } = await supabase.from('agendamentos')
+        .update({ status: 'cancelado', motivo_cancelamento: motivo }).eq('id', item.id);
+      if (error) { toast(error.message, 'error', 5000); okBtn.disabled = false; return; }
+      m.close();
+      toast('Cancelado', 'info');
+      location.reload();
+    });
+  }
+
   function itemCard(item) {
     const status = STATUS_INFO[item.status] || STATUS_INFO.pendente;
     const tipo = TIPO_ATIVIDADE[item.tipo] || { label: item.tipo, icon: '📌' };
@@ -576,13 +609,7 @@ async function agendaGerenteView(app) {
       }, icon('edit', 14)));
       actions.appendChild(el('button', {
         class: 'btn btn-ghost btn-sm text-fg-muted',
-        onclick: async () => {
-          const ok = await confirmModal({ title: 'Cancelar agendamento?', message: 'Você poderá reagendar depois.', confirmLabel: 'Cancelar agendamento' });
-          if (!ok) return;
-          await supabase.from('agendamentos').update({ status: 'cancelado' }).eq('id', item.id);
-          toast('Cancelado', 'info');
-          location.reload();
-        }
+        onclick: () => openCancelModal(item),
       }, '✕'));
     } else if (item.status === 'realizado' && item.atividade_id) {
       actions.appendChild(el('button', {

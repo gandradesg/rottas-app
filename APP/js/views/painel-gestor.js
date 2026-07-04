@@ -180,16 +180,33 @@ export async function painelGestorView(_params, app) {
       const { data } = await supabase.from('carteira_visitas').select('imobiliaria_nome').eq('gerente_id', gid).eq('ano_mes', ym);
       const set = new Set((data || []).map(r => r.imobiliaria_nome));
       box.innerHTML = '';
-      const search = el('input', { class: 'input flex-1', type: 'search', placeholder: 'Buscar imobiliária...' });
+      const search = el('input', { class: 'input flex-1', type: 'search', placeholder: 'Buscar imobiliária (outras cidades)...' });
       const novaBtn = el('button', { class: 'btn btn-secondary btn-sm flex-shrink-0' }, icon('plus', 14), 'Nova');
       const counter = el('div', { class: 'text-xs text-fg-muted' }, `${set.size} imobiliária(s) na carteira`);
       const list = el('div', { class: 'flex flex-col gap-1' });
-      // Só imobiliárias do escopo do usuário (superintendente = seus estados)
-      const getImobs = () => getScopedImobiliarias();
+      // Cidade (praça) do gerente selecionado: por padrão a lista mostra só as
+      // imobiliárias dessa cidade. Ao pesquisar, libera TODAS (qualquer regional).
+      const gerObj = gers.find(g => g.id === gid);
+      const gerCidade = (gerObj?.cidade || '').trim().toLowerCase();
+      const hint = el('div', { class: 'text-[11px] text-fg-subtle' },
+        gerCidade
+          ? `Mostrando imobiliárias de ${gerObj.cidade}. Pesquise pelo nome para incluir de outra praça.`
+          : 'Gerente sem cidade cadastrada — pesquise pelo nome para listar imobiliárias.');
       function renderList(f) {
         list.innerHTML = '';
         const ff = (f || '').trim().toLowerCase();
-        getImobs().filter(im => !ff || im.nome.toLowerCase().includes(ff)).forEach(im => {
+        const all = state.imobiliarias || [];
+        // Com busca: todas as imobiliárias (livre). Sem busca: só a cidade do gerente.
+        const base = ff
+          ? all.filter(im => im.nome.toLowerCase().includes(ff))
+          : all.filter(im => gerCidade && (im.cidade || '').trim().toLowerCase() === gerCidade);
+        if (!base.length) {
+          list.appendChild(el('div', { class: 'card p-3 text-center text-xs text-fg-muted' },
+            ff ? 'Nenhuma imobiliária encontrada.'
+               : 'Nenhuma imobiliária na cidade do gerente. Pesquise pelo nome para incluir de outra praça.'));
+          return;
+        }
+        base.forEach(im => {
           const cb = el('input', { type: 'checkbox' });
           cb.checked = set.has(im.nome);
           cb.addEventListener('change', async () => {
@@ -225,7 +242,7 @@ export async function painelGestorView(_params, app) {
           }
         } catch (e) { /* cancelado */ }
       });
-      box.append(el('div', { class: 'card p-2 flex gap-2 items-center' }, search, novaBtn), counter, list);
+      box.append(el('div', { class: 'card p-2 flex gap-2 items-center' }, search, novaBtn), hint, counter, list);
       renderList('');
     }
     gSel.addEventListener('change', load);
@@ -575,14 +592,10 @@ export async function painelGestorView(_params, app) {
     let list = Object.values(byImob);
     // Com carteira ativa, mostra/alerta só as imobiliárias atribuídas no mês
     if (usandoCarteira) list = list.filter(x => carteiraSet.has(x.nome));
-    list.sort((a,b) => {
-      // Sem visita primeiro (alerta), depois mais antiga, depois VGV maior
-      const aDays = a.lastAt ? Math.floor((Date.now() - a.lastAt.getTime()) / 86400000) : 999;
-      const bDays = b.lastAt ? Math.floor((Date.now() - b.lastAt.getTime()) / 86400000) : 999;
-      if (aDays >= 7 && bDays < 7) return -1;
-      if (bDays >= 7 && aDays < 7) return 1;
-      return b.vgv - a.vgv;
-    });
+    // Ordena SEMPRE pelas que têm mais atendimentos primeiro.
+    // Empate: mais propostas, depois maior VGV, depois nome.
+    list.sort((a,b) =>
+      (b.atend - a.atend) || (b.prop - a.prop) || (b.vgv - a.vgv) || a.nome.localeCompare(b.nome));
 
     if (!list.length) {
       dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' },

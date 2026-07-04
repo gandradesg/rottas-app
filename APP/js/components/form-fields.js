@@ -290,9 +290,12 @@ export async function addMotivoOrulo(nome) {
   return data;
 }
 
-// Cria novo local de visita no banco
+// Cria novo local de visita no banco.
+// Padroniza tudo em MAIÚSCULAS para ficar uniforme na lista.
 export async function addLocalVisita(nome) {
-  const { data, error } = await supabase.from('locais_visita').insert({ nome }).select().single();
+  const n = (nome || '').trim().toUpperCase();
+  if (!n) throw new Error('Informe o local');
+  const { data, error } = await supabase.from('locais_visita').insert({ nome: n }).select().single();
   if (error) throw error;
   await loadLists();
   return data;

@@ -1,8 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.3';
+export const APP_VERSION = '1.9.4';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.4',
+    date: '04/07/2026',
+    changes: [
+      'PAINEL: a aba Imobiliárias agora lista sempre as com MAIS atendimentos primeiro (empate por propostas e VGV)',
+      'CARTEIRA: ao escolher o gerente, a lista mostra por padrão só as imobiliárias da cidade (praça) dele. Pesquisando pelo nome, é possível incluir imobiliárias de qualquer outra regional',
+      'AGENDA: ao cancelar um agendamento agora há um campo livre de motivo — com botão "Ditar" (voz → texto) para escrever mais rápido',
+      'PADRONIZAÇÃO: "Local da visita" passa a ser salvo em MAIÚSCULAS (os já cadastrados foram uniformizados)',
+    ],
+  },
   {
     version: '1.9.3',
     date: '04/07/2026',

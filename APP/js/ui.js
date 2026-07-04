@@ -194,6 +194,64 @@ export function icon(name, size = 20, className = '') {
   return svg;
 }
 
+// ----- Botão de ditado (voz → texto) -----
+// Usa a Web Speech API (webkitSpeechRecognition). Ao falar, vai anexando o
+// texto reconhecido ao <input>/<textarea> alvo. Se o navegador não suportar,
+// retorna null (o campo continua utilizável só digitando).
+export function dictationButton(target, { lang = 'pt-BR' } = {}) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  let rec = null, listening = false;
+  const btn = el('button', {
+    type: 'button',
+    class: 'btn btn-secondary btn-sm flex items-center gap-1.5 flex-shrink-0',
+    title: 'Ditar (falar)',
+  }, icon('mic', 16), 'Ditar');
+
+  function setListening(on) {
+    listening = on;
+    btn.innerHTML = '';
+    if (on) {
+      btn.classList.add('btn-danger'); btn.classList.remove('btn-secondary');
+      btn.append(icon('mic', 16), document.createTextNode(' Ouvindo… toque p/ parar'));
+    } else {
+      btn.classList.remove('btn-danger'); btn.classList.add('btn-secondary');
+      btn.append(icon('mic', 16), document.createTextNode(' Ditar'));
+    }
+  }
+
+  btn.addEventListener('click', () => {
+    if (listening) { rec?.stop(); return; }
+    try {
+      rec = new SR();
+      rec.lang = lang;
+      rec.interimResults = false;
+      rec.continuous = true;
+      rec.onresult = (e) => {
+        let txt = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) txt += e.results[i][0].transcript;
+        }
+        txt = txt.trim();
+        if (!txt) return;
+        const cur = (target.value || '').trim();
+        target.value = cur ? cur + ' ' + txt : txt;
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      rec.onerror = (e) => {
+        setListening(false);
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          toast('Permita o microfone para ditar', 'warning');
+        }
+      };
+      rec.onend = () => setListening(false);
+      rec.start();
+      setListening(true);
+    } catch (err) { toast('Não foi possível iniciar o ditado', 'error'); }
+  });
+  return btn;
+}
+
 // Loading spinner inline
 export function spinner(dark = false) {
   return el('span', { class: `spinner ${dark ? 'spinner-dark' : ''}` });
