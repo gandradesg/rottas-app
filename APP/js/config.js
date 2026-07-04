@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.4';
+export const APP_VERSION = '1.9.5';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.5',
+    date: '04/07/2026',
+    changes: [
+      'CORRIGIDO: Superintendente via agendamentos de gerentes de outro estado (ex.: PR via SC). A regra do banco tinha uma brecha que liberava tudo para admins — agora o Superintendente vê só o(s) estado(s) dele e o Gestor Regional só as cidades dele (atividades já respeitavam)',
+      'PAINEL: o indicador "Equipe ativa" agora conta gerentes que registraram algo sobre o total de gerentes VISÍVEIS ao seu escopo (antes usava o total geral, dando ex.: 1 de 5 sem sentido)',
+    ],
+  },
   {
     version: '1.9.4',
     date: '04/07/2026',

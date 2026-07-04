@@ -395,11 +395,19 @@ export async function painelGestorView(_params, app) {
       el('div', { class: 'text-sm text-fg-muted mt-1' }, `${c.vendas} reserva${c.vendas !== 1 ? 's' : ''} no período`),
     );
 
+    // "Equipe ativa": gerentes que registraram algo / total de gerentes VISÍVEIS
+    // ao escopo do usuário (superintendente = seus estados, regional = cidades).
+    const escopoGers = scopedGerentes();
+    const escopoIds = new Set(escopoGers.map(g => g.id));
+    const totalEscopo = escopoIds.size;
+    const ativosEscopo = new Set(
+      allAtividades.map(a => a.gerente_id).filter(id => escopoIds.has(id))
+    ).size;
     const ativosCard = el('div', { class: 'card p-4' },
       el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' }, 'Equipe ativa'),
       el('div', { class: 'text-3xl font-extrabold' },
-        new Set(allAtividades.map(a => a.gerente_id)).size,
-        el('span', { class: 'text-base text-fg-muted ml-2 font-normal' }, `de ${gerentes?.length || 0}`)
+        ativosEscopo,
+        el('span', { class: 'text-base text-fg-muted ml-2 font-normal' }, `de ${totalEscopo}`)
       ),
       el('div', { class: 'text-sm text-fg-muted mt-1' }, 'gerentes registraram atividades'),
     );
