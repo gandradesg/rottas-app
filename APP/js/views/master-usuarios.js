@@ -43,7 +43,18 @@ export function canManageProfile(target) {
   if (target.id === myId) return true;
   if (myRole === 'master') return true;
   if (['gestor', 'superintendente', 'gestor_regional'].includes(myRole)) {
-    return ['gerente', 'supervisor'].includes(target.role);
+    if (!['gerente', 'supervisor'].includes(target.role)) return false;
+    // Escopo: superintendente só gerencia quem está no(s) seu(s) estado(s);
+    // gestor regional só nas suas cidades. Gestor não tem restrição.
+    if (myRole === 'superintendente') {
+      const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
+      return es.includes(target.estado);
+    }
+    if (myRole === 'gestor_regional') {
+      const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
+      return cs.includes(target.cidade);
+    }
+    return true; // gestor
   }
   if (myRole === 'gerente') return target.role === 'supervisor';
   return false;

@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.5';
+export const APP_VERSION = '1.9.6';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.6',
+    date: '04/07/2026',
+    changes: [
+      'CORRIGIDO: Superintendente conseguia ver e EDITAR usuários de outro estado (ex.: PR editando gerente de SC). Agora cada Superintendente gerencia só os usuários do(s) seu(s) estado(s), e o Gestor Regional só das suas cidades — na lista de Usuários e na regra do banco',
+    ],
+  },
   {
     version: '1.9.5',
     date: '04/07/2026',
