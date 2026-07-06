@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.8';
+export const APP_VERSION = '1.9.9';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.9',
+    date: '04/07/2026',
+    changes: [
+      'ESTABILIDADE: fim do "estado misto" de versões (index antigo + código novo) que travava a tela — o app agora detecta versão nova e se atualiza sozinho (limpa cache, troca o service worker e recarrega uma vez)',
+      'AGENDA: consultas iniciais com tempo-limite de 8s — se a rede pendurar, a tela carrega mesmo assim em vez de ficar no "carregando"',
+    ],
+  },
   {
     version: '1.9.8',
     date: '04/07/2026',

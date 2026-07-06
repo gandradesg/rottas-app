@@ -19,6 +19,23 @@ async function checkForUpdate() {
     const m = txt.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
     if (m && m[1] && m[1] !== localVersion) {
       console.warn('[update] versao local:', localVersion, '- servidor:', m[1]);
+      const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      // No navegador: converge SOZINHO pra versão nova (limpa cache + desregistra
+      // SW + reload uma vez). Isso mata o "estado misto" (index/JS de versões
+      // diferentes) que trava a tela. Trava anti-loop por versão do servidor.
+      const flagKey = 'auto-upd-' + m[1];
+      if (!isStandalone && !sessionStorage.getItem(flagKey)) {
+        sessionStorage.setItem(flagKey, '1');
+        console.warn('[update] limpando cache + SW e recarregando para', m[1]);
+        try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+        try {
+          const regs = await navigator.serviceWorker?.getRegistrations?.();
+          if (regs) await Promise.all(regs.map(x => x.unregister()));
+        } catch (e) {}
+        location.reload();
+        return;
+      }
+      // PWA instalado (ou já tentou reload nesta sessão): mostra banner manual
       showUpdateBanner(localVersion, m[1]);
     }
   } catch (e) { /* sem internet ou off - silencia */ }

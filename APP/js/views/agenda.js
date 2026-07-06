@@ -18,6 +18,15 @@ const TIPO_ICON = {
   checkin: 'mapPin', atendimento: 'users', proposta: 'fileText', orulo: 'globe', outro: 'calendar'
 };
 
+// Corrida com timeout: se a consulta pendurar, resolve com fallback em vez de
+// deixar a tela travada no skeleton (a proteção global é 45s; aqui é 8s).
+function raceTO(promise, ms = 8000, fallback = { data: null }) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 const DAY_NAMES = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const MONTH_NAMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
@@ -171,8 +180,8 @@ async function agendaGerenteView(app) {
   let teamIds = [meuId];
   try {
     if (role === 'gerente') {
-      const { data: subs } = await supabase
-        .from('profiles').select('id').eq('gerente_supervisor_id', meuId).eq('ativo', true);
+      const { data: subs } = await raceTO(supabase
+        .from('profiles').select('id').eq('gerente_supervisor_id', meuId).eq('ativo', true));
       if (subs?.length) teamIds = [meuId, ...subs.map(s => s.id)];
     } else if (role === 'supervisor' && state.profile?.gerente_supervisor_id) {
       teamIds = [meuId, state.profile.gerente_supervisor_id];
@@ -190,8 +199,8 @@ async function agendaGerenteView(app) {
     //  - gestor_regional: só gerentes das suas cidades
     //  - master: todos (ou, se tiver estados designados, só desses)
     //  - gestor: todos
-    const { data } = await supabase
-      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome');
+    const { data } = await raceTO(supabase
+      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome'));
     let list = data || [];
     const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
     const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
@@ -204,7 +213,7 @@ async function agendaGerenteView(app) {
     }
     outrosGerentes = list;
   } else if (role === 'gerente') {
-    const { data: mesmos } = await supabase.rpc('gerentes_mesma_praca');
+    const { data: mesmos } = await raceTO(supabase.rpc('gerentes_mesma_praca'));
     outrosGerentes = mesmos || [];
   }
   } catch (e) { /* rede: segue sem o filtro "ver agenda de" */ outrosGerentes = []; }
