@@ -185,17 +185,42 @@ export async function agendaFormView(params, app) {
       responsavelField = field(isAdminRole ? 'Gerente responsável' : 'Responsável pela atividade', respSel, { required: true });
     }
   } else if (responsaveis.length > 1 || (isAdminRole && responsaveis.length >= 1)) {
-    // CRIAÇÃO: checkboxes de quem estará presente
-    const boxes = el('div', { class: 'flex flex-col gap-1.5' });
+    // CRIAÇÃO: lista suspensa (dropdown) multi-seleção — não polui a tela
+    const dd = el('div', { class: 'relative' });
+    const display = el('button', { type: 'button', class: 'select text-left flex items-center justify-between' });
+    let labelSpan = el('span', { class: 'truncate text-fg-subtle' }, 'Selecione os gerentes...');
+    display.append(labelSpan, icon('chevronDown', 16, 'text-fg-subtle flex-shrink-0'));
+    const popup = el('div', { class: 'absolute z-40 left-0 right-0 mt-1 card max-h-72 overflow-y-auto hidden', style: { top: '100%' } });
+    const listWrap = el('div', { class: 'flex flex-col p-1' });
+    popup.append(listWrap);
+    const nomeCurto = r => r.nome.replace(/\s*\(.*\)$/, '');
+    function refreshLabel() {
+      const marcados = responsaveis.filter(r => selecionados.has(r.id));
+      const n = marcados.length;
+      const txt = n === 0 ? 'Selecione os gerentes...'
+        : n === 1 ? nomeCurto(marcados[0])
+        : `${n} gerentes selecionados`;
+      const ns = el('span', { class: 'truncate ' + (n ? '' : 'text-fg-subtle') }, txt);
+      labelSpan.replaceWith(ns); labelSpan = ns;
+    }
     responsaveis.forEach(r => {
       const cb = el('input', { type: 'checkbox', checked: selecionados.has(r.id) });
-      cb.addEventListener('change', () => { cb.checked ? selecionados.add(r.id) : selecionados.delete(r.id); });
-      boxes.appendChild(el('label', { class: 'card p-2.5 flex items-center gap-2 cursor-pointer text-sm' },
+      cb.addEventListener('change', () => { cb.checked ? selecionados.add(r.id) : selecionados.delete(r.id); refreshLabel(); });
+      listWrap.appendChild(el('label', { class: 'flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-bg-elev cursor-pointer text-sm' },
         cb, el('span', { class: 'flex-1' }, r.nome)));
     });
-    responsavelField = field(isAdminRole ? 'Gerentes presentes' : 'Quem estará presente', boxes, {
+    const closeDD = () => { popup.classList.add('hidden'); document.removeEventListener('click', outsideDD); };
+    const outsideDD = (e) => { if (!dd.contains(e.target)) closeDD(); };
+    display.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (popup.classList.contains('hidden')) { popup.classList.remove('hidden'); document.addEventListener('click', outsideDD); }
+      else closeDD();
+    });
+    dd.append(display, popup);
+    refreshLabel();
+    responsavelField = field(isAdminRole ? 'Gerentes presentes' : 'Quem estará presente', dd, {
       required: true,
-      help: 'Marque todos os gerentes presentes. Cria uma agenda para cada um; ao realizar, gera um único check-in que conta no contador de todos.',
+      help: 'Selecione todos os gerentes presentes. Cria uma agenda para cada um; ao realizar, gera um único check-in que conta no contador de todos.',
     });
   } else if (isAdminRole && responsaveis.length === 0) {
     responsavelField = el('div', { class: 'card p-3 text-sm text-warning' },

@@ -20,6 +20,15 @@ export async function atividadeDetailView(params, app) {
     return;
   }
 
+  // Participantes (agenda em grupo): nomes dos gerentes creditados nesta atividade
+  let participantesNomes = [];
+  if (Array.isArray(a.participantes) && a.participantes.length > 1) {
+    try {
+      const { data: ps } = await supabase.from('profiles').select('id, nome').in('id', a.participantes);
+      participantesNomes = (ps || []).map(p => p.nome);
+    } catch (e) { /* ignore */ }
+  }
+
   const t = TIPO_ATIVIDADE[a.tipo];
   const isOwner = a.gerente_id === state.user.id;
   const userIsGestor = isGestor();
@@ -105,6 +114,19 @@ export async function atividadeDetailView(params, app) {
     rows.push(el('div', { class: 'flex flex-col py-2 border-b border-border' },
       el('span', { class: 'text-xs uppercase tracking-wider text-fg-subtle font-semibold' }, 'Observações'),
       el('p', { class: 'text-sm mt-1 whitespace-pre-wrap' }, a.observacoes),
+    ));
+  }
+
+  // Participantes (atividade compartilhada por vários gerentes presentes)
+  if (participantesNomes.length > 1) {
+    rows.push(el('div', { class: 'flex flex-col py-2 border-b border-border' },
+      el('span', { class: 'text-xs uppercase tracking-wider text-fg-subtle font-semibold' },
+        `Gerentes presentes (${participantesNomes.length})`),
+      el('div', { class: 'flex flex-wrap gap-1.5 mt-2' },
+        ...participantesNomes.map(nome => el('span', { class: 'chip chip-purple' }, '👤 ' + nome)),
+      ),
+      el('span', { class: 'text-[11px] text-fg-subtle mt-1' },
+        'Conta 1 vez no total da empresa e no contador de cada presente.'),
     ));
   }
 

@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.7';
+export const APP_VERSION = '1.9.8';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.8',
+    date: '04/07/2026',
+    changes: [
+      'AGENDA: "Gerentes presentes" virou lista suspensa (dropdown) — mais limpo, sem poluir a tela',
+      'ATIVIDADE: quando é compartilhada por vários gerentes, a tela de detalhe mostra os "Gerentes presentes" (conta 1x no total da empresa e 1x no contador de cada presente)',
+    ],
+  },
   {
     version: '1.9.7',
     date: '04/07/2026',
