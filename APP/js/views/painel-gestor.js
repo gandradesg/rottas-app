@@ -474,15 +474,21 @@ export async function painelGestorView(_params, app) {
   function renderGerentes() {
     const allAtividades = baseAtividades.filter(hay);
     const byGerente = {};
+    const nomeDe = (gid, a) => (gerentes || []).find(g => g.id === gid)?.nome
+      || (gid === a.gerente_id ? a.profiles?.nome : null) || 'Sem nome';
     allAtividades.forEach(a => {
-      const id = a.gerente_id;
-      const name = a.profiles?.nome || 'Sem nome';
-      if (!byGerente[id]) byGerente[id] = { id, nome: name, profile: a.profiles, checkin:0, atend:0, prop:0, vendas:0, orulo:0, vgv:0 };
-      const g = byGerente[id];
-      if (a.tipo === 'checkin') g.checkin++;
-      if (a.tipo === 'atendimento') g.atend++;
-      if (a.tipo === 'proposta') { g.prop++; g.vgv += parseFloat(a.valor) || 0; if (a.reserva) g.vendas++; }
-      if (a.tipo === 'orulo') g.orulo++;
+      // Credita o dono E os participantes (agenda em grupo): o check-in único
+      // conta no card de cada gerente presente, sem duplicar no total da empresa.
+      const creditos = new Set([a.gerente_id, ...(Array.isArray(a.participantes) ? a.participantes : [])]);
+      creditos.forEach(id => {
+        if (!id) return;
+        if (!byGerente[id]) byGerente[id] = { id, nome: nomeDe(id, a), profile: id === a.gerente_id ? a.profiles : null, checkin:0, atend:0, prop:0, vendas:0, orulo:0, vgv:0 };
+        const g = byGerente[id];
+        if (a.tipo === 'checkin') g.checkin++;
+        if (a.tipo === 'atendimento') g.atend++;
+        if (a.tipo === 'proposta') { g.prop++; g.vgv += parseFloat(a.valor) || 0; if (a.reserva) g.vendas++; }
+        if (a.tipo === 'orulo') g.orulo++;
+      });
     });
     // Inclui gerentes sem atividades (respeitando a busca)
     (gerentes || []).forEach(g => {

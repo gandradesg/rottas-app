@@ -10,6 +10,22 @@ import { audioField } from '../components/audio-field.js';
 import { isGestor, isAdmin } from '../auth.js';
 import { buildDiff, auditarEdicaoDireta } from '../activity-actions.js';
 
+// Marca o agendamento como realizado. Se for parte de um GRUPO (vários gerentes
+// presentes), realiza TODAS as agendas do grupo de uma vez via RPC (SECURITY
+// DEFINER) — assim a linha dos colegas também vira "realizado / ver atividade"
+// e ninguém precisa registrar o mesmo check-in de novo.
+function marcarAgendamentoRealizado(agendamento, atividadeId) {
+  if (agendamento.grupo_id) {
+    supabase.rpc('realizar_agendamento_grupo', {
+      p_grupo_id: agendamento.grupo_id, p_atividade_id: atividadeId,
+    }).then(() => {}).catch(() => {});
+  } else {
+    supabase.from('agendamentos').update({
+      status: 'realizado', atividade_id: atividadeId, realizado_em: new Date().toISOString(),
+    }).eq('id', agendamento.id).then(() => {});
+  }
+}
+
 const TITLES = {
   checkin:     { novo: 'Registro de novo Check-in',     editar: 'Editar Check-in' },
   atendimento: { novo: 'Registro de novo Atendimento',  editar: 'Editar Atendimento' },
@@ -476,6 +492,11 @@ export async function atividadeFormView(params, app) {
     // Se veio da agenda, vincula ao agendamento
     if (agendamento && !id) {
       payload.agendamento_id = agendamento.id;
+      // Agenda em grupo (vários gerentes presentes): credita todos os presentes
+      // nesta ÚNICA atividade — conta no contador de cada um sem inflar o total.
+      if (Array.isArray(agendamento.participantes) && agendamento.participantes.length > 1) {
+        payload.participantes = agendamento.participantes;
+      }
     }
 
     try {
@@ -517,9 +538,7 @@ export async function atividadeFormView(params, app) {
           clearTimeout(safetyTimeout);
           // Linkage com agendamento (em bg)
           if (agendamento) {
-            supabase.from('agendamentos').update({
-              status: 'realizado', atividade_id: inserted.id, realizado_em: new Date().toISOString()
-            }).eq('id', agendamento.id).then(() => {});
+            marcarAgendamentoRealizado(agendamento, inserted.id);
             toast('✓ Check-in registrado e agenda atualizada!', 'success', 3500);
             navigate('/agenda', true);
           } else {
@@ -707,11 +726,7 @@ export async function atividadeFormView(params, app) {
       clearTimeout(safetyTimeout);
       // Linkage bidirecional com agendamento (se veio de lá)
       if (agendamento && !id && data[0]?.id) {
-        supabase.from('agendamentos').update({
-          status: 'realizado',
-          atividade_id: data[0].id,
-          realizado_em: new Date().toISOString(),
-        }).eq('id', agendamento.id).then(() => {});
+        marcarAgendamentoRealizado(agendamento, data[0].id);
         toast('✓ Atividade registrada e agenda atualizada!', 'success', 3500);
         navigate('/agenda', true);
       } else {

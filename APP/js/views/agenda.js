@@ -169,18 +169,21 @@ async function agendaGerenteView(app) {
   const meuId = state.user.id;
   const role = state.profile?.role;
   let teamIds = [meuId];
-  if (role === 'gerente') {
-    const { data: subs } = await supabase
-      .from('profiles').select('id').eq('gerente_supervisor_id', meuId).eq('ativo', true);
-    if (subs?.length) teamIds = [meuId, ...subs.map(s => s.id)];
-  } else if (role === 'supervisor' && state.profile?.gerente_supervisor_id) {
-    teamIds = [meuId, state.profile.gerente_supervisor_id];
-  }
+  try {
+    if (role === 'gerente') {
+      const { data: subs } = await supabase
+        .from('profiles').select('id').eq('gerente_supervisor_id', meuId).eq('ativo', true);
+      if (subs?.length) teamIds = [meuId, ...subs.map(s => s.id)];
+    } else if (role === 'supervisor' && state.profile?.gerente_supervisor_id) {
+      teamIds = [meuId, state.profile.gerente_supervisor_id];
+    }
+  } catch (e) { /* rede: segue só com o próprio id */ }
 
   // Gerentes disponíveis no filtro "Ver agenda de":
   // - Admin (master/gestor/etc.) na visão Gerente: TODOS os gerentes (inspeção/teste)
   // - Gerente comum: gerentes da mesma praça (cidade), via RPC SECURITY DEFINER
   let outrosGerentes = [];
+  try {
   if (isAdmin()) {
     // Admin na visão Gerente: lista de gerentes conforme o ESCOPO do usuário.
     //  - superintendente: só gerentes dos seus estados
@@ -204,6 +207,7 @@ async function agendaGerenteView(app) {
     const { data: mesmos } = await supabase.rpc('gerentes_mesma_praca');
     outrosGerentes = mesmos || [];
   }
+  } catch (e) { /* rede: segue sem o filtro "ver agenda de" */ outrosGerentes = []; }
 
   let viewFilter = 'minha'; // 'minha' (eu + equipe) | <id de gerente da praça>
 

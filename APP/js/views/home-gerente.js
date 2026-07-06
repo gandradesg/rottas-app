@@ -208,10 +208,12 @@ export async function homeGerenteView(_params, app) {
   // Carrega conforme o período
   async function load() {
     feedList.innerHTML = '<div class="skeleton h-16"></div>';
+    // Conta as próprias atividades E aquelas em que sou participante (agenda em
+    // grupo: um check-in feito por um colega presente também conta pra mim).
     let q = supabase
       .from('atividades')
       .select('*')
-      .eq('gerente_id', state.user.id)
+      .or(`gerente_id.eq.${state.user.id},participantes.cs.{${state.user.id}}`)
       .eq('cancelada', false)
       .neq('tipo', 'visita')
       .order('created_at', { ascending: false });

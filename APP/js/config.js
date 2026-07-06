@@ -1,8 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.6';
+export const APP_VERSION = '1.9.7';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.7',
+    date: '04/07/2026',
+    changes: [
+      'NOVO: agenda com vários gerentes presentes — ao agendar, marque todos os que estarão juntos (ex.: mesma imobiliária). Cria uma agenda para cada um, e ao realizar gera UM único check-in que conta no contador de todos, sem inflar o total da empresa (evita registro duplicado)',
+      'ESTABILIDADE: tela travada "carregando pra sempre" — toda requisição agora tem tempo-limite (aborta em 45s em vez de pendurar), e as consultas iniciais da agenda são à prova de falha de rede',
+    ],
+  },
   {
     version: '1.9.6',
     date: '04/07/2026',

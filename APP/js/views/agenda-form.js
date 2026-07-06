@@ -169,18 +169,33 @@ export async function agendaFormView(params, app) {
   // executa o check-in/atividade depois.
   let responsavelField = null;
   const isAdminRole = ['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole);
-  // Mostra o seletor quando há mais de uma opção, ou quando é admin (precisa escolher o gerente)
-  if (responsaveis.length > 1 || (isAdminRole && responsaveis.length >= 1)) {
-    const respSel = el('select', { class: 'select' },
-      isAdminRole ? el('option', { value: '', selected: !responsavelId }, 'Selecione o gerente...') : null,
-      ...responsaveis.map(r => el('option', { value: r.id, selected: responsavelId === r.id }, r.nome)),
-    );
-    respSel.addEventListener('change', () => { responsavelId = respSel.value; });
-    responsavelField = field(isAdminRole ? 'Gerente responsável' : 'Responsável pela atividade', respSel, {
+  // Multi-seleção de presentes. Ao EDITAR, mantém 1 responsável (a linha em si);
+  // na CRIAÇÃO, pode marcar vários — cria uma agenda pra cada um.
+  const selecionados = new Set();
+  if (responsavelId) selecionados.add(responsavelId);
+
+  if (id) {
+    // EDIÇÃO: seletor único (a agenda editada pertence a um gerente)
+    if (responsaveis.length > 1 || (isAdminRole && responsaveis.length >= 1)) {
+      const respSel = el('select', { class: 'select' },
+        isAdminRole ? el('option', { value: '', selected: !responsavelId }, 'Selecione o gerente...') : null,
+        ...responsaveis.map(r => el('option', { value: r.id, selected: responsavelId === r.id }, r.nome)),
+      );
+      respSel.addEventListener('change', () => { responsavelId = respSel.value; selecionados.clear(); if (respSel.value) selecionados.add(respSel.value); });
+      responsavelField = field(isAdminRole ? 'Gerente responsável' : 'Responsável pela atividade', respSel, { required: true });
+    }
+  } else if (responsaveis.length > 1 || (isAdminRole && responsaveis.length >= 1)) {
+    // CRIAÇÃO: checkboxes de quem estará presente
+    const boxes = el('div', { class: 'flex flex-col gap-1.5' });
+    responsaveis.forEach(r => {
+      const cb = el('input', { type: 'checkbox', checked: selecionados.has(r.id) });
+      cb.addEventListener('change', () => { cb.checked ? selecionados.add(r.id) : selecionados.delete(r.id); });
+      boxes.appendChild(el('label', { class: 'card p-2.5 flex items-center gap-2 cursor-pointer text-sm' },
+        cb, el('span', { class: 'flex-1' }, r.nome)));
+    });
+    responsavelField = field(isAdminRole ? 'Gerentes presentes' : 'Quem estará presente', boxes, {
       required: true,
-      help: isAdminRole
-        ? 'Em qual gerente do seu time esta agenda será criada'
-        : 'Você, ou um gerente/supervisor da sua cidade (vocês compartilham agenda)',
+      help: 'Marque todos os gerentes presentes. Cria uma agenda para cada um; ao realizar, gera um único check-in que conta no contador de todos.',
     });
   } else if (isAdminRole && responsaveis.length === 0) {
     responsavelField = el('div', { class: 'card p-3 text-sm text-warning' },
@@ -199,13 +214,22 @@ export async function agendaFormView(params, app) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!responsavelId) { toast('Selecione o gerente responsável pela agenda', 'error'); return; }
+    // Lista de presentes (criação = multi; edição = 1)
+    const presentes = id ? (responsavelId ? [responsavelId] : []) : [...selecionados];
+    if (!presentes.length) { toast('Selecione quem estará presente', 'error'); return; }
     const fd = new FormData(form);
     const dataIso = new Date(fd.get('data_prevista')).toISOString();
 
+    // Grupo quando há mais de um presente: uma agenda por gerente, mesmo grupo_id,
+    // e "participantes" = todos (usado ao realizar para creditar cada um).
+    const ehGrupo = presentes.length > 1;
+    const grupoId = ehGrupo ? crypto.randomUUID() : null;
+
     // Local da visita e Imobiliária são campos SEPARADOS (colunas distintas).
     const payload = {
-      gerente_id: responsavelId, // Próprio gerente OU um supervisor escolhido
+      gerente_id: presentes[0], // dono da linha (nas N linhas, cada uma tem o seu)
+      participantes: ehGrupo ? presentes : [],
+      grupo_id: grupoId,
       tipo: chosenTipo,
       data_prevista: dataIso,
       titulo: (fd.get('titulo') || '').toString().trim() || null,
@@ -232,12 +256,19 @@ export async function agendaFormView(params, app) {
 
     loadingBtn(submitBtn, true);
     try {
-      const { data, error } = id
-        ? await supabase.from('agendamentos').update(payload).eq('id', id).select()
-        : await supabase.from('agendamentos').insert(payload).select();
+      let data, error;
+      if (id) {
+        ({ data, error } = await supabase.from('agendamentos').update(payload).eq('id', id).select());
+      } else if (ehGrupo) {
+        // Uma linha por presente (cada uma com o seu gerente_id) — todos veem na agenda
+        const rows = presentes.map(pid => ({ ...payload, gerente_id: pid }));
+        ({ data, error } = await supabase.from('agendamentos').insert(rows).select());
+      } else {
+        ({ data, error } = await supabase.from('agendamentos').insert(payload).select());
+      }
       if (error) throw error;
       if (!data || !data.length) throw new Error('Sem permissão (RLS rejeitou)');
-      toast(id ? '✓ Atualizado' : '✓ Agendado!', 'success');
+      toast(id ? '✓ Atualizado' : (ehGrupo ? `✓ Agendado para ${data.length} gerentes!` : '✓ Agendado!'), 'success');
       navigate('/', true);
     } catch (err) {
       console.error('[agenda] erro:', err);

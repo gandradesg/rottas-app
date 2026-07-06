@@ -17,6 +17,25 @@ async function safeLock(name, _acquireTimeout, fn) {
   }
 }
 
+// Fetch com timeout GLOBAL: a causa nº1 de "tela carregando pra sempre" é uma
+// requisição (query, RPC ou refresh de token) que fica pendurada em rede ruim e
+// nunca resolve — travando getSession() e todas as queries em fila atrás dela.
+// Aqui abortamos qualquer requisição que passar de 45s, então ela REJEITA (as
+// telas mostram erro/retry) em vez de congelar. 45s é folgado pra uploads de
+// foto em 3G, mas ainda finito.
+function fetchWithTimeout(input, init = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => {
+    try { ctrl.abort(new DOMException('Tempo esgotado', 'AbortError')); } catch { ctrl.abort(); }
+  }, 45000);
+  // Encadeia com um signal externo, se houver
+  if (init.signal) {
+    if (init.signal.aborted) ctrl.abort();
+    else init.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
+  return fetch(input, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
     persistSession: true,
@@ -26,6 +45,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
     storageKey: 'rottas-app-auth',
     lock: safeLock,
   },
+  global: { fetch: fetchWithTimeout },
 });
 
 // Estado global da aplicação
