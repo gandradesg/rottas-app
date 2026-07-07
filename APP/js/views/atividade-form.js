@@ -322,7 +322,7 @@ export async function atividadeFormView(params, app) {
     setTimeout(checkTreinamentoMode, 50);
 
     form.append(
-      locationFieldEl ? field('Localização', locationFieldEl, { required: true }) :
+      locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Se o dispositivo não permitir, dá para registrar sem ela.' }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
       field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
@@ -356,7 +356,7 @@ export async function atividadeFormView(params, app) {
     let atImobWrap;
 
     form.append(
-      locationFieldEl ? field('Localização', locationFieldEl, { required: true }) :
+      locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Se o dispositivo não permitir, dá para registrar sem ela.' }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
       field('Local da visita', creatableSelect({
         name: 'local_visita', items: state.locaisVisita, value: initial?.local_visita,
@@ -504,9 +504,20 @@ export async function atividadeFormView(params, app) {
       if (tipo === 'checkin') {
         const coords = locationFieldEl?.getCoords?.();
         if (!id) {
-          if (!coords) throw new Error('Capture a localização antes de salvar');
-          payload.latitude = coords.latitude;
-          payload.longitude = coords.longitude;
+          if (coords) {
+            payload.latitude = coords.latitude;
+            payload.longitude = coords.longitude;
+          } else {
+            // Localização NÃO é obrigatória: alguns PCs não conseguem ativar o GPS.
+            // Continua tentando puxar automática, mas permite registrar sem ela.
+            const ok = await confirmModal({
+              title: 'Sem localização',
+              message: 'Não foi possível capturar a localização (GPS bloqueado ou indisponível neste dispositivo). Deseja registrar mesmo assim, sem localização?',
+              confirmLabel: 'Registrar sem localização',
+              cancelLabel: 'Voltar',
+            });
+            if (!ok) { clearTimeout(safetyTimeout); loadingBtn(submitBtn, false); return; }
+          }
         }
         payload.imobiliaria = (fd.get('imobiliaria') || '').toString().trim();
         payload.motivo_visita = (fd.get('motivo_visita') || '').toString().trim();
@@ -562,9 +573,20 @@ export async function atividadeFormView(params, app) {
       if (tipo === 'atendimento') {
         const coords = locationFieldEl?.getCoords?.();
         if (!id) {
-          if (!coords) throw new Error('Capture a localização antes de salvar');
-          payload.latitude = coords.latitude;
-          payload.longitude = coords.longitude;
+          if (coords) {
+            payload.latitude = coords.latitude;
+            payload.longitude = coords.longitude;
+          } else {
+            // Localização NÃO é obrigatória: alguns PCs não conseguem ativar o GPS.
+            // Continua tentando puxar automática, mas permite registrar sem ela.
+            const ok = await confirmModal({
+              title: 'Sem localização',
+              message: 'Não foi possível capturar a localização (GPS bloqueado ou indisponível neste dispositivo). Deseja registrar mesmo assim, sem localização?',
+              confirmLabel: 'Registrar sem localização',
+              cancelLabel: 'Voltar',
+            });
+            if (!ok) { clearTimeout(safetyTimeout); loadingBtn(submitBtn, false); return; }
+          }
         }
         payload.local_visita = (fd.get('local_visita')||'').toString().trim();
         payload.produto = (fd.get('produto')||'').toString().trim();

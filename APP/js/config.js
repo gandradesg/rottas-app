@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.9';
+export const APP_VERSION = '1.9.10';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.10',
+    date: '04/07/2026',
+    changes: [
+      'LOCALIZAÇÃO opcional: em check-in e atendimento, se o dispositivo não conseguir ativar o GPS (comum em alguns PCs), agora é possível registrar mesmo assim — o app confirma e salva sem localização, em vez de travar o cadastro. Onde o GPS funciona, continua capturando automaticamente',
+    ],
+  },
   {
     version: '1.9.9',
     date: '04/07/2026',
