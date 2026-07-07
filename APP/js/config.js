@@ -1,8 +1,153 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.11';
+export const APP_VERSION = '1.9.12';
 export const APP_BUILD_DATE = '2026-07-04';
 
+// Histórico curado: uma entrada por dia, só com as mudanças relevantes.
+// (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.12',
+    date: '04/07/2026',
+    changes: [
+      'NOVO: agenda compartilhada — ao agendar, marque todos os gerentes presentes (ex.: mesma imobiliária). Gera um único check-in, que conta no contador de cada presente sem duplicar o total da empresa',
+      'Localização deixou de ser obrigatória em check-in/atendimento: onde há GPS continua automática; onde o dispositivo não permite, dá para registrar mesmo assim',
+      'Escopo por praça reforçado: cada Superintendente só vê e edita usuários e agendas do(s) seu(s) estado(s); o Gestor Regional, só das suas cidades',
+      'Painel de Imobiliárias ordenado pelas com mais atendimentos; Carteira filtra pelas imobiliárias da praça do gerente (com busca livre para outras)',
+      'Cancelamento de agendamento com motivo livre e botão "Ditar" (voz → texto)',
+      'ESTABILIDADE: fim das telas travadas no carregamento e do uso de versão desatualizada em cache — o app sempre carrega a versão mais recente e consistente',
+    ],
+  },
+  {
+    version: '1.9.2',
+    date: '03/07/2026',
+    changes: [
+      'NOVO: cidade com preenchimento automático (lista oficial IBGE de PR e SC) e UF automática, em todos os cadastros',
+      'NOVO: agenda compartilhada entre gerentes/supervisores da mesma cidade, com filtro "Ver agenda de" colegas da praça',
+      'Motivos de visita e de contato viraram listas abertas — o gerente cadastra um novo na hora',
+      'Master/admin na visão Gerente pode inspecionar e testar a agenda de qualquer gerente',
+    ],
+  },
+  {
+    version: '1.7.0',
+    date: '02/07/2026',
+    changes: [
+      'NOVO: painel de Performance na Agenda — agendadas, % concluídas, canceladas e remarcadas, acompanhando o período (dia/semana/mês)',
+      'NOVO: atendimentos adicionais dentro de um atendimento (registro complementar do mesmo cliente, fora do funil)',
+      '"Gerente da imobiliária" deixou de ser obrigatório; edições de baixo impacto (termômetro, observações, reserva) passam a valer sem aprovação',
+      'Cores padronizadas por tipo de atividade e KPI "Visitas" renomeado para "Atendimentos"',
+      'Corrigido: envio do convite de usuário e o loop da tela "Defina sua senha"',
+    ],
+  },
+  {
+    version: '1.4.9',
+    date: '18/06/2026',
+    changes: [
+      'NOVO: gerente pode editar qualquer campo da própria atividade — a alteração vai para aprovação do gestor (com antes → depois na aba Aprovações)',
+      'NOVO: aba 🎯 Carteira — define por gerente/mês as imobiliárias a visitar (o alerta de "sem visita" passa a considerar só essas)',
+      'NOVO: proposta vinculada ao atendimento e reserva livre (sem aprovação); "Venda" passou a se chamar "Reserva"',
+      'Histórico de alterações e central de auditoria (edições e exclusões) para gestão',
+      'Privacidade: lista de clientes só para admin; diversas correções de estabilidade',
+    ],
+  },
+  {
+    version: '1.2.2',
+    date: '17/06/2026',
+    changes: [
+      'NOVO: telefone inteligente (bandeira e formato por país) e sugestão de domínio de e-mail',
+      'NOVO: Corretor e Cliente com cadastro na hora, vinculados à imobiliária, com aviso de duplicado',
+      'NOVO: Sugestões de melhoria no Perfil — qualquer usuário registra ideias e o Master acompanha',
+      'NOVO: busca dinâmica no Painel e nas Listas; gestão de corretores e clientes direto nas Listas',
+    ],
+  },
+  {
+    version: '1.1.0',
+    date: '21/05/2026',
+    changes: [
+      'NOVO PERFIL: Recepção Rottas — registra somente Visitas, isolado dos demais módulos',
+      'NOVA ATIVIDADE: Visita, com importação em massa por planilha (XLSX) e auditoria',
+    ],
+  },
+  {
+    version: '1.0.6',
+    date: '19/05/2026',
+    changes: [
+      'NOVO: Dashboard Analítico (VGV, conversões, curvas, funil e rankings), com escopo automático por perfil',
+      'Hierarquia rígida na gestão de usuários e sincronização de calendário corporativo (Microsoft 365)',
+    ],
+  },
+  {
+    version: '0.9.4',
+    date: '16/05/2026',
+    changes: [
+      'Órulo e DWV unificados; imobiliárias com cidade/estado obrigatórios (nome sempre em maiúsculas)',
+      'Supervisor passou a ter aba Agenda; visibilidade por estado (Superintendente) e cidade (Gestor Regional)',
+      'Performance: regras de acesso e carregamento bem mais rápidos',
+    ],
+  },
+  {
+    version: '0.9.0',
+    date: '12/05/2026',
+    changes: [
+      'NOVA HIERARQUIA: 6 perfis — Supervisor → Gerente → Gestor Regional → Superintendente → Gestor → Master',
+      'Superintendente multi-estado, Gestor Regional multi-cidade e workflow de aprovação de propostas',
+      'Correção definitiva do loop de "definir senha"',
+    ],
+  },
+  {
+    version: '0.8.6',
+    date: '07/05/2026',
+    changes: [
+      'NOVO: app sempre carrega a versão mais recente (atualização automática) e funciona offline',
+      'Convites por e-mail com template correto e logo Rottas; Master pode criar outros masters',
+      'Painel: aba Imobiliárias com alerta de "sem visita há 7+ dias" e importação de listas em massa',
+      'Foto opcional no check-in; estados limitados a PR e SC',
+    ],
+  },
+  {
+    version: '0.8.0',
+    date: '06/05/2026',
+    changes: [
+      'Ícone e splash do PWA com a logo oficial Rottas; e-mails compatíveis com Outlook corporativo',
+    ],
+  },
+  {
+    version: '0.7.7',
+    date: '05/05/2026',
+    changes: [
+      'NOVO: Agenda como tela inicial — calendário dia/semana/mês e "Realizar" a atividade direto da agenda',
+      'Listas de imobiliárias e locais de visita separadas; ditado por voz nas observações; sync de calendário',
+      'Ícones do PWA para iOS e Android',
+    ],
+  },
+  {
+    version: '0.6.0',
+    date: '03/05/2026',
+    changes: [
+      'NOVO: módulo de Agenda (planejamento de visitas e atendimentos) com visão consolidada da equipe',
+      'Numeração sequencial automática por tipo, funil de vendas visual e mini-mapa no registro',
+    ],
+  },
+  {
+    version: '0.5.0',
+    date: '02/05/2026',
+    changes: [
+      'Sistema de aprovação de exclusão e permissões granulares para gestores',
+      'Papel Gestor separado do Master, transcrição de áudio por voz e tela "Sobre"',
+    ],
+  },
+  {
+    version: '0.1.0',
+    date: '01/05/2026',
+    changes: [
+      'Primeira versão: Check-in, Atendimento, Proposta e Órulo com geolocalização e fotos',
+      'Painel do Gestor com dashboards, ranking e filtros; cadastro de usuários e listas; tema claro/escuro',
+    ],
+  },
+];
+
+// Histórico técnico detalhado (todas as micro-versões) — não exibido na tela "Sobre",
+// mantido só para referência interna.
+const _CHANGELOG_DETALHADO = [
   {
     version: '1.9.11',
     date: '04/07/2026',

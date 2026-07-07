@@ -8,7 +8,7 @@
 // Mudar esta string faz o navegador detectar um SW novo, ativar na hora, PURGAR o
 // cache antigo (no 'activate') e recarregar — garantindo que nunca fique um mix de
 // versoes de JS em cache (causa raiz de "app nao abre / versao velha").
-const SW_VERSION = '1.9.11';
+const SW_VERSION = '1.9.12';
 const CACHE_NAME = 'imob-rottas-' + SW_VERSION;
 
 self.addEventListener('install', (event) => {
@@ -39,8 +39,23 @@ self.addEventListener('fetch', (event) => {
   const reqUrl = new URL(req.url);
   if (reqUrl.origin !== self.location.origin) return;
 
-  // NETWORK FIRST: tenta servidor, atualiza cache, fallback offline
+  // CÓDIGO DO APP (HTML/JS/CSS): SOMENTE REDE, sem cache.
+  // Motivo: cache do SW podia servir um arquivo velho enquanto outro vinha novo,
+  // criando "estado misto" de versões (index de uma versão + módulos de outra),
+  // que travava a tela. Sem cachear código, cada carga pega um conjunto de
+  // arquivos 100% consistente do servidor (Vercel já manda no-store nesses).
+  const isCode = req.mode === 'navigate'
+    || reqUrl.pathname === '/'
+    || /\.(js|css|html|webmanifest)$/.test(reqUrl.pathname);
+  if (isCode) {
+    event.respondWith(fetch(req));
+    return;
+  }
+
+  // ASSETS (imagens, ícones): cache-first leve (podem ficar offline sem risco de mix)
   event.respondWith((async () => {
+    const cached = await caches.match(req);
+    if (cached) return cached;
     try {
       const networkRes = await fetch(req);
       if (networkRes && networkRes.status === 200 && networkRes.type === 'basic') {
@@ -49,11 +64,7 @@ self.addEventListener('fetch', (event) => {
       }
       return networkRes;
     } catch (err) {
-      // Offline: serve do cache se tiver
-      const cached = await caches.match(req);
       if (cached) return cached;
-      // HTML root fallback
-      if (req.destination === 'document') return caches.match('/');
       throw err;
     }
   })());
