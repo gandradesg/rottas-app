@@ -322,7 +322,7 @@ export async function atividadeFormView(params, app) {
     setTimeout(checkTreinamentoMode, 50);
 
     form.append(
-      locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Se o dispositivo não permitir, dá para registrar sem ela.' }) :
+      locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Ative a localização do seu dispositivo.' }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
       field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
@@ -356,7 +356,7 @@ export async function atividadeFormView(params, app) {
     let atImobWrap;
 
     form.append(
-      locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Se o dispositivo não permitir, dá para registrar sem ela.' }) :
+      locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Ative a localização do seu dispositivo.' }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
       field('Local da visita', creatableSelect({
         name: 'local_visita', items: state.locaisVisita, value: initial?.local_visita,

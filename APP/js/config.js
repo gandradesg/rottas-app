@@ -1,8 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.10';
+export const APP_VERSION = '1.9.11';
 export const APP_BUILD_DATE = '2026-07-04';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.11',
+    date: '04/07/2026',
+    changes: [
+      'Texto do campo Localização ajustado: "Capturada automaticamente. Ative a localização do seu dispositivo."',
+    ],
+  },
   {
     version: '1.9.10',
     date: '04/07/2026',
