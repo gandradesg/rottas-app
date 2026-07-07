@@ -618,12 +618,20 @@ async function agendaGerenteView(app) {
       actions.appendChild(calendarButton(item, { el, icon, toast }));
       actions.appendChild(el('button', {
         class: 'btn btn-ghost btn-sm',
+        title: 'Editar',
+        'aria-label': 'Editar agendamento',
         onclick: () => navigate(`/agenda/${item.id}/editar`)
       }, icon('edit', 14)));
       actions.appendChild(el('button', {
-        class: 'btn btn-ghost btn-sm text-fg-muted',
+        class: 'btn btn-ghost btn-sm text-danger flex items-center gap-1 group',
+        style: { color: '#EF4444' },
+        title: 'Cancelar',
+        'aria-label': 'Cancelar agendamento',
         onclick: () => openCancelModal(item),
-      }, '✕'));
+      },
+        icon('x', 14),
+        el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Cancelar'),
+      ));
     } else if (item.status === 'realizado' && item.atividade_id) {
       actions.appendChild(el('button', {
         class: 'btn btn-secondary btn-sm flex items-center gap-1.5',

@@ -1,14 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.12';
+export const APP_VERSION = '1.9.13';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
   {
-    version: '1.9.12',
+    version: '1.9.13',
     date: '04/07/2026',
     changes: [
+      'AGENDA: botão de cancelar agendamento agora é vermelho e mostra "Cancelar" ao passar o mouse; o botão de editar também tem dica ao passar o mouse',
       'NOVO: agenda compartilhada — ao agendar, marque todos os gerentes presentes (ex.: mesma imobiliária). Gera um único check-in, que conta no contador de cada presente sem duplicar o total da empresa',
       'Localização deixou de ser obrigatória em check-in/atendimento: onde há GPS continua automática; onde o dispositivo não permite, dá para registrar mesmo assim',
       'Escopo por praça reforçado: cada Superintendente só vê e edita usuários e agendas do(s) seu(s) estado(s); o Gestor Regional, só das suas cidades',
