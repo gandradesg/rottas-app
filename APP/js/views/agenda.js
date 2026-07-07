@@ -617,11 +617,14 @@ async function agendaGerenteView(app) {
       // Botão sync de calendário (Google/Outlook/.ics)
       actions.appendChild(calendarButton(item, { el, icon, toast }));
       actions.appendChild(el('button', {
-        class: 'btn btn-ghost btn-sm',
+        class: 'btn btn-ghost btn-sm flex items-center gap-1 group',
         title: 'Editar',
         'aria-label': 'Editar agendamento',
         onclick: () => navigate(`/agenda/${item.id}/editar`)
-      }, icon('edit', 14)));
+      },
+        icon('edit', 14),
+        el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Editar'),
+      ));
       actions.appendChild(el('button', {
         class: 'btn btn-ghost btn-sm text-danger flex items-center gap-1 group',
         style: { color: '#EF4444' },
