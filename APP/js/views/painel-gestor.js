@@ -364,6 +364,12 @@ export async function painelGestorView(_params, app) {
     });
   }
 
+  // Abre o Histórico da equipe já filtrado por tipo (mesmo período do painel)
+  function goHist(tipo) {
+    try { localStorage.setItem('historico-preset', JSON.stringify({ tipo, periodo: filters.periodo })); } catch (e) {}
+    navigate('/historico');
+  }
+
   function renderOverview() {
     const allAtividades = baseAtividades.filter(hay);
     const c = {
@@ -381,12 +387,12 @@ export async function painelGestorView(_params, app) {
       .reduce((s,a) => s + (parseFloat(a.valor) || 0), 0);
 
     const grid = el('div', { class: 'grid grid-cols-2 gap-3' },
-      kpi('Check-ins', c.checkin, 'mapPin', '#3B82F6'),
-      kpi('Atendimentos', c.atend, 'users', '#8B5CF6'),
-      kpi('Propostas', c.prop, 'fileText', '#F59E0B'),
-      kpi('Reservas', c.vendas, 'trendingUp', '#10B981'),
-      kpi('Órulo/DWV', c.orulo, 'globe', '#10B981'),
-      kpi('VGV propostas', fmt.currencyMillions(valorPropostas), 'dollarSign', '#F26B22'),
+      kpi('Check-ins', c.checkin, 'mapPin', '#3B82F6', () => goHist('checkin')),
+      kpi('Atendimentos', c.atend, 'users', '#8B5CF6', () => goHist('atendimento')),
+      kpi('Propostas', c.prop, 'fileText', '#F59E0B', () => goHist('proposta')),
+      kpi('Reservas', c.vendas, 'trendingUp', '#10B981', () => goHist('proposta')),
+      kpi('Órulo/DWV', c.orulo, 'globe', '#10B981', () => goHist('orulo')),
+      kpi('VGV propostas', fmt.currencyMillions(valorPropostas), 'dollarSign', '#F26B22', () => goHist('proposta')),
     );
 
     const vendasCard = el('div', { class: 'card p-4' },
@@ -818,14 +824,20 @@ export async function painelGestorView(_params, app) {
   reload();
 }
 
-function kpi(label, value, ic, color) {
-  return el('div', { class: 'card p-3 flex flex-col gap-1' },
+function kpi(label, value, ic, color, onClick) {
+  // Card clicável → abre o Histórico filtrado por este tipo
+  return el('button', {
+    class: 'card p-3 flex flex-col gap-1 text-left w-full hover:border-rottas-300 transition group',
+    onclick: onClick || null,
+    title: onClick ? `Ver ${label.toLowerCase()}` : null,
+  },
     el('div', { class: 'flex items-center gap-2' },
       el('div', {
         class: 'w-7 h-7 rounded-lg flex items-center justify-center',
         style: { background: color + '20', color }
       }, icon(ic, 16)),
       el('span', { class: 'text-[10px] font-bold uppercase tracking-wider text-fg-subtle' }, label),
+      onClick ? el('span', { class: 'ml-auto text-fg-subtle group-hover:text-rottas-500 transition' }, icon('chevronRight', 16)) : null,
     ),
     el('div', { class: 'text-2xl font-extrabold leading-tight mt-1' }, String(value)),
   );
