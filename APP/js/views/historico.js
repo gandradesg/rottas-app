@@ -21,6 +21,8 @@ export async function historicoView(_params, app) {
     gerente: 'todos',
     empreendimento: 'todos',
     estado: 'todos',
+    termometro: 'todos', // subfiltro quando tipo = atendimento
+    motivo: 'todos',      // subfiltro (motivo/tipo do check-in) quando tipo = checkin
     busca: '',
   };
 
@@ -70,8 +72,37 @@ export async function historicoView(_params, app) {
 
   const buscaInput = el('input', { class: 'input', type: 'search', placeholder: 'Buscar (cliente, imobiliária, observações...)' });
 
+  // Subfiltro contextual: aparece conforme o tipo escolhido
+  //  - Atendimento → Temperatura do cliente
+  //  - Check-in    → Tipo do check-in (motivo da visita)
+  const subFilterWrap = el('div', {});
+  function renderSubFilter() {
+    subFilterWrap.innerHTML = '';
+    if (filters.tipo === 'atendimento') {
+      const sel = el('select', { class: 'select' },
+        el('option', { value: 'todos' }, 'Todas as temperaturas'),
+        el('option', { value: 'quente', selected: filters.termometro === 'quente' }, '🔥 Quente'),
+        el('option', { value: 'morno',  selected: filters.termometro === 'morno'  }, '🌤️ Morno'),
+        el('option', { value: 'frio',   selected: filters.termometro === 'frio'   }, '❄️ Frio'),
+      );
+      sel.value = filters.termometro;
+      sel.addEventListener('change', () => { filters.termometro = sel.value; reload(); });
+      subFilterWrap.appendChild(sel);
+    } else if (filters.tipo === 'checkin') {
+      const motivos = (state.motivosVisita || []);
+      const sel = el('select', { class: 'select' },
+        el('option', { value: 'todos' }, 'Todos os tipos de check-in'),
+        ...motivos.map(m => el('option', { value: m.nome, selected: filters.motivo === m.nome }, m.nome)),
+      );
+      sel.value = filters.motivo;
+      sel.addEventListener('change', () => { filters.motivo = sel.value; reload(); });
+      subFilterWrap.appendChild(sel);
+    }
+  }
+
   const filterItems = [
     el('div', { class: 'grid grid-cols-2 gap-2' }, tipoSel, periodoSel),
+    subFilterWrap,
   ];
   if (gerenteSel) filterItems.push(gerenteSel);
   filterItems.push(buscaInput);
@@ -116,6 +147,9 @@ export async function historicoView(_params, app) {
     if (!isTeamView) q = q.eq('gerente_id', state.user.id);
     if (isTeamView && filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
     if (filters.tipo !== 'todos') q = q.eq('tipo', filters.tipo);
+    // Subfiltros contextuais
+    if (filters.tipo === 'atendimento' && filters.termometro !== 'todos') q = q.eq('termometro', filters.termometro);
+    if (filters.tipo === 'checkin' && filters.motivo !== 'todos') q = q.eq('motivo_visita', filters.motivo);
 
     const now = new Date();
     if (filters.periodo === 'hoje') {
@@ -169,7 +203,14 @@ export async function historicoView(_params, app) {
   }
 
   // Listeners
-  tipoSel.addEventListener('change', () => { filters.tipo = tipoSel.value; reload(); });
+  tipoSel.addEventListener('change', () => {
+    filters.tipo = tipoSel.value;
+    // Ao trocar o tipo, zera os subfiltros e re-renderiza o subfiltro adequado
+    filters.termometro = 'todos';
+    filters.motivo = 'todos';
+    renderSubFilter();
+    reload();
+  });
   periodoSel.addEventListener('change', () => { filters.periodo = periodoSel.value; reload(); });
   if (gerenteSel) gerenteSel.addEventListener('change', () => { filters.gerente = gerenteSel.value; reload(); });
   let searchTimer;
@@ -181,6 +222,7 @@ export async function historicoView(_params, app) {
   // Reflete os filtros iniciais (inclui preset vindo da home) nos selects
   tipoSel.value = filters.tipo;
   periodoSel.value = filters.periodo;
+  renderSubFilter();
 
   reload();
 }

@@ -1,14 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.16';
+export const APP_VERSION = '1.9.17';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
   {
-    version: '1.9.16',
+    version: '1.9.17',
     date: '04/07/2026',
     changes: [
+      'HISTÓRICO: filtro extra que aparece conforme o tipo — ao filtrar Atendimentos, dá para filtrar pela temperatura do cliente (Quente/Morno/Frio); ao filtrar Check-ins, pelo tipo do check-in (motivo da visita)',
       'INÍCIO e PAINEL: os quadros de Check-ins, Atendimentos, Propostas, Reservas e Órulo/DWV agora são clicáveis — abrem o Histórico já filtrado por aquele tipo (no mesmo período). Vale para gerente e para as visões de gestão (Superintendente, Master, etc.)',
       'AGENDA: botão de cancelar agendamento em vermelho, mostrando "Cancelar" ao passar o mouse; o botão de editar mostra "Editar" ao passar o mouse',
       'NOVO: agenda compartilhada — ao agendar, marque todos os gerentes presentes (ex.: mesma imobiliária). Gera um único check-in, que conta no contador de cada presente sem duplicar o total da empresa',
