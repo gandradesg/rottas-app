@@ -24,6 +24,18 @@ export async function historicoView(_params, app) {
     busca: '',
   };
 
+  // Preset vindo dos cards de KPI da home (abrir já filtrado por tipo/período).
+  try {
+    const preset = JSON.parse(localStorage.getItem('historico-preset') || 'null');
+    if (preset) {
+      localStorage.removeItem('historico-preset');
+      if (preset.tipo) filters.tipo = preset.tipo;
+      // Períodos da home (dia/semana/mes/geral) → períodos do histórico
+      const mapPeriodo = { dia: 'hoje', semana: 'semana', mes: 'mes', geral: 'tudo' };
+      if (preset.periodo) filters.periodo = mapPeriodo[preset.periodo] || preset.periodo;
+    }
+  } catch (e) { /* ignora preset inválido */ }
+
   const content = el('div', { class: 'flex flex-col gap-4' });
 
   // Header com título e ações
@@ -165,6 +177,10 @@ export async function historicoView(_params, app) {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { filters.busca = buscaInput.value; reload(); }, 300);
   });
+
+  // Reflete os filtros iniciais (inclui preset vindo da home) nos selects
+  tipoSel.value = filters.tipo;
+  periodoSel.value = filters.periodo;
 
   reload();
 }

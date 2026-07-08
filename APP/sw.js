@@ -8,7 +8,7 @@
 // Mudar esta string faz o navegador detectar um SW novo, ativar na hora, PURGAR o
 // cache antigo (no 'activate') e recarregar — garantindo que nunca fique um mix de
 // versoes de JS em cache (causa raiz de "app nao abre / versao velha").
-const SW_VERSION = '1.9.14';
+const SW_VERSION = '1.9.15';
 const CACHE_NAME = 'imob-rottas-' + SW_VERSION;
 
 self.addEventListener('install', (event) => {

@@ -62,15 +62,21 @@ export async function homeGerenteView(_params, app) {
   }
   updateSectionTitle();
 
+  // Abre o Histórico já filtrado por tipo (e no período atual da home)
+  function abrirHistorico(tipo) {
+    try { localStorage.setItem('historico-preset', JSON.stringify({ tipo, periodo })); } catch (e) {}
+    navigate('/historico');
+  }
+
   // KPIs
   const kpiGrid = el('div', { class: 'grid grid-cols-2 gap-3' });
   function renderKPIs(counts) {
     kpiGrid.innerHTML = '';
     kpiGrid.append(
-      kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin'),
-      kpiCard('Atendimentos', counts.atendimento, 'clientes', 'purple', 'users'),
-      kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText'),
-      kpiCard('Reservas', counts.venda, 'reservadas', 'green', 'trendingUp'),
+      kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin', () => abrirHistorico('checkin')),
+      kpiCard('Atendimentos', counts.atendimento, 'clientes', 'purple', 'users', () => abrirHistorico('atendimento')),
+      kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText', () => abrirHistorico('proposta')),
+      kpiCard('Reservas', counts.venda, 'reservadas', 'green', 'trendingUp', () => abrirHistorico('proposta')),
     );
   }
   renderKPIs({ checkin: 0, atendimento: 0, proposta: 0, venda: 0 });
@@ -280,7 +286,7 @@ export async function homeGerenteView(_params, app) {
   load();
 }
 
-function kpiCard(label, value, suffix, color, ic) {
+function kpiCard(label, value, suffix, color, ic, onClick) {
   const colors = {
     blue:   { bg: 'rgba(59,130,246,0.12)',  fg: '#3B82F6' },
     purple: { bg: 'rgba(139,92,246,0.12)',  fg: '#8B5CF6' },
@@ -288,13 +294,19 @@ function kpiCard(label, value, suffix, color, ic) {
     green:  { bg: 'rgba(16,185,129,0.12)',  fg: '#10B981' },
   };
   const c = colors[color];
-  return el('div', { class: 'card p-3 flex flex-col gap-1' },
+  // Card clicável → abre o histórico filtrado por este tipo
+  return el('button', {
+    class: 'card p-3 flex flex-col gap-1 text-left w-full hover:border-rottas-300 transition group',
+    onclick: onClick || null,
+    title: onClick ? `Ver ${label.toLowerCase()}` : null,
+  },
     el('div', { class: 'flex items-center gap-2' },
       el('div', {
         class: 'w-7 h-7 rounded-lg flex items-center justify-center',
         style: { background: c.bg, color: c.fg }
       }, icon(ic, 16)),
       el('span', { class: 'text-[10px] font-bold uppercase tracking-wider text-fg-subtle' }, label),
+      onClick ? el('span', { class: 'ml-auto text-fg-subtle group-hover:text-rottas-500 transition' }, icon('chevronRight', 16)) : null,
     ),
     el('div', { class: 'text-3xl font-extrabold leading-none mt-1' }, String(value)),
     el('span', {
