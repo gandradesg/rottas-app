@@ -267,7 +267,15 @@ async function agendaGerenteView(app) {
       cal.appendChild(el('div', { class: 'card p-4 text-sm text-fg-muted flex flex-col gap-2' },
         el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar a agenda.'),
         el('div', {}, (error.message || 'Falha de rede') + '.'),
-        el('button', { class: 'btn btn-secondary btn-sm self-start', onclick: () => loadItems() }, '↻ Tentar de novo'),
+        el('div', { class: 'text-xs text-fg-subtle' },
+          'Se "Tentar de novo" não resolver, use "Recarregar app" (reinicia a conexão — comum após deixar o app parado no iPhone).'),
+        el('div', { class: 'flex gap-2 flex-wrap' },
+          el('button', { class: 'btn btn-secondary btn-sm', onclick: () => loadItems() }, '↻ Tentar de novo'),
+          el('button', { class: 'btn btn-primary btn-sm', onclick: () => {
+            try { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
+            location.reload();
+          } }, '⟳ Recarregar app'),
+        ),
       ));
       return;
     }
@@ -617,24 +625,27 @@ async function agendaGerenteView(app) {
       }, icon('mapPin', 14), 'Realizar agora'));
       // Botão sync de calendário (Google/Outlook/.ics)
       actions.appendChild(calendarButton(item, { el, icon, toast }));
-      actions.appendChild(el('button', {
-        class: 'btn btn-ghost btn-sm flex items-center gap-1 group',
-        title: 'Editar',
-        'aria-label': 'Editar agendamento',
-        onclick: () => navigate(`/agenda/${item.id}/editar`)
-      },
-        icon('edit', 14),
-        el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Editar'),
-      ));
-      actions.appendChild(el('button', {
-        class: 'btn btn-ghost btn-sm text-danger flex items-center gap-1 group',
-        style: { color: '#EF4444' },
-        title: 'Cancelar',
-        'aria-label': 'Cancelar agendamento',
-        onclick: () => openCancelModal(item),
-      },
-        icon('x', 14),
-        el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Cancelar'),
+      // Editar + Cancelar agrupados: ficam SEMPRE juntos na mesma linha
+      actions.appendChild(el('div', { class: 'flex gap-1.5 flex-shrink-0' },
+        el('button', {
+          class: 'btn btn-ghost btn-sm flex items-center gap-1 group',
+          title: 'Editar',
+          'aria-label': 'Editar agendamento',
+          onclick: () => navigate(`/agenda/${item.id}/editar`)
+        },
+          icon('edit', 14),
+          el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Editar'),
+        ),
+        el('button', {
+          class: 'btn btn-ghost btn-sm flex items-center gap-1 group',
+          style: { color: '#EF4444' },
+          title: 'Cancelar',
+          'aria-label': 'Cancelar agendamento',
+          onclick: () => openCancelModal(item),
+        },
+          icon('x', 14),
+          el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Cancelar'),
+        ),
       ));
     } else if (item.status === 'realizado' && item.atividade_id) {
       actions.appendChild(el('button', {
@@ -730,10 +741,27 @@ async function agendaGestorView(app) {
     if (filters.tipo !== 'todos')   q = q.eq('tipo', filters.tipo);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
 
-    const { data, error } = await q.limit(2000);
+    let data, error;
+    try {
+      const res = await Promise.race([
+        q.limit(2000),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
+      ]);
+      data = res.data; error = res.error;
+    } catch (e) { error = e; }
     if (error) {
       cal.innerHTML = '';
-      cal.appendChild(el('div', { class: 'card p-4 text-danger text-sm' }, 'Erro: ' + error.message));
+      cal.appendChild(el('div', { class: 'card p-4 text-sm text-fg-muted flex flex-col gap-2' },
+        el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar a agenda.'),
+        el('div', {}, (error.message || 'Falha de rede') + '.'),
+        el('div', { class: 'flex gap-2 flex-wrap' },
+          el('button', { class: 'btn btn-secondary btn-sm', onclick: () => reload() }, '↻ Tentar de novo'),
+          el('button', { class: 'btn btn-primary btn-sm', onclick: () => {
+            try { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
+            location.reload();
+          } }, '⟳ Recarregar app'),
+        ),
+      ));
       return;
     }
     allItems = (data || []).map(i => ({ ...i, gerente_nome: i.profiles?.nome }));

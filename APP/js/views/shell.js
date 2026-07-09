@@ -56,8 +56,9 @@ export function shell(content, opts = {}) {
     );
   }
 
-  // Header
-  const header = el('header', { class: 'sticky top-0 z-30 glass border-b border-border' },
+  // Header — padding-top respeita a área segura do iOS (notch/barra de status),
+  // senão o conteúdo fica cortado sob o relógio/bateria (viewport-fit=cover).
+  const header = el('header', { class: 'sticky top-0 z-30 glass border-b border-border', style: { paddingTop: 'env(safe-area-inset-top)' } },
     el('div', { class: 'max-w-screen-md mx-auto px-4 py-3 flex items-center gap-3' },
       back
         ? el('button', { class: 'p-2 -ml-2 rounded-lg hover:bg-bg-elev transition', 'aria-label': 'Voltar', onclick: () => history.back() }, icon('arrowLeft', 22))
