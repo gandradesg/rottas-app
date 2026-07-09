@@ -161,7 +161,9 @@ export async function atividadeFormView(params, app) {
     agendamento = data;
   }
 
-  const tipo = params.tipo || agendamento?.tipo || null;
+  // Agendamento tipo "Outro" não tem atividade própria — ao realizar, vira um
+  // Check-in (o gerente completa imobiliária/motivo). O título vira observação.
+  const tipo = params.tipo || (agendamento?.tipo === 'outro' ? 'checkin' : agendamento?.tipo) || null;
   const id = params.id;
   const t = TIPO_ATIVIDADE[tipo];
   if (!t) { navigate('/registrar', true); return; }
@@ -183,7 +185,10 @@ export async function atividadeFormView(params, app) {
       motivo_visita:  agendamento.motivo_visita,
       // Local da visita e Imobiliária agora são campos separados no agendamento
       local_visita:   agendamento.local_visita || null,
-      observacoes:    agendamento.observacoes,
+      // Para "Outro", o título do agendamento (ex.: "Treinamento de produto") vira observação
+      observacoes:    agendamento.tipo === 'outro'
+        ? [agendamento.titulo, agendamento.observacoes].filter(Boolean).join(' — ')
+        : agendamento.observacoes,
     };
   }
 

@@ -1,15 +1,16 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.19';
+export const APP_VERSION = '1.9.20';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
   {
-    version: '1.9.19',
+    version: '1.9.20',
     date: '04/07/2026',
     changes: [
-      'CHECK-IN à prova de conexão ruim: agora o registro é salvo com repetição automática — se a resposta não voltar (iOS suspende a conexão ao usar a câmera, ou 3G/4G instável), o app tenta de novo sozinho sem duplicar e sem perder o check-in',
+      'AGENDA: agendamento do tipo "Outro" agora pode ser realizado — abre como Check-in (o título, ex.: "Treinamento de produto", vira observação), então dá para concluir e contabilizar',
+      'CHECK-IN à prova de conexão ruim: registro salvo com repetição automática — se a resposta não voltar (iOS suspende ao usar a câmera, ou 3G/4G instável), o app tenta de novo sozinho sem duplicar e sem perder o check-in',
       'NOVO: contas de TESTE — o Master pode marcar um usuário como "conta de teste" (no editor de Usuários). Tudo que essa conta registra fica de fora dos contadores e relatórios gerais (Painel/Histórico da equipe). As contas Gabriel Gerente e Gabriel Supervisor já vêm marcadas',
       'HISTÓRICO: filtro extra conforme o tipo — Atendimentos por temperatura do cliente (Quente/Morno/Frio); Check-ins pelo tipo do check-in (motivo da visita)',
       'INÍCIO e PAINEL: os quadros de Check-ins, Atendimentos, Propostas, Reservas e Órulo/DWV agora são clicáveis — abrem o Histórico já filtrado por aquele tipo (no mesmo período). Vale para gerente e para as visões de gestão (Superintendente, Master, etc.)',
