@@ -99,6 +99,7 @@ function userRow(p) {
           el('span', { class: 'font-semibold truncate' }, p.nome),
           el('span', { class: `chip ${roleChip.cls}` }, roleChip.icon, ' ', roleChip.label),
           !p.ativo && el('span', { class: 'chip chip-red' }, 'Inativo'),
+          p.conta_teste && el('span', { class: 'chip chip-purple' }, '🧪 Teste'),
           p.primeiro_acesso && el('span', { class: 'chip chip-yellow' }, 'Pendente'),
         ),
         el('div', { class: 'text-xs text-fg-muted truncate' }, p.email),
@@ -191,6 +192,20 @@ function openEditModal(p) {
     ),
   );
   fields.form.appendChild(ativoToggle);
+
+  // Conta de teste (só Master): registros dessa conta não entram nos contadores
+  // e relatórios gerais — serve para o Master testar sem poluir os números reais.
+  let testeToggle = null;
+  if (isMaster() && !isPrincipalMaster(p)) {
+    testeToggle = el('label', { class: 'flex items-center gap-3 mt-2 p-3 card cursor-pointer', style: { borderColor: 'rgba(139,92,246,0.4)' } },
+      el('input', { type: 'checkbox', name: 'conta_teste', checked: !!p.conta_teste }),
+      el('div', {},
+        el('span', { class: 'font-semibold block text-sm' }, '🧪 Conta de teste'),
+        el('span', { class: 'text-xs text-fg-muted' }, 'Tudo que esta conta registrar NÃO conta nos números reais (Painel, Histórico da equipe). Ideal para testar.'),
+      ),
+    );
+    fields.form.appendChild(testeToggle);
+  }
 
   // Botão de excluir perfil - apenas master editando perfis não-master
   // Master principal NUNCA pode ser excluído (nem pelo próprio). Outros masters podem por outro master.
@@ -285,6 +300,7 @@ function openEditModal(p) {
     const ativo = ativoToggle.querySelector('input[name=ativo]').checked;
     m.close();
     toast('Salvando...', 'info', 1500);
+    const contaTeste = testeToggle ? testeToggle.querySelector('input[name=conta_teste]').checked : (p.conta_teste || false);
     supabase.from('profiles').update({
       nome: v.nome,
       telefone: v.telefone,
@@ -296,6 +312,7 @@ function openEditModal(p) {
       cidades_acesso: v.cidades_acesso || [],
       gerente_supervisor_id: v.gerente_supervisor_id || null,
       ativo,
+      conta_teste: contaTeste,
     }).eq('id', p.id).select().then(({ data, error }) => {
       if (error) {
         console.error('[user update] erro:', error);

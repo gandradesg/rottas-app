@@ -223,6 +223,9 @@ export async function homeGerenteView(_params, app) {
       .eq('cancelada', false)
       .neq('tipo', 'visita')
       .order('created_at', { ascending: false });
+    // Se NÃO for conta de teste, esconde dados de teste (que um colega de teste
+    // pudesse ter incluído). A conta de teste vê os próprios registros normalmente.
+    if (!state.profile?.conta_teste) q = q.neq('teste', true);
 
     const now = new Date();
     if (periodo === 'dia') {

@@ -488,6 +488,9 @@ export async function atividadeFormView(params, app) {
       tipo,
       observacoes: (fd.get('observacoes') || '').toString().trim() || null,
       updated_at: new Date().toISOString(),
+      // Conta de teste: não entra nos contadores/relatórios gerais.
+      // Só na CRIAÇÃO (no update fica undefined → não altera o registro existente).
+      teste: (!id && !!state.profile?.conta_teste) || undefined,
     };
     // Se veio da agenda, vincula ao agendamento
     if (agendamento && !id) {
@@ -540,28 +543,34 @@ export async function atividadeFormView(params, app) {
         loadingBtn(submitBtn, true);
 
         if (!id) {
-          // INSERT otimista: sem fotos, navega, sobe fotos em bg
-          console.log('[atividade] inserindo check-in...');
-          const { data: inserted, error } = await supabase
-            .from('atividades').insert({ ...payload, fotos: [] }).select().single();
-          if (error) throw error;
-          if (!inserted) throw new Error('Falha ao inserir (RLS ou rede)');
+          // INSERT OTIMISTA de verdade: dispara o insert e NAVEGA JÁ, sem esperar a
+          // resposta. Em iOS/PWA, ao usar a câmera o app vai a segundo plano e a
+          // resposta pode demorar (o registro é salvo, mas o app mostrava "demorou
+          // muito"). Agora o insert roda em background; erros, fotos e vínculo com
+          // a agenda são tratados quando a resposta chega.
+          console.log('[atividade] inserindo check-in (otimista)...');
+          const insertPromise = supabase.from('atividades').insert({ ...payload, fotos: [] }).select().single();
           clearTimeout(safetyTimeout);
-          // Linkage com agendamento (em bg)
           if (agendamento) {
-            marcarAgendamentoRealizado(agendamento, inserted.id);
-            toast('✓ Check-in registrado e agenda atualizada!', 'success', 3500);
+            toast('✓ Check-in registrado!', 'success', 3000);
             navigate('/agenda', true);
           } else {
             toast('✓ Check-in registrado!', 'success', 2500);
             navigate('/', true);
           }
-          if (files.length) {
-            uploadPhotos(files).then(urls =>
-              supabase.from('atividades').update({ fotos: urls }).eq('id', inserted.id)
-            ).then(() => toast('✓ Fotos enviadas', 'success', 2500))
-             .catch(e => toast('Erro ao subir fotos: ' + (e.message||''), 'error', 5000));
-          }
+          insertPromise.then(({ data: inserted, error }) => {
+            if (error || !inserted) {
+              toast('⚠ Falha ao salvar o check-in: ' + (error?.message || 'verifique a conexão e refaça'), 'error', 7000);
+              return;
+            }
+            if (agendamento) marcarAgendamentoRealizado(agendamento, inserted.id);
+            if (files.length) {
+              uploadPhotos(files).then(urls =>
+                supabase.from('atividades').update({ fotos: urls }).eq('id', inserted.id)
+              ).then(() => toast('✓ Fotos enviadas', 'success', 2500))
+               .catch(e => toast('Erro ao subir fotos: ' + (e.message||''), 'error', 5000));
+            }
+          }).catch(e => toast('⚠ Falha ao salvar o check-in: ' + (e.message || 'rede'), 'error', 7000));
           return;
         } else {
           // UPDATE: upload sync se houver

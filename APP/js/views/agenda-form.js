@@ -255,6 +255,7 @@ export async function agendaFormView(params, app) {
       gerente_id: presentes[0], // dono da linha (nas N linhas, cada uma tem o seu)
       participantes: ehGrupo ? presentes : [],
       grupo_id: grupoId,
+      teste: (!id && !!state.profile?.conta_teste) || undefined, // só na criação; não polui os números reais
       tipo: chosenTipo,
       data_prevista: dataIso,
       titulo: (fd.get('titulo') || '').toString().trim() || null,

@@ -244,6 +244,7 @@ async function agendaGerenteView(app) {
       .gte('data_prevista', from.toISOString())
       .lte('data_prevista', to.toISOString())
       .order('data_prevista', { ascending: true });
+    if (!state.profile?.conta_teste) q = q.neq('teste', true); // some pra quem não é teste
     if (viewFilter !== 'minha') {
       q = q.eq('gerente_id', viewFilter);
     } else if (!isAdmin()) {
@@ -724,6 +725,7 @@ async function agendaGestorView(app) {
       .gte('data_prevista', from.toISOString())
       .lte('data_prevista', to.toISOString())
       .order('data_prevista', { ascending: true });
+    if (!state.profile?.conta_teste) q = q.neq('teste', true); // esconde agendas de teste
     if (filters.status !== 'todos') q = q.eq('status', filters.status);
     if (filters.tipo !== 'todos')   q = q.eq('tipo', filters.tipo);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);

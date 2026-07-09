@@ -145,6 +145,9 @@ export async function historicoView(_params, app) {
     // Exclui visitas do histórico operacional (visitas só aparecem em /visitas)
     let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email)').eq('cancelada', false).neq('tipo', 'visita').order('created_at', { ascending: false });
     if (!isTeamView) q = q.eq('gerente_id', state.user.id);
+    // Relatório da equipe não mostra dados de contas de teste (o próprio testador
+    // vê os dele na sua visão individual)
+    if (isTeamView && !state.profile?.conta_teste) q = q.neq('teste', true);
     if (isTeamView && filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
     if (filters.tipo !== 'todos') q = q.eq('tipo', filters.tipo);
     // Subfiltros contextuais
