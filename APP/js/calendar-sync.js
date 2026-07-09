@@ -172,13 +172,15 @@ export function calendarButton(ag, { el, icon, toast }) {
   );
   const wrapper = el('div', { class: 'relative inline-block' },
     el('button', {
-      class: 'btn btn-ghost btn-sm flex items-center gap-1.5',
+      class: 'btn btn-ghost btn-sm flex items-center gap-1 group',
+      title: 'Sincronizar com calendário',
+      'aria-label': 'Sincronizar com calendário',
       onclick: (e) => {
         e.stopPropagation();
         dropdown.classList.toggle('hidden');
         dropdown.classList.toggle('flex');
       },
-    }, icon('calendar', 14), 'Sync calendário'),
+    }, icon('calendar', 14), el('span', { class: 'hidden group-hover:inline text-xs font-semibold' }, 'Calendário')),
     dropdown,
   );
   document.addEventListener('click', () => {

@@ -15,6 +15,25 @@ const TIPOS = [
 
 const PREFILL_DATE_KEY = 'agenda-prefill-date';
 
+// Salva agendamento(s) de forma RESILIENTE: upsert idempotente (ids do cliente) +
+// repetição com tempo-limite por tentativa. Se a rede travar (iOS suspende a
+// conexão), tenta de novo sem duplicar. Retorna { ok, error }.
+async function salvarAgendamentosResiliente(rows, tentativas = 3) {
+  let lastErr = null;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      const res = await Promise.race([
+        supabase.from('agendamentos').upsert(rows, { onConflict: 'id', ignoreDuplicates: true }).select('id'),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
+      ]);
+      if (!res.error) return { ok: true };
+      lastErr = res.error;
+    } catch (e) { lastErr = e; }
+    await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+  }
+  return { ok: false, error: lastErr };
+}
+
 export async function agendaFormView(params, app) {
   const id = params.id;
   let initial = null;
@@ -282,23 +301,27 @@ export async function agendaFormView(params, app) {
 
     loadingBtn(submitBtn, true);
     try {
-      let data, error;
       if (id) {
-        ({ data, error } = await supabase.from('agendamentos').update(payload).eq('id', id).select());
-      } else if (ehGrupo) {
-        // Uma linha por presente (cada uma com o seu gerente_id) — todos veem na agenda
-        const rows = presentes.map(pid => ({ ...payload, gerente_id: pid }));
-        ({ data, error } = await supabase.from('agendamentos').insert(rows).select());
-      } else {
-        ({ data, error } = await supabase.from('agendamentos').insert(payload).select());
+        const { data, error } = await supabase.from('agendamentos').update(payload).eq('id', id).select();
+        if (error) throw error;
+        if (!data || !data.length) throw new Error('Sem permissão (RLS rejeitou)');
+        toast('✓ Atualizado', 'success');
+        navigate('/', true);
+        return;
       }
-      if (error) throw error;
-      if (!data || !data.length) throw new Error('Sem permissão (RLS rejeitou)');
-      toast(id ? '✓ Atualizado' : (ehGrupo ? `✓ Agendado para ${data.length} gerentes!` : '✓ Agendado!'), 'success');
+      // CRIAÇÃO resiliente: id gerado no cliente + upsert idempotente + retry com
+      // tempo-limite por tentativa. Se a rede travar (iOS suspende), tenta de novo
+      // sem duplicar (mesmo id) — resolve o "ficou carregando e não foi".
+      const uuid = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+      const rows = presentes.map(pid => ({ ...payload, gerente_id: pid, id: uuid() }));
+      const temIds = rows.every(r => r.id);
+      const r = await salvarAgendamentosResiliente(rows, temIds ? 3 : 1);
+      if (!r.ok) throw (r.error || new Error('Falha ao salvar'));
+      toast(ehGrupo ? `✓ Agendado para ${rows.length} gerentes!` : '✓ Agendado!', 'success');
       navigate('/', true);
     } catch (err) {
       console.error('[agenda] erro:', err);
-      toast(err.message || 'Erro ao salvar', 'error', 5000);
+      toast('⚠ ' + (err.message || 'Erro ao salvar') + '. Verifique a conexão e tente de novo.', 'error', 6000);
       loadingBtn(submitBtn, false);
     }
   });

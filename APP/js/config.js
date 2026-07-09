@@ -1,15 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.21';
+export const APP_VERSION = '1.9.22';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
   {
-    version: '1.9.21',
+    version: '1.9.22',
     date: '04/07/2026',
     changes: [
-      'iPHONE: corrigido o topo cortado sob o relógio/bateria (respeita a área segura do aparelho). Na agenda, os botões Editar e Cancelar ficam na mesma linha',
+      'AGENDAR à prova de conexão ruim: criar agendamento agora salva com repetição automática — se a rede travar (iOS suspende a conexão), tenta de novo sem duplicar, em vez de "ficar carregando e não ir"',
+      'TESTE não consome mais numeração real (não fura os #números dos registros reais) e não conta em nada fora da própria conta de teste. Novo botão "🧹 Limpar teste" (Master, em Usuários) apaga os dados de teste quando quiser',
+      'UI: botões da agenda mais compactos (Sync/Editar/Cancelar em ícones) para caberem na mesma linha; topo do iPhone corrigido',
       'ESTABILIDADE: quando a agenda não carrega (conexão suspensa pelo iOS após deixar o app parado), agora há o botão "Recarregar app" que reinicia a conexão e resolve — o "Tentar de novo" sozinho nem sempre bastava',
       'AGENDA: agendamento "Outro" agora é realizado como um check-in leve — sem exigir imobiliária; o título (ex.: "Treinamento de produto") vira a descrição. Conta como check-in',
       'CHECK-IN à prova de conexão ruim: registro salvo com repetição automática — se a resposta não voltar (iOS suspende ao usar a câmera, ou 3G/4G instável), o app tenta de novo sozinho sem duplicar e sem perder o check-in',

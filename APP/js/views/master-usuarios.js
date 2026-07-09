@@ -16,10 +16,27 @@ export async function masterUsuariosView(_params, app) {
       el('h1', { class: 'text-2xl font-extrabold' }, 'Usuários'),
       el('p', { class: 'text-sm text-fg-muted' }, 'Gestores e Gerentes de Plataforma'),
     ),
-    el('button', {
-      class: 'btn btn-primary',
-      onclick: () => openCreateModal()
-    }, icon('plus', 16), 'Novo'),
+    el('div', { class: 'flex items-center gap-2' },
+      isMaster() ? el('button', {
+        class: 'btn btn-secondary btn-sm',
+        title: 'Apagar tudo que as contas de teste registraram',
+        onclick: async () => {
+          const ok = await confirmModal({
+            title: '🧹 Limpar dados de teste?',
+            message: 'Apaga TODAS as atividades e agendamentos criados por contas de teste. Os dados reais não são tocados. Não dá para desfazer.',
+            confirmLabel: 'Limpar teste', danger: true,
+          });
+          if (!ok) return;
+          const { data, error } = await supabase.rpc('limpar_dados_teste');
+          if (error) { toast('Erro: ' + error.message, 'error', 6000); return; }
+          toast(`✓ Limpo: ${data?.atividades || 0} atividades e ${data?.agendamentos || 0} agendamentos de teste`, 'success', 5000);
+        }
+      }, '🧹 Limpar teste') : null,
+      el('button', {
+        class: 'btn btn-primary',
+        onclick: () => openCreateModal()
+      }, icon('plus', 16), 'Novo'),
+    ),
   ));
 
   listEl = el('div', { class: 'flex flex-col gap-2' });
