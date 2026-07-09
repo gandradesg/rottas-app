@@ -26,6 +26,43 @@ function marcarAgendamentoRealizado(agendamento, atividadeId) {
   }
 }
 
+// Salva o check-in de forma RESILIENTE: id gerado no cliente + repetição
+// automática. Se a resposta não voltar (iOS suspende a conexão ao usar a câmera,
+// rede 3G/4G instável), tenta de novo com o MESMO id — então nunca duplica e
+// não perde o registro. Roda em segundo plano (a tela já navegou).
+async function salvarCheckinResiliente(row, knownId, agendamento, files) {
+  const maxTentativas = 4;
+  let saved = null, lastErr = null;
+  for (let i = 0; i < maxTentativas && !saved; i++) {
+    try {
+      const { data, error } = await supabase.from('atividades').insert(row).select().single();
+      if (!error && data) { saved = data; break; }
+      // Chave duplicada = já gravou numa tentativa anterior (resposta se perdeu)
+      if (error && (error.code === '23505' || /duplicate key/i.test(error.message || ''))) {
+        if (knownId) {
+          const { data: ex } = await supabase.from('atividades').select('*').eq('id', knownId).single();
+          saved = ex || { id: knownId };
+        } else { saved = { id: null }; }
+        break;
+      }
+      lastErr = error;
+    } catch (e) { lastErr = e; }
+    if (!knownId) break; // sem id próprio não repete (evitaria duplicar)
+    await new Promise(r => setTimeout(r, 1500 * (i + 1))); // espera crescente
+  }
+  if (!saved) {
+    toast('⚠ Não foi possível salvar o check-in. Refaça quando a conexão estabilizar.', 'error', 8000);
+    return;
+  }
+  if (agendamento) marcarAgendamentoRealizado(agendamento, saved.id);
+  if (files && files.length && saved.id) {
+    uploadPhotos(files)
+      .then(urls => supabase.from('atividades').update({ fotos: urls }).eq('id', saved.id))
+      .then(() => toast('✓ Fotos enviadas', 'success', 2500))
+      .catch(e => toast('Erro ao subir fotos: ' + (e.message || ''), 'error', 5000));
+  }
+}
+
 const TITLES = {
   checkin:     { novo: 'Registro de novo Check-in',     editar: 'Editar Check-in' },
   atendimento: { novo: 'Registro de novo Atendimento',  editar: 'Editar Atendimento' },
@@ -543,34 +580,16 @@ export async function atividadeFormView(params, app) {
         loadingBtn(submitBtn, true);
 
         if (!id) {
-          // INSERT OTIMISTA de verdade: dispara o insert e NAVEGA JÁ, sem esperar a
-          // resposta. Em iOS/PWA, ao usar a câmera o app vai a segundo plano e a
-          // resposta pode demorar (o registro é salvo, mas o app mostrava "demorou
-          // muito"). Agora o insert roda em background; erros, fotos e vínculo com
-          // a agenda são tratados quando a resposta chega.
-          console.log('[atividade] inserindo check-in (otimista)...');
-          const insertPromise = supabase.from('atividades').insert({ ...payload, fotos: [] }).select().single();
+          // OTIMISTA + RESILIENTE: gera o id no cliente, NAVEGA JÁ e salva em
+          // background com repetição automática (mesmo id → nunca duplica).
+          // Resolve o "demorou muito" e o registro perdido em rede instável/iOS.
+          const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+          const row = { ...payload, fotos: [] };
+          if (newId) row.id = newId;
           clearTimeout(safetyTimeout);
-          if (agendamento) {
-            toast('✓ Check-in registrado!', 'success', 3000);
-            navigate('/agenda', true);
-          } else {
-            toast('✓ Check-in registrado!', 'success', 2500);
-            navigate('/', true);
-          }
-          insertPromise.then(({ data: inserted, error }) => {
-            if (error || !inserted) {
-              toast('⚠ Falha ao salvar o check-in: ' + (error?.message || 'verifique a conexão e refaça'), 'error', 7000);
-              return;
-            }
-            if (agendamento) marcarAgendamentoRealizado(agendamento, inserted.id);
-            if (files.length) {
-              uploadPhotos(files).then(urls =>
-                supabase.from('atividades').update({ fotos: urls }).eq('id', inserted.id)
-              ).then(() => toast('✓ Fotos enviadas', 'success', 2500))
-               .catch(e => toast('Erro ao subir fotos: ' + (e.message||''), 'error', 5000));
-            }
-          }).catch(e => toast('⚠ Falha ao salvar o check-in: ' + (e.message || 'rede'), 'error', 7000));
+          toast('✓ Check-in registrado!', 'success', agendamento ? 3000 : 2500);
+          navigate(agendamento ? '/agenda' : '/', true);
+          salvarCheckinResiliente(row, newId, agendamento, files);
           return;
         } else {
           // UPDATE: upload sync se houver
