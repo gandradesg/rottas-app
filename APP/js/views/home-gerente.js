@@ -73,7 +73,7 @@ export async function homeGerenteView(_params, app) {
   function renderKPIs(counts) {
     kpiGrid.innerHTML = '';
     kpiGrid.append(
-      kpiCard('Outros', counts.outro, 'eventos', 'gray', 'calendar', () => abrirHistorico('outro')),
+      kpiCard('Outros', counts.outro, 'gerais', 'gray', 'calendar', () => abrirHistorico('outro')),
       kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin', () => abrirHistorico('checkin')),
       kpiCard('Atendimentos', counts.atendimento, 'clientes', 'purple', 'users', () => abrirHistorico('atendimento')),
       kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText', () => abrirHistorico('proposta')),
