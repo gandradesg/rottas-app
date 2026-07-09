@@ -291,12 +291,20 @@ export async function addMotivoOrulo(nome) {
 }
 
 // Cria novo tipo de "Outro" (lista dedicada) — primeira letra maiúscula.
+// Não duplica: se já existir (ignorando maiúsc./minúsc.), reaproveita o existente.
 export async function addOutroTipo(nome) {
   const n = capitalizeFirst(nome);
   if (!n) throw new Error('Informe o tipo');
+  const existente = (state.outrosTipos || []).find(o => (o.nome || '').toLowerCase() === n.toLowerCase());
+  if (existente) return existente;
   const { data, error } = await supabase.from('outros_tipos')
     .insert({ nome: n, created_by: state.user?.id || null }).select().single();
-  if (error) throw error;
+  if (error) {
+    // Corrida/duplicado no banco: recarrega e devolve o que já existe
+    const dup = (state.outrosTipos || []).find(o => (o.nome || '').toLowerCase() === n.toLowerCase());
+    if (dup) return dup;
+    throw error;
+  }
   (state.outrosTipos || (state.outrosTipos = [])).push(data);
   return data;
 }

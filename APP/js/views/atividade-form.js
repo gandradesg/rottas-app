@@ -63,6 +63,30 @@ async function salvarCheckinResiliente(row, knownId, agendamento, files) {
   }
 }
 
+// Insere uma atividade de forma RESILIENTE (atendimento/proposta/órulo/outro):
+// id gerado no cliente + upsert idempotente + retry com tempo-limite por tentativa.
+// Rejeição real do banco (RLS/constraint) falha na hora; timeout/queda de rede
+// (iOS suspende a conexão) tenta de novo sem duplicar. Retorna { ok, row, error }.
+async function salvarAtividadeResiliente(payload) {
+  const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+  const row = { ...payload };
+  if (newId) row.id = newId;
+  const tentativas = newId ? 3 : 1;
+  let lastErr = null;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      const res = await Promise.race([
+        supabase.from('atividades').upsert(row, { onConflict: 'id' }).select().single(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
+      ]);
+      if (!res.error && res.data) return { ok: true, row: res.data };
+      if (res.error) { lastErr = res.error; break; } // rejeição real do banco: não repete
+    } catch (e) { lastErr = e; } // timeout/rede: tenta de novo
+    await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+  }
+  return { ok: false, error: lastErr };
+}
+
 const TITLES = {
   checkin:     { novo: 'Registro de novo Check-in',     editar: 'Editar Check-in' },
   atendimento: { novo: 'Registro de novo Atendimento',  editar: 'Editar Atendimento' },
@@ -788,12 +812,17 @@ export async function atividadeFormView(params, app) {
 
       // ===== INSERT/UPDATE com detecção de RLS-rejection =====
       console.log('[atividade] enviando:', tipo, id ? 'UPDATE' : 'INSERT');
-      const { data, error } = id
-        ? await supabase.from('atividades').update(payload).eq('id', id).select()
-        : await supabase.from('atividades').insert(payload).select();
-      if (error) throw error;
-      if (!data || !data.length) {
-        throw new Error('Sem permissão para ' + (id ? 'editar' : 'criar') + ' (RLS rejeitou)');
+      let data;
+      if (id) {
+        const { data: upd, error } = await supabase.from('atividades').update(payload).eq('id', id).select();
+        if (error) throw error;
+        if (!upd || !upd.length) throw new Error('Sem permissão para editar (RLS rejeitou)');
+        data = upd;
+      } else {
+        // Criação resiliente (não trava e não duplica em rede instável/iOS)
+        const r = await salvarAtividadeResiliente(payload);
+        if (!r.ok) throw (r.error || new Error('Falha ao salvar. Verifique a conexão e tente de novo.'));
+        data = [r.row];
       }
       // Edição direta (gestor/master): registra no histórico de auditoria
       if (id) {

@@ -1,10 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.23';
+export const APP_VERSION = '1.9.24';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.24',
+    date: '04/07/2026',
+    changes: [
+      'CORRIGIDO: erro ao registrar "Outro" (o banco não aceitava esse tipo) — agora registra normalmente',
+      'REGISTRO à prova de conexão ruim para todos os tipos (atendimento, proposta, Órulo, Outro): salva com repetição automática, sem travar carregando nem duplicar',
+      'A lista de "Tipos de Outro" agora aparece em Listas (dá pra gerenciar), não duplica mais e já inclui os tipos dos Outros que já estavam agendados',
+    ],
+  },
   {
     version: '1.9.23',
     date: '04/07/2026',

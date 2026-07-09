@@ -46,6 +46,7 @@ const TABS = [
   },
   { id: 'motivos_visita',  table: 'motivos_visita',  label: 'Motivos de visita', stateKey: 'motivosVisita' },
   { id: 'motivos_orulo',   table: 'motivos_orulo',   label: 'Motivos Órulo/DWV', stateKey: 'motivosOrulo' },
+  { id: 'outros_tipos',    table: 'outros_tipos',    label: 'Tipos de "Outro"',  stateKey: 'outrosTipos' },
   { id: 'gerentes_house',  table: 'gerentes_house',  label: 'Gerentes House',    stateKey: 'gerentesHouse' },
   {
     id: 'clientes', table: 'clientes', label: 'Clientes (leads)', stateKey: 'clientes',
