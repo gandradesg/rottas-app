@@ -73,8 +73,11 @@ export async function homeGerenteView(_params, app) {
   function renderKPIs(counts) {
     kpiGrid.innerHTML = '';
     kpiGrid.append(
-      kpiCard('Outros', counts.outro, 'gerais', 'gray', 'calendar', () => abrirHistorico('outro')),
-      kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin', () => abrirHistorico('checkin')),
+      // 1º quadrante dividido ao meio: Outros | Check-in
+      dualKpiCard(
+        { label: 'Outros',   value: counts.outro,   color: 'gray', ic: 'calendar', onClick: () => abrirHistorico('outro') },
+        { label: 'Check-ins', value: counts.checkin, color: 'blue', ic: 'mapPin',   onClick: () => abrirHistorico('checkin') },
+      ),
       kpiCard('Atendimentos', counts.atendimento, 'clientes', 'purple', 'users', () => abrirHistorico('atendimento')),
       kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText', () => abrirHistorico('proposta')),
       kpiCard('Reservas', counts.venda, 'reservadas', 'green', 'trendingUp', () => abrirHistorico('proposta')),
@@ -291,15 +294,40 @@ export async function homeGerenteView(_params, app) {
   load();
 }
 
-function kpiCard(label, value, suffix, color, ic, onClick) {
-  const colors = {
-    blue:   { bg: 'rgba(59,130,246,0.12)',  fg: '#3B82F6' },
-    purple: { bg: 'rgba(139,92,246,0.12)',  fg: '#8B5CF6' },
-    yellow: { bg: 'rgba(245,158,11,0.12)',  fg: '#F59E0B' },
-    green:  { bg: 'rgba(16,185,129,0.12)',  fg: '#10B981' },
-    gray:   { bg: 'rgba(113,119,132,0.14)', fg: '#717784' },
+const KPI_COLORS = {
+  blue:   { bg: 'rgba(59,130,246,0.12)',  fg: '#3B82F6' },
+  purple: { bg: 'rgba(139,92,246,0.12)',  fg: '#8B5CF6' },
+  yellow: { bg: 'rgba(245,158,11,0.12)',  fg: '#F59E0B' },
+  green:  { bg: 'rgba(16,185,129,0.12)',  fg: '#10B981' },
+  gray:   { bg: 'rgba(113,119,132,0.14)', fg: '#717784' },
+};
+
+// Card com DOIS mini-KPIs dividindo um quadrante (ex.: Outros | Check-in)
+function dualKpiCard(a, b) {
+  const half = (k) => {
+    const c = KPI_COLORS[k.color];
+    return el('button', {
+      class: 'flex-1 min-w-0 flex flex-col gap-1 text-left p-3 transition hover:bg-bg-elev group',
+      onclick: k.onClick || null,
+      title: k.onClick ? `Ver ${k.label.toLowerCase()}` : null,
+    },
+      el('div', { class: 'flex items-center gap-1.5' },
+        el('div', { class: 'w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0', style: { background: c.bg, color: c.fg } }, icon(k.ic, 13)),
+        el('span', { class: 'text-[9px] font-bold uppercase tracking-wider text-fg-subtle truncate' }, k.label),
+        k.onClick ? el('span', { class: 'ml-auto text-fg-subtle group-hover:text-rottas-500 transition' }, icon('chevronRight', 13)) : null,
+      ),
+      el('div', { class: 'text-2xl font-extrabold leading-none mt-1' }, String(k.value)),
+    );
   };
-  const c = colors[color];
+  return el('div', { class: 'card p-0 flex items-stretch overflow-hidden' },
+    half(a),
+    el('div', { class: 'self-stretch flex-shrink-0', style: { width: '1px', background: 'rgb(var(--border))' } }),
+    half(b),
+  );
+}
+
+function kpiCard(label, value, suffix, color, ic, onClick) {
+  const c = KPI_COLORS[color];
   // Card clicável → abre o histórico filtrado por este tipo
   return el('button', {
     class: 'card p-3 flex flex-col gap-1 text-left w-full hover:border-rottas-300 transition group',

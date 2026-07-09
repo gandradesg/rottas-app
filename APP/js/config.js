@@ -1,15 +1,15 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.25';
+export const APP_VERSION = '1.9.26';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
   {
-    version: '1.9.25',
+    version: '1.9.26',
     date: '04/07/2026',
     changes: [
-      'INÍCIO: cards reorganizados — Outros e Check-ins lado a lado na primeira linha; o rótulo do card Outros passou de "eventos" para "gerais"',
+      'INÍCIO: indicadores reorganizados — "Outros" e "Check-ins" dividem um mesmo quadrante (metade cada); Atendimentos, Propostas e Reservas ocupam os outros quadrantes',
     ],
   },
   {
