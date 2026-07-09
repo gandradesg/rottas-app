@@ -56,6 +56,7 @@ export async function historicoView(_params, app) {
     el('option', { value: 'atendimento' }, 'Atendimentos'),
     el('option', { value: 'proposta' }, 'Propostas'),
     el('option', { value: 'orulo' }, 'Órulos'),
+    el('option', { value: 'outro' }, 'Outros'),
   );
   const periodoSel = el('select', { class: 'select' },
     el('option', { value: 'hoje' }, 'Hoje'),
@@ -236,7 +237,7 @@ function historyRow(a) {
   const date = fmt.dateTime(a.created_at);
   const numTag = a.numero_sequencial ? `#${a.numero_sequencial} ` : '';
   let title = '';
-  let chips = [{ label: t.label, cls: a.tipo === 'checkin' ? 'chip-blue' : a.tipo === 'atendimento' ? 'chip-purple' : a.tipo === 'proposta' ? (a.reserva ? 'chip-green' : 'chip-yellow') : 'chip-green' }];
+  let chips = [{ label: t.label, cls: a.tipo === 'checkin' ? 'chip-blue' : a.tipo === 'atendimento' ? 'chip-purple' : a.tipo === 'proposta' ? (a.reserva ? 'chip-green' : 'chip-yellow') : a.tipo === 'outro' ? 'chip-gray' : 'chip-green' }];
   let lines = [];
 
   switch (a.tipo) {
@@ -259,6 +260,9 @@ function historyRow(a) {
       title = `${a.empreendimento} · ${a.imobiliaria}`;
       if (a.motivo_contato) lines.push(a.motivo_contato);
       break;
+    case 'outro':
+      title = a.motivo_visita || 'Outro';
+      break;
   }
 
   return el('button', {
@@ -267,7 +271,7 @@ function historyRow(a) {
   },
     el('div', { class: 'flex items-start gap-3' },
       el('div', { class: `activity-icon activity-${a.tipo}` },
-        icon(a.tipo==='checkin'?'mapPin':a.tipo==='atendimento'?'users':a.tipo==='proposta'?'fileText':'globe', 18)
+        icon(a.tipo==='checkin'?'mapPin':a.tipo==='atendimento'?'users':a.tipo==='proposta'?'fileText':a.tipo==='outro'?'calendar':'globe', 18)
       ),
       el('div', { class: 'flex-1 min-w-0' },
         el('div', { class: 'flex items-center justify-between gap-2 mb-1' },

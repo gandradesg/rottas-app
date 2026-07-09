@@ -290,6 +290,17 @@ export async function addMotivoOrulo(nome) {
   return data;
 }
 
+// Cria novo tipo de "Outro" (lista dedicada) — primeira letra maiúscula.
+export async function addOutroTipo(nome) {
+  const n = capitalizeFirst(nome);
+  if (!n) throw new Error('Informe o tipo');
+  const { data, error } = await supabase.from('outros_tipos')
+    .insert({ nome: n, created_by: state.user?.id || null }).select().single();
+  if (error) throw error;
+  (state.outrosTipos || (state.outrosTipos = [])).push(data);
+  return data;
+}
+
 // Cria novo local de visita no banco.
 // Padroniza tudo em MAIÚSCULAS para ficar uniforme na lista.
 export async function addLocalVisita(nome) {

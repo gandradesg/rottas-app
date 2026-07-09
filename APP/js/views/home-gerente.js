@@ -73,13 +73,14 @@ export async function homeGerenteView(_params, app) {
   function renderKPIs(counts) {
     kpiGrid.innerHTML = '';
     kpiGrid.append(
+      kpiCard('Outros', counts.outro, 'eventos', 'gray', 'calendar', () => abrirHistorico('outro')),
       kpiCard('Check-ins', counts.checkin, 'imobiliárias', 'blue', 'mapPin', () => abrirHistorico('checkin')),
       kpiCard('Atendimentos', counts.atendimento, 'clientes', 'purple', 'users', () => abrirHistorico('atendimento')),
       kpiCard('Propostas', counts.proposta, 'enviadas', 'yellow', 'fileText', () => abrirHistorico('proposta')),
       kpiCard('Reservas', counts.venda, 'reservadas', 'green', 'trendingUp', () => abrirHistorico('proposta')),
     );
   }
-  renderKPIs({ checkin: 0, atendimento: 0, proposta: 0, venda: 0 });
+  renderKPIs({ outro: 0, checkin: 0, atendimento: 0, proposta: 0, venda: 0 });
 
   content.appendChild(el('section', {}, sectionTitle, kpiGrid));
 
@@ -258,6 +259,7 @@ export async function homeGerenteView(_params, app) {
     }
 
     const counts = {
+      outro:       atividades.filter(a => a.tipo === 'outro').length,
       checkin:     atividades.filter(a => a.tipo === 'checkin').length,
       atendimento: atividades.filter(a => a.tipo === 'atendimento').length,
       proposta:    atividades.filter(a => a.tipo === 'proposta').length,
@@ -295,6 +297,7 @@ function kpiCard(label, value, suffix, color, ic, onClick) {
     purple: { bg: 'rgba(139,92,246,0.12)',  fg: '#8B5CF6' },
     yellow: { bg: 'rgba(245,158,11,0.12)',  fg: '#F59E0B' },
     green:  { bg: 'rgba(16,185,129,0.12)',  fg: '#10B981' },
+    gray:   { bg: 'rgba(113,119,132,0.14)', fg: '#717784' },
   };
   const c = colors[color];
   // Card clicável → abre o histórico filtrado por este tipo
@@ -349,13 +352,17 @@ function activityRow(a) {
       chips.push({ label: 'Órulo/DWV', cls: 'chip-green' });
       if (a.motivo_contato) meta = a.motivo_contato;
       break;
+    case 'outro':
+      title = a.motivo_visita || 'Outro';
+      chips.push({ label: 'Outro', cls: 'chip-gray' });
+      break;
   }
 
   return el('button', {
     class: 'card p-3 flex items-start gap-3 text-left hover:border-rottas-300 transition w-full',
     onclick: () => navigate(`/atividade/${a.id}`),
   },
-    el('div', { class: `activity-icon activity-${a.tipo}` }, icon(t.icon === '📍' ? 'mapPin' : t.icon === '👥' ? 'users' : t.icon === '📄' ? 'fileText' : 'globe', 18)),
+    el('div', { class: `activity-icon activity-${a.tipo}` }, icon(t.icon === '📍' ? 'mapPin' : t.icon === '👥' ? 'users' : t.icon === '📄' ? 'fileText' : t.icon === '📅' ? 'calendar' : 'globe', 18)),
     el('div', { class: 'flex-1 min-w-0' },
       el('div', { class: 'flex items-center justify-between gap-2 mb-1' },
         el('span', { class: 'font-semibold text-sm truncate' }, numTag + title),

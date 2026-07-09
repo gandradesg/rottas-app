@@ -215,6 +215,7 @@ body {
 .activity-atendimento{ background: rgba(139,92,246,0.15);  color: #8B5CF6; }
 .activity-proposta   { background: rgba(245,158,11,0.15);  color: #F59E0B; }
 .activity-orulo      { background: rgba(16,185,129,0.15);  color: #10B981; }
+.activity-outro      { background: rgba(113,119,132,0.16); color: #717784; }
 .activity-venda      { background: rgba(16,185,129,0.18);  color: #10B981; }
 
 /* Loading spinner */

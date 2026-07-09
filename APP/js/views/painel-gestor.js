@@ -373,6 +373,7 @@ export async function painelGestorView(_params, app) {
   function renderOverview() {
     const allAtividades = baseAtividades.filter(hay);
     const c = {
+      outro:   allAtividades.filter(a => a.tipo === 'outro').length,
       checkin: allAtividades.filter(a => a.tipo === 'checkin').length,
       atend:   allAtividades.filter(a => a.tipo === 'atendimento').length,
       prop:    allAtividades.filter(a => a.tipo === 'proposta').length,
@@ -387,6 +388,7 @@ export async function painelGestorView(_params, app) {
       .reduce((s,a) => s + (parseFloat(a.valor) || 0), 0);
 
     const grid = el('div', { class: 'grid grid-cols-2 gap-3' },
+      kpi('Outros', c.outro, 'calendar', '#717784', () => goHist('outro')),
       kpi('Check-ins', c.checkin, 'mapPin', '#3B82F6', () => goHist('checkin')),
       kpi('Atendimentos', c.atend, 'users', '#8B5CF6', () => goHist('atendimento')),
       kpi('Propostas', c.prop, 'fileText', '#F59E0B', () => goHist('proposta')),

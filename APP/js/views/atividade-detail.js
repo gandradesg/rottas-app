@@ -92,6 +92,10 @@ export async function atividadeDetailView(params, app) {
       addRow('Empreendimento', a.empreendimento);
       addRow('Motivo do contato', a.motivo_contato);
       break;
+    case 'outro':
+      addRow('Tipo', a.motivo_visita);
+      if (a.latitude && a.longitude) rows.push(locationMapRow(a.latitude, a.longitude));
+      break;
   }
 
   // ===== Detalhes extras de Check-in com Treinamento =====
@@ -159,7 +163,7 @@ export async function atividadeDetailView(params, app) {
   // Header com gerente (visível para master)
   const header = el('div', { class: 'card p-4 flex items-center gap-3' },
     el('div', { class: `activity-icon activity-${a.tipo}` },
-      icon(a.tipo==='checkin'?'mapPin':a.tipo==='atendimento'?'users':a.tipo==='proposta'?'fileText':'globe', 22)
+      icon(a.tipo==='checkin'?'mapPin':a.tipo==='atendimento'?'users':a.tipo==='proposta'?'fileText':a.tipo==='outro'?'calendar':'globe', 22)
     ),
     el('div', { class: 'flex-1' },
       el('div', { class: 'text-xs text-fg-subtle font-semibold uppercase tracking-wider flex items-center gap-2' },

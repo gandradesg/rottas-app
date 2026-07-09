@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
 
@@ -170,8 +170,11 @@ export async function agendaFormView(params, app) {
         field('Cliente', el('input', { class: 'input', name: 'cliente', placeholder: 'Nome do cliente', value: initial?.cliente || '' })),
       );
     } else {
-      // OUTRO: Título/descrição
-      ctx.append(field('Título / descrição', tituloInput, { help: 'Texto livre para identificar o agendamento' }));
+      // OUTRO: tipo padronizado por lista (gerente pode cadastrar novos)
+      ctx.append(field('Tipo (Outro)', creatableSelect({
+        name: 'titulo', items: state.outrosTipos, value: initial?.titulo,
+        allowAdd: true, onAdd: addOutroTipo,
+      }), { help: 'Ex.: Treinamento, Evento, Reunião. Pode cadastrar um novo.' }));
     }
     // Observações + Ditar em todos os tipos
     ctx.append(field('Observações', obsInput), audioEl);

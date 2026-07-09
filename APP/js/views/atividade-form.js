@@ -2,7 +2,7 @@
 import { el, icon, toast, loadingBtn, fmt, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
-import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
+import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, addOutroTipo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -68,6 +68,7 @@ const TITLES = {
   atendimento: { novo: 'Registro de novo Atendimento',  editar: 'Editar Atendimento' },
   proposta:    { novo: 'Registro de nova Proposta',     editar: 'Editar Proposta' },
   orulo:       { novo: 'Registro de novo Órulo',        editar: 'Editar Órulo' },
+  outro:       { novo: 'Registrar Outro',               editar: 'Editar Outro' },
 };
 
 // Formulário restrito apenas para informar a Reserva (gerente)
@@ -163,8 +164,7 @@ export async function atividadeFormView(params, app) {
 
   // Agendamento tipo "Outro" não tem atividade própria — ao realizar, vira um
   // Check-in (o gerente completa imobiliária/motivo). O título vira observação.
-  const tipo = params.tipo || (agendamento?.tipo === 'outro' ? 'checkin' : agendamento?.tipo) || null;
-  const fromOutro = agendamento?.tipo === 'outro'; // realizado como check-in "leve"
+  const tipo = params.tipo || agendamento?.tipo || null; // 'outro' é um tipo próprio
   const id = params.id;
   const t = TIPO_ATIVIDADE[tipo];
   if (!t) { navigate('/registrar', true); return; }
@@ -183,8 +183,8 @@ export async function atividadeFormView(params, app) {
       produto:        agendamento.empreendimento, // atendimento usa "produto"
       cliente:        agendamento.cliente,
       corretor:       agendamento.corretor,
-      // Para "Outro", o título (ex.: "Treinamento de produto") vira o motivo do check-in
-      motivo_visita:  agendamento.tipo === 'outro' ? (agendamento.titulo || agendamento.motivo_visita) : agendamento.motivo_visita,
+      motivo_visita:  agendamento.motivo_visita,
+      titulo:         agendamento.titulo, // usado no tipo "Outro"
       // Local da visita e Imobiliária agora são campos separados no agendamento
       local_visita:   agendamento.local_visita || null,
       observacoes:    agendamento.observacoes,
@@ -365,13 +365,11 @@ export async function atividadeFormView(params, app) {
     form.append(
       locationFieldEl ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente. Ative a localização do seu dispositivo.' }) :
         el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
-      // Imobiliária: obrigatória no check-in normal; ocultada quando vem de "Outro"
-      // (ex.: evento/treinamento sem imobiliária específica)
-      fromOutro ? null : field('Imobiliária', creatableSelect({
+      field('Imobiliária', creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
       }), { required: true }),
-      field(fromOutro ? 'Descrição' : 'Motivo da visita', motivoSel, { required: true }),
+      field('Motivo da visita', motivoSel, { required: true }),
       treinamentoBox,
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
@@ -504,6 +502,22 @@ export async function atividadeFormView(params, app) {
     );
   }
 
+  // ===== OUTRO (indicador próprio, campos enxutos) =====
+  if (tipo === 'outro') {
+    if (!id) locationFieldEl = locationField();
+    form.append(
+      field('Tipo (Outro)', creatableSelect({
+        name: 'motivo_visita', items: state.outrosTipos, value: initial?.titulo || initial?.motivo_visita,
+        required: true, allowAdd: true, onAdd: addOutroTipo,
+      }), { required: true, help: 'Ex.: Treinamento, Evento, Reunião. Pode cadastrar um novo.' }),
+      locationFieldEl
+        ? field('Localização', locationFieldEl, { help: 'Capturada automaticamente (opcional).' })
+        : el('div', { class: 'card p-3 text-xs text-fg-muted' }, '📍 Editando: localização não pode ser alterada.'),
+      field('Observações', obsEl),
+      audioFieldEl = audioField({ targetTextarea: obsEl }),
+    );
+  }
+
   const submitBtn = el('button', {
     class: 'btn btn-primary btn-lg w-full mt-2', type: 'submit'
   }, id ? 'Salvar alterações' : 'Registrar atividade');
@@ -565,14 +579,10 @@ export async function atividadeFormView(params, app) {
             if (!ok) { clearTimeout(safetyTimeout); loadingBtn(submitBtn, false); return; }
           }
         }
-        payload.imobiliaria = (fd.get('imobiliaria') || '').toString().trim() || null;
+        payload.imobiliaria = (fd.get('imobiliaria') || '').toString().trim();
         payload.motivo_visita = (fd.get('motivo_visita') || '').toString().trim();
-        // "Outro" é um check-in leve: imobiliária não é obrigatória; o motivo usa o título
-        if (!fromOutro && !payload.imobiliaria) throw new Error('Imobiliária é obrigatória');
-        if (!payload.motivo_visita) {
-          if (fromOutro) payload.motivo_visita = (agendamento?.titulo || 'Outro');
-          else throw new Error('Motivo da visita é obrigatório');
-        }
+        if (!payload.imobiliaria) throw new Error('Imobiliária é obrigatória');
+        if (!payload.motivo_visita) throw new Error('Motivo da visita é obrigatório');
         // Campos extras de treinamento (quando motivo = "Treinamento")
         const trei = form._treinamentoData ? form._treinamentoData() : {};
         if (trei.local_treinamento !== undefined) {
@@ -681,6 +691,14 @@ export async function atividadeFormView(params, app) {
         for (const k of ['imobiliaria','corretor','empreendimento','motivo_contato']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
+        loadingBtn(submitBtn, true);
+      }
+
+      if (tipo === 'outro') {
+        const coords = locationFieldEl?.getCoords?.();
+        if (!id && coords) { payload.latitude = coords.latitude; payload.longitude = coords.longitude; }
+        payload.motivo_visita = (fd.get('motivo_visita')||'').toString().trim();
+        if (!payload.motivo_visita) throw new Error('Selecione o tipo (Outro)');
         loadingBtn(submitBtn, true);
       }
 

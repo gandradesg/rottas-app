@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.22';
+export const APP_VERSION = '1.9.23';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.23',
+    date: '04/07/2026',
+    changes: [
+      'NOVO: "Outros" virou um indicador próprio (aparece antes de Check-ins na home e no painel) — conta separado, sem se misturar com check-in',
+      'Ao agendar/realizar um "Outro", o campo Título virou uma LISTA (Treinamento, Evento, Reunião...) que os gerentes podem ampliar cadastrando novos tipos — padroniza os registros',
+    ],
+  },
   {
     version: '1.9.22',
     date: '04/07/2026',
@@ -1076,6 +1084,7 @@ export const TERMOMETRO_OPTIONS = [
 // Salvamos sempre tipo='orulo' no banco. A UI mostra "Órulo/DWV" pra clareza visual.
 // Visita: atividade exclusiva do perfil Recepção Rottas — NÃO visível pros demais.
 export const TIPO_ATIVIDADE = {
+  outro:        { label: 'Outro',       icon: '📅', color: 'gray'   },
   checkin:      { label: 'Check-in',    icon: '📍', color: 'blue'   },
   atendimento:  { label: 'Atendimento', icon: '👥', color: 'purple' },
   proposta:     { label: 'Proposta',    icon: '📄', color: 'yellow' },
