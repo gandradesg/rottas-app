@@ -98,6 +98,12 @@ export async function atividadeDetailView(params, app) {
       break;
   }
 
+  // Aviso quando a localização foi definida manualmente (busca), não pelo GPS no local
+  if (a.localizacao_manual) {
+    rows.push(el('div', { class: 'flex items-center gap-1.5 py-2 border-b border-border last:border-0 text-xs font-semibold', style: { color: '#F59E0B' } },
+      icon('mapPin', 14), '✏️ Localização editada manualmente'));
+  }
+
   // ===== Detalhes extras de Check-in com Treinamento =====
   if (a.tipo === 'checkin' && (a.motivo_visita || '').toLowerCase() === 'treinamento') {
     if (a.local_treinamento) addRow('Local do treinamento', a.local_treinamento);

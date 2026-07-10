@@ -726,6 +726,11 @@ export async function atividadeFormView(params, app) {
         loadingBtn(submitBtn, true);
       }
 
+      // Marca se a localização foi definida manualmente (busca) em vez do GPS
+      if (!id && locationFieldEl && payload.latitude != null) {
+        payload.localizacao_manual = !!(locationFieldEl.isManual && locationFieldEl.isManual());
+      }
+
       // ===== Garante o cadastro do corretor (quando veio por nome livre) =====
       // Ex.: corretor digitado no agendamento e trazido ao "realizar" fica sem
       // corretor_id; aqui criamos o cadastro vinculado à imobiliária pra ele

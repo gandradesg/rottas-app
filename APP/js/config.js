@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.27';
+export const APP_VERSION = '1.9.28';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.28',
+    date: '04/07/2026',
+    changes: [
+      'LOCALIZAÇÃO editável: continua capturando automática, mas agora dá para "Corrigir/editar localização" pesquisando a imobiliária/endereço (útil quando não deu pra registrar no local). O registro fica marcado com "✏️ Localização editada manualmente"',
+    ],
+  },
   {
     version: '1.9.27',
     date: '04/07/2026',

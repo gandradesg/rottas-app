@@ -399,7 +399,8 @@ export function photoPicker({ name = 'fotos', max = MAX_PHOTOS_PER_ACTIVITY }) {
   return wrap;
 }
 
-// Botão de captura de localização com preview de mapa
+// Botão de captura de localização com preview de mapa + EDIÇÃO MANUAL por busca
+// (pesquisa a imobiliária/endereço no OpenStreetMap e puxa a localização dela).
 export function locationField() {
   const wrap = el('div', { class: 'card p-3 flex flex-col gap-2' });
   const status = el('div', { class: 'text-sm text-fg-muted flex items-center gap-2' },
@@ -412,6 +413,7 @@ export function locationField() {
 
   const mapPreview = el('div', {});
   let coords = null;
+  let manual = false; // true quando a localização foi definida por busca
 
   function showMap(lat, lng) {
     mapPreview.innerHTML = '';
@@ -441,6 +443,7 @@ export function locationField() {
     try {
       const { getLocation } = await import('../geo.js');
       coords = await getLocation();
+      manual = false; // veio do GPS
       status.innerHTML = '';
       status.append(
         icon('mapPin', 16, 'text-success'),
@@ -469,11 +472,82 @@ export function locationField() {
   }
   btn.addEventListener('click', capture);
 
-  wrap.append(status, mapPreview, btn);
+  // ===== Edição manual: pesquisar imobiliária/endereço e puxar a localização =====
+  const editBtn = el('button', {
+    type: 'button', class: 'btn btn-ghost btn-sm w-full text-xs',
+  }, icon('search', 14), 'Corrigir/editar localização (buscar)');
+
+  const searchPanel = el('div', { class: 'flex flex-col gap-2 hidden' });
+  const searchInput = el('input', { class: 'input', type: 'search',
+    placeholder: 'Pesquisar imobiliária ou endereço + cidade' });
+  const searchBtn = el('button', { type: 'button', class: 'btn btn-secondary btn-sm flex-shrink-0' },
+    icon('search', 14), 'Buscar');
+  const resultsBox = el('div', { class: 'flex flex-col gap-1' });
+  searchPanel.append(
+    el('div', { class: 'text-[11px] text-fg-subtle' },
+      'Use quando não deu pra registrar no local. Pesquise o nome da imobiliária + cidade e escolha o endereço.'),
+    el('div', { class: 'flex gap-2' }, searchInput, searchBtn),
+    resultsBox,
+  );
+
+  async function doSearch() {
+    const q = (searchInput.value || '').trim();
+    if (!q) { toast('Digite o que buscar', 'warning'); return; }
+    resultsBox.innerHTML = '';
+    resultsBox.appendChild(el('div', { class: 'text-xs text-fg-muted' }, 'Buscando...'));
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=br&addressdetails=0&q=${encodeURIComponent(q)}`;
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const list = await res.json();
+      resultsBox.innerHTML = '';
+      if (!Array.isArray(list) || !list.length) {
+        resultsBox.appendChild(el('div', { class: 'text-xs text-fg-muted' }, 'Nada encontrado. Tente incluir a cidade.'));
+        return;
+      }
+      list.forEach(r => {
+        resultsBox.appendChild(el('button', {
+          type: 'button',
+          class: 'text-left text-sm px-3 py-2 rounded-lg hover:bg-bg-elev border border-border',
+          onclick: () => {
+            coords = { latitude: parseFloat(r.lat), longitude: parseFloat(r.lon), accuracy: null };
+            manual = true;
+            status.innerHTML = '';
+            status.append(
+              icon('mapPin', 16, 'text-warning'),
+              el('span', { class: 'text-fg' },
+                el('span', { class: 'font-semibold text-warning' }, '✏️ Localização definida manualmente: '),
+                (r.display_name || '').split(',').slice(0, 3).join(', '),
+              ),
+            );
+            showMap(coords.latitude, coords.longitude);
+            searchPanel.classList.add('hidden');
+          },
+        }, r.display_name));
+      });
+    } catch (e) {
+      resultsBox.innerHTML = '';
+      resultsBox.appendChild(el('div', { class: 'text-xs text-danger' }, 'Falha na busca. Verifique a conexão e tente de novo.'));
+    }
+  }
+  searchBtn.addEventListener('click', doSearch);
+  searchInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSearch(); } });
+  editBtn.addEventListener('click', () => {
+    const abrindo = searchPanel.classList.contains('hidden');
+    searchPanel.classList.toggle('hidden');
+    if (abrindo && !searchInput.value) {
+      // Pré-preenche com a imobiliária selecionada no formulário (se houver)
+      const imob = document.querySelector('input[name="imobiliaria"]')?.value || '';
+      if (imob) { searchInput.value = imob; setTimeout(doSearch, 50); }
+      setTimeout(() => searchInput.focus(), 60);
+    }
+  });
+
+  wrap.append(status, mapPreview, btn, editBtn, searchPanel);
   // captura automaticamente
   setTimeout(capture, 200);
 
   wrap.getCoords = () => coords;
+  wrap.isManual = () => manual;
   return wrap;
 }
 
