@@ -475,77 +475,34 @@ export function locationField() {
   // ===== Edição manual: pesquisar imobiliária/endereço e puxar a localização =====
   const editBtn = el('button', {
     type: 'button', class: 'btn btn-ghost btn-sm w-full text-xs',
-  }, icon('search', 14), 'Corrigir/editar localização (buscar)');
+  }, icon('search', 14), 'Editar Localização');
 
   const searchPanel = el('div', { class: 'flex flex-col gap-2 hidden' });
   const searchInput = el('input', { class: 'input', type: 'search',
-    placeholder: 'Imobiliária / endereço + cidade' });
+    placeholder: 'Endereço + cidade' });
   const searchBtn = el('button', { type: 'button', class: 'btn btn-secondary btn-sm flex-shrink-0' },
     icon('search', 14), 'Buscar');
   const resultsBox = el('div', { class: 'flex flex-col gap-1' });
 
-  // Abrir a busca direto no Google Maps (encontra imobiliárias por nome)
+  // Abrir a busca direto no Google Maps (encontra imobiliárias por nome).
+  // O gerente copia o endereço no Maps e cola no campo de busca acima.
   const gmapsBtn = el('button', { type: 'button', class: 'btn btn-secondary btn-sm w-full' },
-    icon('mapPin', 14), 'Abrir no Google Maps para buscar');
-  // Colar o link/coordenadas do Google Maps → vira a localização
-  const pasteInput = el('input', { class: 'input', type: 'text',
-    placeholder: 'Cole aqui o link ou as coordenadas do Google Maps' });
-  const pasteBtn = el('button', { type: 'button', class: 'btn btn-primary btn-sm flex-shrink-0' }, 'Usar');
+    icon('mapPin', 14), 'Buscar no Maps');
 
   searchPanel.append(
-    el('div', { class: 'text-[11px] text-fg-subtle' },
-      'Use quando não deu pra registrar no local.'),
-    el('div', { class: 'text-[11px] font-semibold text-fg-muted' }, '1) Buscar por endereço/cidade:'),
+    el('div', { class: 'text-[11px] font-semibold text-fg-muted' }, 'Busque pelo endereço:'),
     el('div', { class: 'flex gap-2' }, searchInput, searchBtn),
     resultsBox,
-    el('div', { class: 'text-[11px] font-semibold text-fg-muted mt-1' }, '2) Ou pelo Google Maps (acha a imobiliária pelo nome):'),
     gmapsBtn,
     el('div', { class: 'text-[10px] text-fg-subtle' },
-      'No Maps: abra a imobiliária → copie o LINK (desktop) ou segure no local e copie as COORDENADAS → cole abaixo.'),
-    el('div', { class: 'flex gap-2' }, pasteInput, pasteBtn),
+      'No Maps pesquise a imobiliária e cole acima.'),
   );
 
-  // Extrai latitude/longitude de um link do Google Maps OU de coordenadas soltas
-  function parseLatLng(text) {
-    const t = (text || '').trim();
-    if (!t) return null;
-    let m;
-    m = t.match(/@(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/);            // .../@lat,lng,17z/...
-    if (m) return { latitude: +m[1], longitude: +m[2] };
-    m = t.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);          // dados de local
-    if (m) return { latitude: +m[1], longitude: +m[2] };
-    m = t.match(/[?&](?:q|query|ll|destination)=(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)/); // ?q=lat,lng
-    if (m) return { latitude: +m[1], longitude: +m[2] };
-    m = t.match(/(-?\d{1,3}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);      // "lat, lng" solto
-    if (m) return { latitude: +m[1], longitude: +m[2] };
-    return null;
-  }
-  function definirManual(lat, lng, rotulo) {
-    coords = { latitude: lat, longitude: lng, accuracy: null };
-    manual = true;
-    status.innerHTML = '';
-    status.append(
-      icon('mapPin', 16, 'text-warning'),
-      el('span', { class: 'text-fg' },
-        el('span', { class: 'font-semibold text-warning' }, '✏️ Localização definida manualmente'),
-        rotulo ? el('span', {}, ': ' + rotulo) : null,
-      ),
-    );
-    showMap(lat, lng);
-    searchPanel.classList.add('hidden');
-  }
   gmapsBtn.addEventListener('click', () => {
     const q = (searchInput.value || document.querySelector('input[name="imobiliaria"]')?.value || '').trim();
     const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q || 'imobiliária');
     window.open(url, '_blank', 'noopener');
   });
-  pasteBtn.addEventListener('click', () => {
-    const parsed = parseLatLng(pasteInput.value);
-    if (!parsed) { toast('Não achei coordenadas no que foi colado. Cole o link do Google Maps ou "lat, lng".', 'error', 6000); return; }
-    definirManual(parsed.latitude, parsed.longitude, 'via Google Maps');
-    pasteInput.value = '';
-  });
-  pasteInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); pasteBtn.click(); } });
 
   async function doSearch() {
     const q = (searchInput.value || '').trim();

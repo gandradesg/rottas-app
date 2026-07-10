@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.29';
-export const APP_BUILD_DATE = '2026-07-04';
+export const APP_VERSION = '1.9.30';
+export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.30',
+    date: '10/07/2026',
+    changes: [
+      'LOCALIZAÇÃO mais simples: em "Editar Localização" ficou só a busca por endereço + o botão "Buscar no Maps" (pesquisa a imobiliária no Google Maps; é só copiar o endereço e colar na busca). Removido o campo de colar coordenadas',
+    ],
+  },
   {
     version: '1.9.29',
     date: '04/07/2026',
