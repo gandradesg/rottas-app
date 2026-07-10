@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.33';
+export const APP_VERSION = '1.9.34';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.34',
+    date: '10/07/2026',
+    changes: [
+      'Cadastro de cliente mais rápido: espera só 5s por tentativa (antes 15s) — se demorar, já tenta de novo sozinho, sem duplicar',
+    ],
+  },
   {
     version: '1.9.33',
     date: '10/07/2026',

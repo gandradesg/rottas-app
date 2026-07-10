@@ -973,7 +973,7 @@ export function clienteField({ value, valueId, required = true }) {
       const baseArgs = { p_nome: nome, p_tel: telInp.value.trim() || null, p_email: mailInp.value.trim() || null };
       const call = (args) => Promise.race([
         supabase.rpc('criar_cliente', args),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
       ]);
       // Se a função idempotente (4 args, migration v48) ainda não existir no banco,
       // cai automaticamente pra versão antiga (3 args) — deploy à prova de ordem.
