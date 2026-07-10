@@ -889,6 +889,24 @@ export function gerenteImobField({ imobWrap, value, valueId, required = true }) 
 // (nome, retrocompat) + cliente_id.
 // ═══════════════════════════════════════════════════════════════════════════
 export function clienteField({ value, valueId, required = true }) {
+  // ── DESATIVADO (v1.9.36): cadastro de cliente virou TEXTO LIVRE ──────────────
+  // Os gerentes tinham travamento ("Salvando..." eterno) ao cadastrar cliente
+  // pela função no banco. Por decisão de produto, o campo agora é só o NOME
+  // digitado — sem modal, sem gravar na tabela clientes. Todo o código do
+  // cadastro segue abaixo, INTACTO e só não é usado; para reativar, basta
+  // apagar este bloco { ... return wrap; }.
+  {
+    const wrap = el('div', {});
+    const input = el('input', {
+      class: 'input', type: 'text', name: 'cliente', required,
+      value: value || '', placeholder: 'Nome do cliente', autocomplete: 'off',
+    });
+    // cliente_id sempre vazio (retrocompat com quem lê fd.get('cliente_id'))
+    const hiddenId = el('input', { type: 'hidden', name: 'cliente_id', value: '' });
+    wrap.append(input, hiddenId);
+    return wrap;
+  }
+
   const wrap = el('div', {});
   const hiddenNome = el('input', { type: 'hidden', name: 'cliente', value: value || '', required });
   const hiddenId   = el('input', { type: 'hidden', name: 'cliente_id', value: valueId || '' });

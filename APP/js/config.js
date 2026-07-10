@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.35';
+export const APP_VERSION = '1.9.36';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.36',
+    date: '10/07/2026',
+    changes: [
+      'CLIENTE simplificado: o campo Cliente agora é só o NOME digitado (sem cadastro/modal). Isso elimina o travamento em "Salvando..." que alguns gerentes enfrentavam. O cadastro completo continua no código, desativado, e pode voltar depois',
+    ],
+  },
   {
     version: '1.9.35',
     date: '10/07/2026',

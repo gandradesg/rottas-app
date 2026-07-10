@@ -436,7 +436,7 @@ export async function atividadeFormView(params, app) {
       field('Empreendimento', creatableSelect({
         name: 'produto', items: getScopedEmpreendimentos(), value: initial?.produto, required: true,
       }), { required: true }),
-      field('Cliente', clienteField({ value: initial?.cliente, valueId: initial?.cliente_id }), { required: true, help: 'Abre o cadastro de cliente (lead).' }),
+      field('Cliente', clienteField({ value: initial?.cliente, valueId: initial?.cliente_id }), { required: true, help: 'Digite o nome do cliente.' }),
       field('Termômetro', termometroField({ value: initial?.termometro }), { required: true }),
       field('Observações', obsEl),
       audioFieldEl = audioField({ targetTextarea: obsEl }),
@@ -462,7 +462,7 @@ export async function atividadeFormView(params, app) {
 
     let prImobWrap;
     form.append(
-      field('Cliente', clienteField({ value: initial?.cliente, valueId: initial?.cliente_id }), { required: true, help: 'Abre o cadastro de cliente (lead).' }),
+      field('Cliente', clienteField({ value: initial?.cliente, valueId: initial?.cliente_id }), { required: true, help: 'Digite o nome do cliente.' }),
       (prImobWrap = creatableSelect({
         name: 'imobiliaria', items: getScopedImobiliarias(), value: initial?.imobiliaria,
         required: true, allowAdd: true, onAdd: addImobiliaria,
@@ -753,14 +753,16 @@ export async function atividadeFormView(params, app) {
           }
           if (!tem) faltando.push('corretor');
         }
-        if (payload.cliente) {
-          let tem = false;
-          if (payload.cliente_id) {
-            const { data: tc } = await supabase.rpc('cliente_tem_contato', { p_id: payload.cliente_id });
-            tem = !!tc;
-          }
-          if (!tem) faltando.push('cliente');
-        }
+        // Cliente virou texto livre (sem cadastro) — não cobra mais contato dele.
+        // Mantido comentado para reativar junto com o cadastro de cliente.
+        // if (payload.cliente) {
+        //   let tem = false;
+        //   if (payload.cliente_id) {
+        //     const { data: tc } = await supabase.rpc('cliente_tem_contato', { p_id: payload.cliente_id });
+        //     tem = !!tc;
+        //   }
+        //   if (!tem) faltando.push('cliente');
+        // }
         if (faltando.length) {
           const ok = await confirmModal({
             title: 'Contato incompleto',
