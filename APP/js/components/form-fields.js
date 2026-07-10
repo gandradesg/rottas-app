@@ -495,7 +495,7 @@ export function locationField() {
     resultsBox,
     gmapsBtn,
     el('div', { class: 'text-[10px] text-fg-subtle' },
-      'No Maps pesquise a imobiliária e cole acima.'),
+      'No Maps pesquise a imobiliária e cole o endereço acima.'),
   );
 
   gmapsBtn.addEventListener('click', () => {
