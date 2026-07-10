@@ -479,7 +479,7 @@ export function locationField() {
 
   const searchPanel = el('div', { class: 'flex flex-col gap-2 hidden' });
   const searchInput = el('input', { class: 'input', type: 'search',
-    placeholder: 'Endereço + cidade' });
+    placeholder: 'Endereço' });
   const searchBtn = el('button', { type: 'button', class: 'btn btn-secondary btn-sm flex-shrink-0' },
     icon('search', 14), 'Buscar');
   const resultsBox = el('div', { class: 'flex flex-col gap-1' });
