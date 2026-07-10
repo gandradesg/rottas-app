@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.26';
+export const APP_VERSION = '1.9.27';
 export const APP_BUILD_DATE = '2026-07-04';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.27',
+    date: '04/07/2026',
+    changes: [
+      'CADASTROS não travam mais em "Salvando...": imobiliária, corretor, gerente da imobiliária e cliente têm tempo-limite + repetição automática. Se a rede falhar, o botão volta e dá pra tentar de novo SEM perder o que foi digitado',
+      'FOTOS no celular: agora dá para escolher entre CÂMERA e GALERIA (antes só abria a câmera)',
+    ],
+  },
   {
     version: '1.9.26',
     date: '04/07/2026',

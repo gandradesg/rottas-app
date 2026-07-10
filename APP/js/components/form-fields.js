@@ -46,6 +46,29 @@ export function cidadeEstadoField({ cidade, estado } = {}) {
   };
 }
 
+// Insere numa tabela de forma RESILIENTE: gera id no cliente + upsert idempotente
+// + tempo-limite por tentativa + repetição. Se a rede travar (iOS suspende a
+// conexão), não fica preso em "Salvando..." pra sempre — e não duplica (mesmo id).
+// Retorna { data, error }.
+export async function resilientInsert(table, row, { retries = 2, timeoutMs = 6000 } = {}) {
+  const withId = { ...row };
+  if (!withId.id && self.crypto && crypto.randomUUID) withId.id = crypto.randomUUID();
+  const canRetry = !!withId.id;
+  let lastErr = null;
+  for (let i = 0; i < (canRetry ? retries : 1); i++) {
+    try {
+      const res = await Promise.race([
+        supabase.from(table).upsert(withId, { onConflict: 'id' }).select().single(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado — verifique a conexão')), timeoutMs)),
+      ]);
+      if (!res.error && res.data) return { data: res.data, error: null };
+      if (res.error) { lastErr = res.error; break; } // rejeição real do banco: não repete
+    } catch (e) { lastErr = e; } // timeout/rede: tenta de novo
+    await new Promise(r => setTimeout(r, 900 * (i + 1)));
+  }
+  return { data: null, error: lastErr || new Error('Falha ao salvar') };
+}
+
 // Só os dígitos de um telefone (ignora +55, parênteses, espaços, traços).
 // Usado pra detectar duplicado independente do formato em que foi salvo.
 export function normDigits(s) { return (s || '').replace(/\D/g, ''); }
@@ -224,11 +247,7 @@ export async function addImobiliaria(nome) {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Salvando...';
       try {
-        const { data, error } = await supabase
-          .from('imobiliarias')
-          .insert({ nome: nomeUpper, cidade, estado })
-          .select()
-          .single();
+        const { data, error } = await resilientInsert('imobiliarias', { nome: nomeUpper, cidade, estado });
         if (error) throw error;
         await loadLists();
         m.close();
@@ -236,7 +255,7 @@ export async function addImobiliaria(nome) {
       } catch (err) {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Cadastrar';
-        toast(err.message || 'Erro ao cadastrar', 'error', 5000);
+        toast((err.message || 'Erro ao cadastrar') + ' — toque em Cadastrar para tentar de novo.', 'error', 6000);
       }
     });
   });
@@ -326,9 +345,11 @@ export function photoPicker({ name = 'fotos', max = MAX_PHOTOS_PER_ACTIVITY }) {
   const previews = el('div', { class: 'grid grid-cols-3 gap-2' });
   const files = []; // { file, url }
 
+  // Sem "capture": no celular o usuário escolhe entre CÂMERA e GALERIA
+  // (com capture:'environment' abria só a câmera, sem opção de galeria).
   const input = el('input', {
     type: 'file', accept: 'image/*', multiple: true,
-    capture: 'environment', class: 'hidden', name,
+    class: 'hidden', name,
   });
 
   const addBtn = el('button', {
@@ -605,8 +626,8 @@ export function corretorField({ imobWrap, value, valueId, required = true }) {
       };
       saveBtn.disabled = true;
       try {
-        const { data, error } = await supabase.from('corretores').insert(payload).select().single();
-        if (error) { toast('Erro: ' + error.message, 'error', 6000); saveBtn.disabled = false; return; }
+        const { data, error } = await resilientInsert('corretores', payload);
+        if (error) { toast('Erro: ' + error.message + ' — toque em Cadastrar de novo.', 'error', 6000); saveBtn.disabled = false; return; }
         if (!Array.isArray(state.corretores)) state.corretores = [];
         state.corretores.push(data);
         state.corretores.sort((a, b) => a.nome.localeCompare(b.nome));
@@ -747,8 +768,8 @@ export function gerenteImobField({ imobWrap, value, valueId, required = true }) 
       };
       saveBtn.disabled = true;
       try {
-        const { data, error } = await supabase.from('gerentes_imobiliaria').insert(payload).select().single();
-        if (error) { toast('Erro: ' + error.message, 'error', 6000); saveBtn.disabled = false; return; }
+        const { data, error } = await resilientInsert('gerentes_imobiliaria', payload);
+        if (error) { toast('Erro: ' + error.message + ' — toque em Cadastrar de novo.', 'error', 6000); saveBtn.disabled = false; return; }
         if (!Array.isArray(state.gerentesImob)) state.gerentesImob = [];
         state.gerentesImob.push(data);
         state.gerentesImob.sort((a, b) => a.nome.localeCompare(b.nome));
@@ -855,12 +876,16 @@ export function clienteField({ value, valueId, required = true }) {
       if (chosen) { setValue(chosen.nome, chosen.id); m.close(); toast('Cliente vinculado', 'success'); return; }
       saveBtn.disabled = true;
       try {
-        // Cria via função no banco (não exige permissão de leitura da tabela clientes)
-        const { data, error } = await supabase.rpc('criar_cliente', {
-          p_nome: nome,
-          p_tel: telInp.value.trim() || null,
-          p_email: mailInp.value.trim() || null,
-        });
+        // Cria via função no banco (não exige permissão de leitura da tabela clientes).
+        // Com tempo-limite: se a rede travar, não fica preso — libera pra tentar de novo.
+        const { data, error } = await Promise.race([
+          supabase.rpc('criar_cliente', {
+            p_nome: nome,
+            p_tel: telInp.value.trim() || null,
+            p_email: mailInp.value.trim() || null,
+          }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado — verifique a conexão e toque em salvar de novo')), 7000)),
+        ]);
         const row = Array.isArray(data) ? data[0] : data;
         if (error || !row) { toast('Erro: ' + (error?.message || 'falha ao cadastrar'), 'error', 6000); saveBtn.disabled = false; return; }
         setValue(row.nome, row.id);
