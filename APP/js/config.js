@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.34';
+export const APP_VERSION = '1.9.35';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.35',
+    date: '10/07/2026',
+    changes: [
+      'AUDITORIA (Master): agora dá pra remover um registro do "Histórico de edições e exclusões" (botão de lixeira em cada item). Registros de exclusão não tentam mais abrir uma atividade que não existe mais',
+    ],
+  },
   {
     version: '1.9.34',
     date: '10/07/2026',

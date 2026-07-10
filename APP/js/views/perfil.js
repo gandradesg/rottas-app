@@ -188,14 +188,38 @@ export async function perfilView(_params, app) {
         ));
       }
     }
-    return el('div', { class: 'card p-3 flex flex-col gap-1' },
-      el('button', {
-        class: 'flex items-center gap-2 text-sm font-medium text-left w-full',
-        onclick: () => h.atividade_id && navigate(`/atividade/${h.atividade_id}`),
+    // Registro de EXCLUSÃO: a atividade não existe mais, então não navega
+    // (evita "item órfão" que abre uma tela vazia). Edição continua abrindo.
+    const podeAbrir = !isExcl && !!h.atividade_id;
+    const removerBtn = el('button', {
+      class: 'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-fg-subtle hover:text-danger hover:bg-danger/10 transition',
+      title: 'Remover do histórico',
+      onclick: async (e) => {
+        e.stopPropagation();
+        const ok = await confirmModal({
+          title: 'Remover do histórico?',
+          message: `Isto apaga só o registro de auditoria "${h.resumo || 'Atividade'}". Não afeta nenhuma atividade. Continuar?`,
+          confirmLabel: 'Remover',
+          danger: true,
+        });
+        if (!ok) return;
+        const { error } = await supabase.from('atividades_historico').delete().eq('id', h.id);
+        if (error) { toast('Erro ao remover: ' + error.message, 'error', 6000); return; }
+        toast('Registro removido', 'success');
+        loadHistorico();
       },
-        el('span', {}, isExcl ? '🗑️' : '✏️'),
-        el('span', { class: 'flex-1 truncate' }, h.resumo || 'Atividade'),
-        el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' }, fmt.date(h.em)),
+    }, icon('trash', 15));
+    return el('div', { class: 'card p-3 flex flex-col gap-1' },
+      el('div', { class: 'flex items-center gap-2' },
+        el('button', {
+          class: 'flex items-center gap-2 text-sm font-medium text-left flex-1 min-w-0' + (podeAbrir ? '' : ' cursor-default'),
+          onclick: () => podeAbrir && navigate(`/atividade/${h.atividade_id}`),
+        },
+          el('span', {}, isExcl ? '🗑️' : '✏️'),
+          el('span', { class: 'flex-1 truncate' }, h.resumo || 'Atividade'),
+          el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' }, fmt.date(h.em)),
+        ),
+        removerBtn,
       ),
       el('div', { class: 'text-xs text-fg-muted' },
         'por ' + (h.por_nome || '?') +
