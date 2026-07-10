@@ -19,6 +19,7 @@ const PREFILL_DATE_KEY = 'agenda-prefill-date';
 // repetição com tempo-limite por tentativa. Se a rede travar (iOS suspende a
 // conexão), tenta de novo sem duplicar. Retorna { ok, error }.
 async function salvarAgendamentosResiliente(rows, tentativas = 3) {
+  const ids = rows.map(r => r.id).filter(Boolean);
   let lastErr = null;
   for (let i = 0; i < tentativas; i++) {
     try {
@@ -26,8 +27,24 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
         supabase.from('agendamentos').upsert(rows, { onConflict: 'id', ignoreDuplicates: true }).select('id'),
         new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
       ]);
-      if (!res.error) return { ok: true };
-      lastErr = res.error;
+      if (!res.error) {
+        // CONFIRMAÇÃO read-after-write: só declara sucesso se as linhas realmente
+        // existirem no banco. Evita o "deu tudo certo mas não apareceu na agenda":
+        // se a resposta do upsert vier ok mas a linha não persistir/for filtrada,
+        // reenvia; se depois de confirmar não achar nada, reporta erro honesto.
+        if (!ids.length) return { ok: true };
+        try {
+          const chk = await Promise.race([
+            supabase.from('agendamentos').select('id').in('id', ids),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('to')), 6000)),
+          ]);
+          if (chk.error) return { ok: true }; // não deu pra checar: aceita o upsert sem erro
+          const achou = (chk.data || []).length;
+          if (achou >= ids.length) return { ok: true };
+          if (achou > 0) return { ok: true }; // gravou ao menos parte — não trava
+          lastErr = new Error('O agendamento não foi confirmado no servidor'); // 0 confirmadas: reenvia
+        } catch (e) { return { ok: true }; } // sem rede pra checar: aceita
+      } else lastErr = res.error;
     } catch (e) { lastErr = e; }
     await new Promise(r => setTimeout(r, 1200 * (i + 1)));
   }

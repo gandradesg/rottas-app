@@ -963,26 +963,49 @@ export function clienteField({ value, valueId, required = true }) {
       // Se escolheu um cadastro existente, usa ele direto
       if (chosen) { setValue(chosen.nome, chosen.id); m.close(); toast('Cliente vinculado', 'success'); return; }
       saveBtn.disabled = true;
-      try {
-        // Cria via função no banco (não exige permissão de leitura da tabela clientes).
-        // Com tempo-limite: se a rede travar, não fica preso — libera pra tentar de novo.
-        const { data, error } = await Promise.race([
-          supabase.rpc('criar_cliente', {
-            p_nome: nome,
-            p_tel: telInp.value.trim() || null,
-            p_email: mailInp.value.trim() || null,
-          }),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado — verifique a conexão e toque em salvar de novo')), 7000)),
-        ]);
-        const row = Array.isArray(data) ? data[0] : data;
-        if (error || !row) { toast('Erro: ' + (error?.message || 'falha ao cadastrar'), 'error', 6000); saveBtn.disabled = false; return; }
-        setValue(row.nome, row.id);
-        m.close();
-        toast(`Cliente "${row.nome}" cadastrado`, 'success');
-      } catch (e) {
-        toast('Falha ao cadastrar cliente: ' + (e.message || e), 'error', 6000);
-        saveBtn.disabled = false;
+      saveBtn.textContent = 'Salvando...';
+      // Cria via função no banco (não exige permissão de leitura da tabela clientes).
+      // RESILIENTE: id gerado no cliente (p_id) → reenviar é IDEMPOTENTE (mesmo id
+      // não duplica; a função devolve o registro existente). Tempo-limite maior
+      // (15s) e reenvio automático: se a rede travar (iOS suspende a conexão), NÃO
+      // perde o cadastro nem cria cliente duplicado. Resolve o "Tempo esgotado".
+      const cid = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : null;
+      const baseArgs = { p_nome: nome, p_tel: telInp.value.trim() || null, p_email: mailInp.value.trim() || null };
+      const call = (args) => Promise.race([
+        supabase.rpc('criar_cliente', args),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+      ]);
+      // Se a função idempotente (4 args, migration v48) ainda não existir no banco,
+      // cai automaticamente pra versão antiga (3 args) — deploy à prova de ordem.
+      const funcAusente = (err) => err && /PGRST202|could not find the function|schema cache/i
+        .test((err.message || '') + ' ' + (err.code || ''));
+      const usarIdem = !!cid;
+      const maxTentativas = usarIdem ? 3 : 1; // só repete quando é idempotente (tem id)
+      let row = null, lastErr = null;
+      for (let i = 0; i < maxTentativas; i++) {
+        try {
+          const { data, error } = await call(usarIdem ? { ...baseArgs, p_id: cid } : baseArgs);
+          if (error) {
+            if (usarIdem && funcAusente(error)) {
+              // v48 ainda não aplicada: usa a antiga 1x (sem repetir, pra não duplicar)
+              const { data: d2, error: e2 } = await call(baseArgs);
+              if (!e2) row = Array.isArray(d2) ? d2[0] : d2; else lastErr = e2;
+            } else lastErr = error;
+            break; // rejeição real do banco: não repete
+          }
+          row = Array.isArray(data) ? data[0] : data;
+          if (row) break;
+        } catch (e) { lastErr = e; } // timeout/rede: tenta de novo (mesmo id, não duplica)
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)));
       }
+      if (!row) {
+        toast('A conexão está instável. Toque em "Usar este cliente" de novo — não vai duplicar.', 'error', 7000);
+        saveBtn.disabled = false; saveBtn.textContent = 'Usar este cliente';
+        return;
+      }
+      setValue(row.nome, row.id);
+      m.close();
+      toast(`Cliente "${row.nome}" cadastrado`, 'success');
     });
   }
 

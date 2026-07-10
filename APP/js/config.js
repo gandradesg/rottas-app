@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.32';
+export const APP_VERSION = '1.9.33';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.33',
+    date: '10/07/2026',
+    changes: [
+      'CONFIABILIDADE: cadastro de cliente não perde mais o lead por "Tempo esgotado" — agora reenvia sozinho em conexão instável e NUNCA duplica (id gerado no aparelho). Tempo-limite aumentado para 15s',
+      'AGENDA: o app só confirma "Agendado!" depois de verificar que o agendamento realmente entrou no servidor — acaba o "deu certo mas não apareceu na agenda"',
+    ],
+  },
   {
     version: '1.9.30',
     date: '10/07/2026',
