@@ -87,6 +87,85 @@ async function salvarAtividadeResiliente(payload) {
   return { ok: false, error: lastErr };
 }
 
+// Sobe as fotos com repetição e tempo-limite. Se falhar em todas as tentativas,
+// LANÇA o erro (quem chama decide o que fazer) — nunca "some" silenciosamente.
+async function uploadPhotosResiliente(files, tentativas = 3) {
+  let lastErr = null;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      return await Promise.race([
+        uploadPhotos(files),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao enviar as fotos')), 25000)),
+      ]);
+    } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 1200 * (i + 1))); }
+  }
+  throw (lastErr || new Error('falha ao enviar as fotos'));
+}
+
+// REGISTRO CONFIRMADO E HONESTO de uma atividade nova. Faz, EM ORDEM:
+//   1) sobe as fotos (se houver) — e já grava a atividade COM as URLs, então a
+//      foto nunca "fica pra trás" num update em 2º plano que pode falhar;
+//   2) grava a atividade (id gerado no cliente → reenviar é idempotente, nunca duplica);
+//   3) CONFIRMA lendo de volta do banco que a linha existe de verdade.
+// Só devolve { ok:true } quando confirmou. Em falha, diz em QUAL etapa parou e por quê:
+//   { ok:false, etapa:'fotos'|'gravacao'|'confirmacao', error }
+async function registrarAtividadeConfirmado(payload, files) {
+  const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+
+  // 1) FOTOS primeiro
+  let fotos = Array.isArray(payload.fotos) ? payload.fotos : [];
+  if (files && files.length) {
+    try { fotos = await uploadPhotosResiliente(files, 3); }
+    catch (e) { return { ok: false, etapa: 'fotos', error: e }; }
+  }
+
+  const row = { ...payload, fotos };
+  if (newId) row.id = newId;
+
+  // 2) GRAVAÇÃO idempotente + tempo-limite + retry
+  const tentativas = newId ? 3 : 1;
+  let lastErr = null, semErro = false;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      const res = await Promise.race([
+        supabase.from('atividades').upsert(row, { onConflict: 'id' }).select('id'),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (conexão lenta)')), 12000)),
+      ]);
+      if (!res.error) { semErro = true; break; }
+      lastErr = res.error; break; // rejeição real do banco (RLS/constraint): não repete
+    } catch (e) { lastErr = e; } // timeout/rede: tenta de novo (mesmo id, não duplica)
+    await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+  }
+
+  // 3) CONFIRMAÇÃO read-after-write. Mesmo que o upsert tenha dado "timeout", a
+  //    linha pode ter entrado — então a verdade é o que está no banco.
+  if (newId) {
+    try {
+      const chk = await Promise.race([
+        supabase.from('atividades').select('id, fotos').eq('id', newId).maybeSingle(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 8000)),
+      ]);
+      if (chk.error) return { ok: false, etapa: 'confirmacao', error: chk.error };
+      if (chk.data && chk.data.id) return { ok: true, row: chk.data };
+      return { ok: false, etapa: 'gravacao', error: lastErr || new Error('a atividade não apareceu no banco') };
+    } catch (e) {
+      return { ok: false, etapa: 'confirmacao', error: e };
+    }
+  }
+  // Navegador sem crypto.randomUUID (raro): confia no upsert sem erro
+  return semErro ? { ok: true, row: { id: null, fotos } } : { ok: false, etapa: 'gravacao', error: lastErr };
+}
+
+// Monta a mensagem honesta de falha, dizendo em qual etapa parou e o motivo real.
+function mensagemFalhaRegistro(r) {
+  const motivo = (r.error && (r.error.message || r.error.details || r.error.code)) || 'motivo desconhecido';
+  if (r.etapa === 'fotos')
+    return `As FOTOS não foram enviadas (${motivo}).\n\nPor segurança, nada foi registrado. Verifique a conexão e tente novamente.`;
+  if (r.etapa === 'confirmacao')
+    return `Não foi possível CONFIRMAR o registro no banco (${motivo}).\n\nPara não gerar duplicado, a atividade NÃO foi dada como certa. Toque em "Tentar novamente".`;
+  return `A atividade NÃO foi gravada no banco (${motivo}).\n\nVerifique a conexão e toque em "Tentar novamente".`;
+}
+
 const TITLES = {
   checkin:     { novo: 'Registro de novo Check-in',     editar: 'Editar Check-in' },
   atendimento: { novo: 'Registro de novo Atendimento',  editar: 'Editar Atendimento' },
@@ -564,6 +643,22 @@ export async function atividadeFormView(params, app) {
       toast('Operação demorou muito - verifique sua conexão e tente novamente', 'error', 6000);
     }, 60000);
 
+    // Falha honesta no registro: mostra a etapa/motivo e um botão "Tentar novamente"
+    // que re-executa o mesmo envio. O formulário e as fotos permanecem intactos
+    // (não navegamos), então o gerente não perde nada.
+    async function tratarFalhaRegistro(r) {
+      clearTimeout(safetyTimeout);
+      loadingBtn(submitBtn, false);
+      const retry = await confirmModal({
+        title: '❌ Atividade não registrada',
+        message: mensagemFalhaRegistro(r),
+        confirmLabel: 'Tentar novamente',
+        cancelLabel: 'Fechar',
+        danger: true,
+      });
+      if (retry) form.requestSubmit();
+    }
+
     const payload = {
       gerente_id: state.user.id,
       tipo,
@@ -624,20 +719,20 @@ export async function atividadeFormView(params, app) {
         loadingBtn(submitBtn, true);
 
         if (!id) {
-          // OTIMISTA + RESILIENTE: gera o id no cliente, NAVEGA JÁ e salva em
-          // background com repetição automática (mesmo id → nunca duplica).
-          // Resolve o "demorou muito" e o registro perdido em rede instável/iOS.
-          const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
-          const row = { ...payload, fotos: [] };
-          if (newId) row.id = newId;
+          // CONFIRMADO: sobe a foto, grava e SÓ confirma sucesso depois de checar
+          // no banco que entrou. Em falha, erro honesto + "Tentar novamente"
+          // (nada some — formulário e fotos ficam preenchidos).
+          const r = await registrarAtividadeConfirmado(payload, files);
+          if (!r.ok) { await tratarFalhaRegistro(r); return; }
           clearTimeout(safetyTimeout);
-          toast('✓ Check-in registrado!', 'success', agendamento ? 3000 : 2500);
+          if (agendamento) { try { await marcarAgendamentoRealizado(agendamento, r.row.id); } catch (e) {} }
+          toast('✓ Check-in registrado e confirmado!', 'success', agendamento ? 3000 : 2500);
           navigate(agendamento ? '/agenda' : '/', true);
-          salvarCheckinResiliente(row, newId, agendamento, files);
           return;
         } else {
-          // UPDATE: upload sync se houver
-          if (files.length) payload.fotos = await uploadPhotos(files);
+          // UPDATE: sobe as fotos (resiliente) antes de salvar; se falhar, o erro
+          // sobe pro catch e o gerente vê a mensagem — não some silenciosamente.
+          if (files.length) payload.fotos = await uploadPhotosResiliente(files, 3);
           else if (initial?.fotos) payload.fotos = initial.fotos;
         }
       }
@@ -826,9 +921,10 @@ export async function atividadeFormView(params, app) {
         if (!upd || !upd.length) throw new Error('Sem permissão para editar (RLS rejeitou)');
         data = upd;
       } else {
-        // Criação resiliente (não trava e não duplica em rede instável/iOS)
-        const r = await salvarAtividadeResiliente(payload);
-        if (!r.ok) throw (r.error || new Error('Falha ao salvar. Verifique a conexão e tente de novo.'));
+        // Criação CONFIRMADA: grava e checa no banco que entrou de verdade.
+        // Em falha, erro honesto + "Tentar novamente" (não perde o formulário).
+        const r = await registrarAtividadeConfirmado(payload, []);
+        if (!r.ok) { await tratarFalhaRegistro(r); return; }
         data = [r.row];
       }
       // Edição direta (gestor/master): registra no histórico de auditoria
