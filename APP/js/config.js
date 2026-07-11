@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.37';
+export const APP_VERSION = '1.9.38';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.38',
+    date: '10/07/2026',
+    changes: [
+      'Botão de reserva simplificado: agora só "Informar reserva"',
+    ],
+  },
   {
     version: '1.9.37',
     date: '10/07/2026',

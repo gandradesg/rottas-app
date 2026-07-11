@@ -328,7 +328,7 @@ export async function atividadeDetailView(params, app) {
       reservaSection.appendChild(el('button', {
         class: 'btn btn-primary',
         onclick: () => openReservaModal(a),
-      }, icon('check', 16), a.reserva ? 'Atualizar reserva' : 'Informar reserva (livre, sem aprovação)'));
+      }, icon('check', 16), a.reserva ? 'Atualizar reserva' : 'Informar reserva'));
     }
   }
 
