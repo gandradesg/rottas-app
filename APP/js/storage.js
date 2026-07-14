@@ -2,7 +2,9 @@
 import { supabase, state } from './supabase.js';
 import { PHOTO_BUCKET } from './config.js';
 
-// Compressa imagem antes de upload (max 1600px no maior lado, JPEG 80%)
+// Compressa imagem antes de upload (max 1600px no maior lado, JPEG 80%).
+// Se algo falhar (canvas retorna nulo, memória, etc.), REJEITA — quem chama
+// (uploadPhoto) cai no plano B e sobe o arquivo original.
 export async function compressImage(file, maxSize = 1600, quality = 0.82) {
   const img = await loadImage(file);
   const { width, height } = scaleSize(img.width, img.height, maxSize);
@@ -10,7 +12,8 @@ export async function compressImage(file, maxSize = 1600, quality = 0.82) {
   canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0, width, height);
-  return new Promise(res => canvas.toBlob(b => res(b), 'image/jpeg', quality));
+  return new Promise((res, rej) =>
+    canvas.toBlob(b => (b && b.size > 0) ? res(b) : rej(new Error('compressão retornou vazio')), 'image/jpeg', quality));
 }
 
 function loadImage(file) {
@@ -28,13 +31,22 @@ function scaleSize(w, h, max) {
 }
 
 export async function uploadPhoto(file) {
-  const blob = file.type.startsWith('image/') ? await compressImage(file) : file;
-  const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg','jpg');
+  // Tenta comprimir; se a compressão falhar (HEIC do iPhone, imagem enorme, canvas
+  // sem memória, etc.), sobe o ARQUIVO ORIGINAL em vez de quebrar o registro todo.
+  let blob = file;
+  if (file && typeof file.type === 'string' && file.type.startsWith('image/')) {
+    try {
+      const comp = await compressImage(file);
+      if (comp && comp.size > 0) blob = comp;
+    } catch (e) { /* mantém o original */ }
+  }
+  const type = (blob && blob.type) || 'image/jpeg';
+  const ext = (type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
   const fileName = `${state.user.id}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
   const { error } = await supabase.storage
     .from(PHOTO_BUCKET)
-    .upload(fileName, blob, { contentType: blob.type, upsert: false });
-  if (error) throw error;
+    .upload(fileName, blob, { contentType: type, upsert: false });
+  if (error) throw new Error(error.message || error.error || 'falha no upload da foto');
   const { data: { publicUrl } } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(fileName);
   return publicUrl;
 }

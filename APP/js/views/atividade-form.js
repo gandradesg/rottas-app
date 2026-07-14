@@ -112,11 +112,14 @@ async function uploadPhotosResiliente(files, tentativas = 3) {
 async function registrarAtividadeConfirmado(payload, files) {
   const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
 
-  // 1) FOTOS primeiro
+  // 1) FOTOS primeiro. Se falharem (rede, HEIC, etc.), NÃO bloqueia o registro:
+  // grava a atividade mesmo assim e avisa que a foto não subiu (o registro é o
+  // que importa; a foto pode ser adicionada depois editando a atividade).
   let fotos = Array.isArray(payload.fotos) ? payload.fotos : [];
+  let fotosFalharam = false, fotosErro = null;
   if (files && files.length) {
     try { fotos = await uploadPhotosResiliente(files, 3); }
-    catch (e) { return { ok: false, etapa: 'fotos', error: e }; }
+    catch (e) { fotosFalharam = true; fotosErro = e; fotos = []; }
   }
 
   const row = { ...payload, fotos };
@@ -146,14 +149,14 @@ async function registrarAtividadeConfirmado(payload, files) {
         new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 8000)),
       ]);
       if (chk.error) return { ok: false, etapa: 'confirmacao', error: chk.error };
-      if (chk.data && chk.data.id) return { ok: true, row: chk.data };
+      if (chk.data && chk.data.id) return { ok: true, row: chk.data, fotosFalharam, fotosErro };
       return { ok: false, etapa: 'gravacao', error: lastErr || new Error('a atividade não apareceu no banco') };
     } catch (e) {
       return { ok: false, etapa: 'confirmacao', error: e };
     }
   }
   // Navegador sem crypto.randomUUID (raro): confia no upsert sem erro
-  return semErro ? { ok: true, row: { id: null, fotos } } : { ok: false, etapa: 'gravacao', error: lastErr };
+  return semErro ? { ok: true, row: { id: null, fotos }, fotosFalharam, fotosErro } : { ok: false, etapa: 'gravacao', error: lastErr };
 }
 
 // Monta a mensagem honesta de falha, dizendo em qual etapa parou e o motivo real.
@@ -726,7 +729,11 @@ export async function atividadeFormView(params, app) {
           if (!r.ok) { await tratarFalhaRegistro(r); return; }
           clearTimeout(safetyTimeout);
           if (agendamento) { try { await marcarAgendamentoRealizado(agendamento, r.row.id); } catch (e) {} }
-          toast('✓ Check-in registrado e confirmado!', 'success', agendamento ? 3000 : 2500);
+          if (r.fotosFalharam) {
+            toast('✓ Check-in registrado! ⚠ A foto NÃO subiu — abra o check-in e adicione a foto quando a conexão melhorar.', 'warning', 8000);
+          } else {
+            toast('✓ Check-in registrado e confirmado!', 'success', agendamento ? 3000 : 2500);
+          }
           navigate(agendamento ? '/agenda' : '/', true);
           return;
         } else {

@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.39';
+export const APP_VERSION = '1.9.40';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.40',
+    date: '10/07/2026',
+    changes: [
+      'FOTO não trava mais o registro: se a foto não subir (formato do iPhone/HEIC, imagem grande ou conexão), a atividade é registrada mesmo assim e o app avisa para adicionar a foto depois — antes ficava preso em "Atividade não registrada"',
+      'Upload de foto mais robusto: se a compressão falhar, envia a imagem original em vez de dar erro',
+    ],
+  },
   {
     version: '1.9.39',
     date: '10/07/2026',
