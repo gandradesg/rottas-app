@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.40';
+export const APP_VERSION = '1.9.41';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.41',
+    date: '10/07/2026',
+    changes: [
+      'Se a foto não subir, o app PERGUNTA em vez de decidir sozinho: "Tentar de novo com a foto" ou "Registrar sem a foto". Nada é registrado sem você escolher',
+    ],
+  },
   {
     version: '1.9.40',
     date: '10/07/2026',

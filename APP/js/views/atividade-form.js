@@ -109,17 +109,22 @@ async function uploadPhotosResiliente(files, tentativas = 3) {
 //   3) CONFIRMA lendo de volta do banco que a linha existe de verdade.
 // Só devolve { ok:true } quando confirmou. Em falha, diz em QUAL etapa parou e por quê:
 //   { ok:false, etapa:'fotos'|'gravacao'|'confirmacao', error }
-async function registrarAtividadeConfirmado(payload, files) {
+async function registrarAtividadeConfirmado(payload, files, opts = {}) {
+  const { permitirSemFoto = false } = opts;
   const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
 
-  // 1) FOTOS primeiro. Se falharem (rede, HEIC, etc.), NÃO bloqueia o registro:
-  // grava a atividade mesmo assim e avisa que a foto não subiu (o registro é o
-  // que importa; a foto pode ser adicionada depois editando a atividade).
+  // 1) FOTOS primeiro. Se falharem (rede, HEIC, etc.) e o usuário AINDA não tiver
+  // decidido, NÃO grava nada — devolve etapa:'fotos' pra quem chamou perguntar:
+  // tentar de novo com a foto, ou registrar sem a foto. Só grava sem foto quando
+  // permitirSemFoto = true (o usuário escolheu continuar sem).
   let fotos = Array.isArray(payload.fotos) ? payload.fotos : [];
-  let fotosFalharam = false, fotosErro = null;
+  let semFoto = false;
   if (files && files.length) {
     try { fotos = await uploadPhotosResiliente(files, 3); }
-    catch (e) { fotosFalharam = true; fotosErro = e; fotos = []; }
+    catch (e) {
+      if (!permitirSemFoto) return { ok: false, etapa: 'fotos', error: e };
+      semFoto = true; fotos = [];
+    }
   }
 
   const row = { ...payload, fotos };
@@ -149,14 +154,14 @@ async function registrarAtividadeConfirmado(payload, files) {
         new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 8000)),
       ]);
       if (chk.error) return { ok: false, etapa: 'confirmacao', error: chk.error };
-      if (chk.data && chk.data.id) return { ok: true, row: chk.data, fotosFalharam, fotosErro };
+      if (chk.data && chk.data.id) return { ok: true, row: chk.data, semFoto };
       return { ok: false, etapa: 'gravacao', error: lastErr || new Error('a atividade não apareceu no banco') };
     } catch (e) {
       return { ok: false, etapa: 'confirmacao', error: e };
     }
   }
   // Navegador sem crypto.randomUUID (raro): confia no upsert sem erro
-  return semErro ? { ok: true, row: { id: null, fotos }, fotosFalharam, fotosErro } : { ok: false, etapa: 'gravacao', error: lastErr };
+  return semErro ? { ok: true, row: { id: null, fotos }, semFoto } : { ok: false, etapa: 'gravacao', error: lastErr };
 }
 
 // Monta a mensagem honesta de falha, dizendo em qual etapa parou e o motivo real.
@@ -725,15 +730,31 @@ export async function atividadeFormView(params, app) {
           // CONFIRMADO: sobe a foto, grava e SÓ confirma sucesso depois de checar
           // no banco que entrou. Em falha, erro honesto + "Tentar novamente"
           // (nada some — formulário e fotos ficam preenchidos).
-          const r = await registrarAtividadeConfirmado(payload, files);
+          let r = await registrarAtividadeConfirmado(payload, files);
+          // Se a FOTO falhar, NÃO registra sozinho: pergunta o que fazer.
+          let semFoto = false;
+          while (!r.ok && r.etapa === 'fotos') {
+            const motivo = (r.error && (r.error.message || r.error.code)) || 'motivo desconhecido';
+            const tentarComFoto = await confirmModal({
+              title: '⚠ A foto não subiu',
+              message: `Não consegui enviar a foto (${motivo}).\n\nA atividade AINDA NÃO foi registrada. O que você quer fazer?`,
+              confirmLabel: 'Tentar de novo com a foto',
+              cancelLabel: 'Registrar sem a foto',
+              danger: false,
+            });
+            if (tentarComFoto) {
+              r = await registrarAtividadeConfirmado(payload, files);
+            } else {
+              semFoto = true;
+              r = await registrarAtividadeConfirmado(payload, [], { permitirSemFoto: true });
+              break;
+            }
+          }
           if (!r.ok) { await tratarFalhaRegistro(r); return; }
           clearTimeout(safetyTimeout);
           if (agendamento) { try { await marcarAgendamentoRealizado(agendamento, r.row.id); } catch (e) {} }
-          if (r.fotosFalharam) {
-            toast('✓ Check-in registrado! ⚠ A foto NÃO subiu — abra o check-in e adicione a foto quando a conexão melhorar.', 'warning', 8000);
-          } else {
-            toast('✓ Check-in registrado e confirmado!', 'success', agendamento ? 3000 : 2500);
-          }
+          toast(semFoto ? '✓ Check-in registrado (sem foto).' : '✓ Check-in registrado e confirmado!',
+            'success', agendamento ? 3000 : 2500);
           navigate(agendamento ? '/agenda' : '/', true);
           return;
         } else {
