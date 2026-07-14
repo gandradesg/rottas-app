@@ -102,7 +102,7 @@ export async function painelGestorView(_params, app) {
     else if (filters.periodo === 'mes') from = new Date(now.getTime() - 30*86400000);
 
     // Exclui tipo='visita' (exclusiva da Recepção Rottas — não aparece no painel)
-    let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email, cidade, estado)').eq('cancelada', false).neq('tipo', 'visita').neq('teste', true).order('created_at', { ascending: false });
+    let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email, cidade, estado)').eq('cancelada', false).neq('tipo', 'visita').or('teste.is.null,teste.eq.false').order('created_at', { ascending: false });
     if (from) q = q.gte('created_at', from.toISOString());
     if (filters.empreendimento !== 'todos') q = q.or(`empreendimento.eq.${filters.empreendimento},produto.eq.${filters.empreendimento}`);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);

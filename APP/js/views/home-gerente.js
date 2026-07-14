@@ -229,7 +229,7 @@ export async function homeGerenteView(_params, app) {
       .order('created_at', { ascending: false });
     // Se NÃO for conta de teste, esconde dados de teste (que um colega de teste
     // pudesse ter incluído). A conta de teste vê os próprios registros normalmente.
-    if (!state.profile?.conta_teste) q = q.neq('teste', true);
+    if (!state.profile?.conta_teste) q = q.or('teste.is.null,teste.eq.false'); // null-safe (exclui só teste=true)
 
     const now = new Date();
     if (periodo === 'dia') {

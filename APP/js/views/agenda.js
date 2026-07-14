@@ -244,7 +244,10 @@ async function agendaGerenteView(app) {
       .gte('data_prevista', from.toISOString())
       .lte('data_prevista', to.toISOString())
       .order('data_prevista', { ascending: true });
-    if (!state.profile?.conta_teste) q = q.neq('teste', true); // some pra quem não é teste
+    // Esconde só as contas de TESTE. Precisa incluir teste=null E teste=false
+    // (o .neq('teste',true) sozinho descarta linhas NULL no Postgres — bug que
+    // sumia com os agendamentos recém-criados do gerente).
+    if (!state.profile?.conta_teste) q = q.or('teste.is.null,teste.eq.false');
     if (viewFilter !== 'minha') {
       q = q.eq('gerente_id', viewFilter);
     } else if (!isAdmin()) {
@@ -736,7 +739,7 @@ async function agendaGestorView(app) {
       .gte('data_prevista', from.toISOString())
       .lte('data_prevista', to.toISOString())
       .order('data_prevista', { ascending: true });
-    if (!state.profile?.conta_teste) q = q.neq('teste', true); // esconde agendas de teste
+    if (!state.profile?.conta_teste) q = q.or('teste.is.null,teste.eq.false'); // esconde só teste (null-safe)
     if (filters.status !== 'todos') q = q.eq('status', filters.status);
     if (filters.tipo !== 'todos')   q = q.eq('tipo', filters.tipo);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);

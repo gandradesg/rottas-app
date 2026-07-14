@@ -148,7 +148,7 @@ export async function historicoView(_params, app) {
     if (!isTeamView) q = q.eq('gerente_id', state.user.id);
     // Relatório da equipe não mostra dados de contas de teste (o próprio testador
     // vê os dele na sua visão individual)
-    if (isTeamView && !state.profile?.conta_teste) q = q.neq('teste', true);
+    if (isTeamView && !state.profile?.conta_teste) q = q.or('teste.is.null,teste.eq.false'); // null-safe (exclui só teste=true)
     if (isTeamView && filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
     if (filters.tipo !== 'todos') q = q.eq('tipo', filters.tipo);
     // Subfiltros contextuais
