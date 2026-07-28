@@ -614,6 +614,10 @@ async function agendaGerenteView(app) {
         item.observacoes && el('div', { class: 'text-xs text-fg-muted mt-1 line-clamp-2 italic' },
           '"' + item.observacoes + '"'
         ),
+        // Data/hora de CRIAÇÃO (Brasília) — pra identificar quando foi criado e
+        // confirmar que o registro realmente entrou.
+        item.created_at && el('div', { class: 'text-[10px] text-fg-subtle mt-1' },
+          '🕒 Criado em ' + fmt.dateTime(item.created_at)),
       ),
     ));
 

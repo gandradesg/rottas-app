@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.42';
+export const APP_VERSION = '1.9.43';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.43',
+    date: '28/07/2026',
+    changes: [
+      'Todas as datas e horas agora no fuso de BRASÍLIA (independente do fuso do aparelho)',
+      'Agendamentos mostram "🕒 Criado em ..." — dá pra ver quando foi criado e confirmar que entrou',
+    ],
+  },
   {
     version: '1.9.42',
     date: '28/07/2026',
