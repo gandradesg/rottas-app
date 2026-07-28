@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.41';
+export const APP_VERSION = '1.9.42';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.42',
+    date: '28/07/2026',
+    changes: [
+      'ATUALIZAÇÃO AUTOMÁTICA também no app instalado: antes o app na tela de início ficava preso numa versão antiga (e por isso correções não chegavam aos gerentes). Agora ele se atualiza sozinho ao abrir; se precisar, o aviso "Atualizar agora" resolve na hora',
+    ],
+  },
   {
     version: '1.9.41',
     date: '10/07/2026',

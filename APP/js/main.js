@@ -19,12 +19,15 @@ async function checkForUpdate() {
     const m = txt.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
     if (m && m[1] && m[1] !== localVersion) {
       console.warn('[update] versao local:', localVersion, '- servidor:', m[1]);
-      const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
-      // No navegador: converge SOZINHO pra versão nova (limpa cache + desregistra
-      // SW + reload uma vez). Isso mata o "estado misto" (index/JS de versões
-      // diferentes) que trava a tela. Trava anti-loop por versão do servidor.
+      // Converge SOZINHO pra versão nova (limpa cache + desregistra SW + reload
+      // uma vez) — INCLUSIVE no PWA instalado (standalone). Antes o app instalado
+      // NÃO se atualizava sozinho e ficava preso numa versão antiga (era por isso
+      // que correções não chegavam aos gerentes). O SW é network-only pra código,
+      // então após limpar cache + reload o app pega o código novo. Trava anti-loop
+      // por versão do servidor (sessionStorage): tenta 1x por sessão; se mesmo
+      // assim não convergir, cai no banner manual.
       const flagKey = 'auto-upd-' + m[1];
-      if (!isStandalone && !sessionStorage.getItem(flagKey)) {
+      if (!sessionStorage.getItem(flagKey)) {
         sessionStorage.setItem(flagKey, '1');
         console.warn('[update] limpando cache + SW e recarregando para', m[1]);
         try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
@@ -35,21 +38,23 @@ async function checkForUpdate() {
         location.reload();
         return;
       }
-      // PWA instalado (ou já tentou reload nesta sessão): mostra banner manual
+      // Já tentou o reload automático nesta sessão e ainda está desatualizado:
+      // mostra banner manual (raro — ex.: WebAPK Android muito preso).
       showUpdateBanner(localVersion, m[1]);
     }
   } catch (e) { /* sem internet ou off - silencia */ }
 }
 function showUpdateBanner(local, server) {
   if (document.getElementById('update-banner')) return; // ja existe
-  const isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
   const banner = document.createElement('div');
   banner.id = 'update-banner';
   banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#F26B22;color:#fff;padding:10px 14px;font:14px/1.4 sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center;justify-content:space-between;';
-  banner.innerHTML = `<div><b>Nova versao disponivel</b> (v${server}). Voce esta na v${local}.${isStandalone ? ' Para atualizar, desinstale e reinstale o app.' : ' Recarregue a pagina (Ctrl+Shift+R).'}</div><button style="background:#fff;color:#F26B22;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">${isStandalone ? 'OK' : 'Recarregar'}</button>`;
-  banner.querySelector('button').onclick = () => {
-    if (isStandalone) banner.remove();
-    else { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); location.reload(); }
+  banner.innerHTML = `<div><b>Nova versao disponivel</b> (v${server}). Voce esta na v${local}. Toque em Atualizar.</div><button style="background:#fff;color:#F26B22;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">Atualizar agora</button>`;
+  banner.querySelector('button').onclick = async () => {
+    // Limpa cache + desregistra SW + reload (funciona no navegador E no PWA instalado).
+    try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+    try { const regs = await navigator.serviceWorker?.getRegistrations?.(); if (regs) await Promise.all(regs.map(x => x.unregister())); } catch (e) {}
+    location.reload();
   };
   document.body.appendChild(banner);
 }
