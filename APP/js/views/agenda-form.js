@@ -269,7 +269,7 @@ export async function agendaFormView(params, app) {
   // === Recorrência (só na CRIAÇÃO) ===
   // Repete o mesmo agendamento nas próximas datas e sincroniza como evento
   // recorrente no calendário (RRULE).
-  let recorrenciaSel = null, recTotalWrap = null, recTotalInput = null;
+  let recorrenciaSel = null, recUntilWrap = null, recUntilInput = null;
   if (!id) {
     recorrenciaSel = el('select', { class: 'select' },
       el('option', { value: '' }, 'Não repetir'),
@@ -278,16 +278,14 @@ export async function agendaFormView(params, app) {
       el('option', { value: 'quinzenal' }, 'Quinzenal'),
       el('option', { value: 'mensal' }, 'Mensal'),
     );
-    recTotalInput = el('input', { class: 'input', type: 'number', min: '2', max: '52', value: '4', inputmode: 'numeric' });
-    recTotalWrap = field('Repetir quantas vezes (contando a 1ª)', recTotalInput, {
-      help: 'Ex.: 4 = a data escolhida + mais 3 ocorrências.',
-    });
-    recTotalWrap.style.display = 'none';
+    recUntilInput = el('input', { class: 'input', type: 'date' });
+    recUntilWrap = field('Repetir até', recUntilInput);
+    recUntilWrap.style.display = 'none';
     recorrenciaSel.addEventListener('change', () => {
-      recTotalWrap.style.display = recorrenciaSel.value ? '' : 'none';
+      recUntilWrap.style.display = recorrenciaSel.value ? '' : 'none';
     });
   }
-  const recorrenciaField = recorrenciaSel ? field('Repetir (recorrência)', recorrenciaSel, {
+  const recorrenciaField = recorrenciaSel ? field('Recorrência', recorrenciaSel, {
     help: 'Cria o mesmo agendamento nas próximas datas e entra no calendário como evento recorrente.',
   }) : null;
 
@@ -295,7 +293,7 @@ export async function agendaFormView(params, app) {
     field('Tipo', el('div', { class: 'flex gap-2' }, ...tipoButtons), { required: true }),
     field('Data e hora prevista', dataInput, { required: true }),
     recorrenciaField,
-    recTotalWrap,
+    recUntilWrap,
     responsavelField,
     ctx,
     submitBtn, cancelBtn,
@@ -360,26 +358,40 @@ export async function agendaFormView(params, app) {
       // tempo-limite por tentativa. Se a rede travar (iOS suspende), tenta de novo
       // sem duplicar (mesmo id) — resolve o "ficou carregando e não foi".
       const uuid = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
-      // Recorrência (só criação): calcula as datas das ocorrências.
+      // Recorrência (só criação): repete a partir da data escolhida ATÉ a data limite.
       const freq = (recorrenciaSel && recorrenciaSel.value) ? recorrenciaSel.value : '';
-      const total = freq ? Math.min(Math.max(parseInt(recTotalInput.value, 10) || 1, 1), 52) : 1;
-      const recorrenciaId = freq ? uuid() : null;
       const base = new Date(dataIso);
-      const dataDaOcorrencia = (i) => {
-        const d = new Date(base);
-        if (freq === 'diaria') d.setDate(d.getDate() + i);
-        else if (freq === 'semanal') d.setDate(d.getDate() + 7 * i);
-        else if (freq === 'quinzenal') d.setDate(d.getDate() + 14 * i);
-        else if (freq === 'mensal') d.setMonth(d.getMonth() + i);
-        return d.toISOString();
+      const passo = (d, i) => {
+        const x = new Date(d);
+        if (freq === 'diaria') x.setDate(x.getDate() + i);
+        else if (freq === 'semanal') x.setDate(x.getDate() + 7 * i);
+        else if (freq === 'quinzenal') x.setDate(x.getDate() + 14 * i);
+        else if (freq === 'mensal') x.setMonth(x.getMonth() + i);
+        return x;
       };
+      // Datas das ocorrências (mantendo o horário da 1ª). Vai até o FIM do dia limite.
+      const datas = [];
+      if (freq) {
+        const raw = (recUntilInput.value || '').trim();
+        if (!raw) { loadingBtn(submitBtn, false); return toast('Escolha a data em "Repetir até".', 'error'); }
+        const ate = new Date(raw + 'T23:59:59');
+        if (isNaN(ate.getTime()) || ate < base) { loadingBtn(submitBtn, false); return toast('A data de "Repetir até" precisa ser depois da data do agendamento.', 'error', 6000); }
+        for (let i = 0; i < 400; i++) { // teto de segurança
+          const occ = passo(base, i);
+          if (occ > ate) break;
+          datas.push(occ.toISOString());
+        }
+      } else {
+        datas.push(dataIso);
+      }
+      const recorrenciaId = freq ? uuid() : null;
       // Uma linha por (presente × ocorrência). Campos de recorrência só entram
       // quando há recorrência (mantém a criação normal à prova de coluna faltando).
       const rows = [];
       for (const pid of presentes) {
-        for (let i = 0; i < total; i++) {
-          const row = { ...payload, gerente_id: pid, id: uuid(), data_prevista: dataDaOcorrencia(i) };
-          if (freq) { row.recorrencia_id = recorrenciaId; row.recorrencia_freq = freq; row.recorrencia_total = total; }
+        for (const occ of datas) {
+          const row = { ...payload, gerente_id: pid, id: uuid(), data_prevista: occ };
+          if (freq) { row.recorrencia_id = recorrenciaId; row.recorrencia_freq = freq; row.recorrencia_total = datas.length; }
           rows.push(row);
         }
       }
@@ -387,7 +399,7 @@ export async function agendaFormView(params, app) {
       const r = await salvarAgendamentosResiliente(rows, temIds ? 3 : 1);
       if (!r.ok) throw (r.error || new Error('Falha ao salvar'));
       toast(
-        freq ? `✓ ${total} agendamentos criados (recorrência ${recorrenciaSel.options[recorrenciaSel.selectedIndex].text.toLowerCase()})!`
+        freq ? `✓ ${datas.length} agendamentos criados (${recorrenciaSel.options[recorrenciaSel.selectedIndex].text.toLowerCase()})!`
              : (ehGrupo ? `✓ Agendado para ${presentes.length} gerentes!` : '✓ Agendado!'),
         'success');
       navigate('/', true);

@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.46';
+export const APP_VERSION = '1.9.47';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.47',
+    date: '14/09/2026',
+    changes: [
+      'Recorrência mais clara: campo renomeado para "Recorrência" e agora você define "Repetir até" (data) em vez de contar repetições',
+    ],
+  },
   {
     version: '1.9.46',
     date: '14/09/2026',
