@@ -478,6 +478,58 @@ function userFormFields(p) {
     ),
   );
 
+  // === Cidades de responsabilidade (gerente / supervisor) ===
+  // Opções = TODAS as cidades cadastradas em imobiliárias. O gerente/supervisor
+  // passa a ver imobs de todas as cidades marcadas (além da cidade base).
+  const cidadesFromImobs = [];
+  const seenImobCity = new Set();
+  (state.imobiliarias || []).forEach(im => {
+    if (!im.cidade) return;
+    const key = (im.cidade + '|' + (im.estado || '')).toLowerCase();
+    if (seenImobCity.has(key)) return;
+    seenImobCity.add(key);
+    cidadesFromImobs.push({ nome: im.cidade, estado: im.estado || '' });
+  });
+  cidadesFromImobs.sort((a,b) =>
+    (a.estado||'').localeCompare(b.estado||'') || a.nome.localeCompare(b.nome));
+
+  const cidadesRespCheck = {};
+  cidadesFromImobs.forEach(c => {
+    const key = c.nome + '|' + c.estado;
+    cidadesRespCheck[key] = initialCidades.some(x => (typeof x === 'string' ? x : x.nome) === c.nome);
+  });
+  const cidadesRespGrid = el('div', { class: 'grid grid-cols-2 gap-2 max-h-60 overflow-y-auto' });
+  function renderCidadesResp(filtro) {
+    cidadesRespGrid.innerHTML = '';
+    const f = (filtro || '').trim().toLowerCase();
+    const arr = f ? cidadesFromImobs.filter(c => c.nome.toLowerCase().includes(f)) : cidadesFromImobs;
+    if (!cidadesFromImobs.length) {
+      cidadesRespGrid.appendChild(el('span', { class: 'text-sm text-fg-muted col-span-2' },
+        'Nenhuma cidade encontrada. Cadastre imobiliárias com cidade preenchida.'));
+      return;
+    }
+    if (!arr.length) { cidadesRespGrid.appendChild(el('span', { class: 'text-sm text-fg-muted col-span-2' }, 'Nenhuma cidade para a busca.')); return; }
+    arr.forEach(c => {
+      const key = c.nome + '|' + c.estado;
+      const cb = el('input', { type: 'checkbox', checked: !!cidadesRespCheck[key] });
+      cb.addEventListener('change', () => { cidadesRespCheck[key] = cb.checked; });
+      cidadesRespGrid.appendChild(el('label', { class: 'flex items-center gap-2 p-2 rounded-lg hover:bg-bg-elev cursor-pointer' },
+        cb, el('span', { class: 'text-sm' }, c.nome, c.estado && el('span', { class: 'text-xs text-fg-muted ml-1' }, c.estado))));
+    });
+  }
+  const cidadesRespBusca = el('input', { class: 'input mb-2', type: 'search', placeholder: 'Buscar cidade...' });
+  let cidadesRespTimer;
+  cidadesRespBusca.addEventListener('input', () => { clearTimeout(cidadesRespTimer); cidadesRespTimer = setTimeout(() => renderCidadesResp(cidadesRespBusca.value), 150); });
+  renderCidadesResp('');
+  const cidadesRespBox = el('div', { class: 'card p-3 hidden' },
+    el('h3', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mb-2' },
+      '🏙️ Cidades de responsabilidade'),
+    el('p', { class: 'text-xs text-fg-muted mb-2' },
+      'Marque as cidades que esta pessoa atende. Ela verá as imobiliárias de todas elas (além da cidade base). Ao cadastrar uma imobiliária em cidade nova, ela é vinculada automaticamente.'),
+    cidadesRespBusca,
+    cidadesRespGrid,
+  );
+
   // === Vínculo Supervisor -> Gerente ===
   // Quando o role é Supervisor, mostra select de qual gerente ele é subordinado
   // (1 supervisor pertence a 1 gerente, mas 1 gerente pode ter vários supervisores).
@@ -520,6 +572,8 @@ function userFormFields(p) {
     }
     // Cidades: gestor_regional
     cidadesBox.classList.toggle('hidden', chosenRole !== 'gestor_regional');
+    // Cidades de responsabilidade: gerente / supervisor
+    cidadesRespBox.classList.toggle('hidden', !['gerente','supervisor'].includes(chosenRole));
     // Vínculo gerente: supervisor
     supervisorBox.classList.toggle('hidden', chosenRole !== 'supervisor');
   }
@@ -543,6 +597,7 @@ function userFormFields(p) {
     el('div', {}, el('label', { class: 'label label-required' }, 'Perfil de acesso'), roleField),
     estadosBox,
     cidadesBox,
+    cidadesRespBox,
     supervisorBox,
     permsCard,
     el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
@@ -572,10 +627,15 @@ function userFormFields(p) {
       } else {
         v.estados_acesso = [];
       }
-      // Multi-cidade (gestor_regional): vem da lista derivada de empreendimentos
+      // Multi-cidade (gestor_regional): vem das cidades dos empreendimentos.
+      // Gerente/Supervisor: cidades de responsabilidade, vindas das imobiliárias.
       if (chosenRole === 'gestor_regional') {
         v.cidades_acesso = cidadesFromEmps
           .filter(c => cidadesCheck[c.nome + '|' + c.estado])
+          .map(c => c.nome);
+      } else if (['gerente','supervisor'].includes(chosenRole)) {
+        v.cidades_acesso = cidadesFromImobs
+          .filter(c => cidadesRespCheck[c.nome + '|' + c.estado])
           .map(c => c.nome);
       } else {
         v.cidades_acesso = [];

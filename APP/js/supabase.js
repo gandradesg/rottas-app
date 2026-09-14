@@ -137,8 +137,17 @@ export async function loadLists() {
 //   Master/Gestor    → tudo
 //   Superintendente  → tudo nos estados_acesso (jsonb array)
 //   Gestor Regional  → tudo nas cidades_acesso (jsonb array)
-//   Gerente          → sua cidade (e supervisores subordinados, via outro helper)
-//   Supervisor       → sua cidade (acompanha o gerente)
+//   Gerente          → cidade base + cidades de responsabilidade (cidades_acesso)
+//   Supervisor       → cidade base + cidades de responsabilidade (cidades_acesso)
+
+// Cidades que um gerente/supervisor atende: a cidade base + as cidades de
+// responsabilidade (cidades_acesso). Sem duplicatas.
+export function cidadesDoGerente(p) {
+  const set = new Set();
+  if (p?.cidade) set.add(p.cidade);
+  if (Array.isArray(p?.cidades_acesso)) p.cidades_acesso.forEach(c => { if (c) set.add(c); });
+  return [...set];
+}
 
 // Retorna imobiliárias visíveis ao usuário atual (scope geográfico)
 export function getScopedImobiliarias() {
@@ -155,8 +164,9 @@ export function getScopedImobiliarias() {
     return all.filter(im => cidades.includes(im.cidade));
   }
   if (['gerente', 'supervisor'].includes(p.role)) {
-    if (!p.cidade) return [];
-    return all.filter(im => im.cidade === p.cidade);
+    const cidades = cidadesDoGerente(p);
+    if (!cidades.length) return [];
+    return all.filter(im => cidades.includes(im.cidade));
   }
   return all;
 }
@@ -186,8 +196,9 @@ export function getScopedEmpreendimentos() {
     return all.filter(e => atendeCidades(e, cidades));
   }
   if (['gerente', 'supervisor'].includes(p.role)) {
-    if (!p.cidade) return [];
-    return all.filter(e => atendeCidades(e, [p.cidade]));
+    const cidades = cidadesDoGerente(p);
+    if (!cidades.length) return [];
+    return all.filter(e => atendeCidades(e, cidades));
   }
   return all;
 }

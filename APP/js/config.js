@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.47';
+export const APP_VERSION = '1.9.48';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.48',
+    date: '14/09/2026',
+    changes: [
+      'CIDADES DE RESPONSABILIDADE (gerente/supervisor): no cadastro do usuário dá pra marcar várias cidades (lista puxa de todas as cidades das imobiliárias). A pessoa passa a ver as imobs de todas elas, não só da cidade base. E ao cadastrar uma imobiliária em cidade nova, essa cidade é vinculada a ela automaticamente',
+    ],
+  },
   {
     version: '1.9.47',
     date: '14/09/2026',

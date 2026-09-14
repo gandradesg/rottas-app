@@ -249,6 +249,20 @@ export async function addImobiliaria(nome) {
       try {
         const { data, error } = await resilientInsert('imobiliarias', { nome: nomeUpper, cidade, estado });
         if (error) throw error;
+        // AUTO-VÍNCULO: se um gerente/supervisor cadastrou imob numa cidade que
+        // ainda não é dele, adiciona essa cidade às cidades de responsabilidade
+        // dele (cidades_acesso) — assim ele passa a ver essa imob na hora.
+        try {
+          const prof = state.profile;
+          if (prof && ['gerente', 'supervisor'].includes(prof.role) && cidade && cidade !== prof.cidade) {
+            const atuais = Array.isArray(prof.cidades_acesso) ? prof.cidades_acesso : [];
+            if (!atuais.includes(cidade)) {
+              const novas = [...atuais, cidade];
+              const { error: upErr } = await supabase.from('profiles').update({ cidades_acesso: novas }).eq('id', prof.id).select();
+              if (!upErr) prof.cidades_acesso = novas; // reflete no escopo imediatamente
+            }
+          }
+        } catch (e) { /* não bloqueia o cadastro da imob */ }
         await loadLists();
         m.close();
         resolve(data);
