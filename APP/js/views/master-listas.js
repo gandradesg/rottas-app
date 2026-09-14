@@ -158,15 +158,22 @@ export async function masterListasView(_params, app) {
               confirmLabel: 'Excluir', danger: true,
             });
             if (!ok) return;
-            // .select() retorna o que foi deletado — se vazio, RLS bloqueou (sem permissão)
-            const { data, error } = await supabase.from(tab.table).delete().eq('id', it.id).select();
-            if (error) return toast(error.message, 'error', 6000);
-            if (!data || !data.length) {
-              return toast('Sem permissão para excluir. Peça ao Master a permissão "Gerenciar listas".', 'error', 6000);
-            }
-            await loadLists();
+            // OTIMISTA (igual add/editar): remove da tela na hora e sincroniza no
+            // servidor em 2º plano. Assim a lista NUNCA fica "agarrada" esperando
+            // o refresh — e se o servidor recusar, devolve o item e avisa.
+            const arr = state[tab.stateKey] || [];
+            const idx = arr.indexOf(it);
+            if (idx >= 0) arr.splice(idx, 1);
             renderActive();
-            toast('Excluído', 'success');
+            supabase.from(tab.table).delete().eq('id', it.id).select().then(({ data, error }) => {
+              // .select() retorna o que foi deletado — se vazio, RLS bloqueou (sem permissão)
+              if (error || !data || !data.length) {
+                if (idx >= 0) { arr.splice(Math.min(idx, arr.length), 0, it); renderActive(); } // rollback
+                toast(error ? error.message : 'Sem permissão para excluir. Peça ao Master a permissão "Gerenciar listas".', 'error', 6000);
+                return;
+              }
+              toast('Excluído', 'success', 2000);
+            });
           }
         }, icon('trash', 16, 'text-danger')),
       ));

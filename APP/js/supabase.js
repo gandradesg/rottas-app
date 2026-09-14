@@ -96,28 +96,39 @@ export async function loadProfile() {
 
 // Helper: carrega todas as listas gerenciadas pelo master
 export async function loadLists() {
-  // 7 queries em paralelo (inclui gerentes_house p/ visita e corretores p/ atendimento)
-  const [imob, emp, mv, mo, lv, gh, cor, gim, ot] = await Promise.all([
-    supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome'),
-    supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url, cidades_visiveis').order('nome'),
-    supabase.from('motivos_visita').select('id, nome').order('nome'),
-    supabase.from('motivos_orulo').select('id, nome').order('nome'),
-    supabase.from('locais_visita').select('id, nome').order('nome'),
-    supabase.from('gerentes_house').select('id, nome, ativo').eq('ativo', true).order('nome'),
-    supabase.from('corretores').select('id, nome, telefone, email, imobiliaria_id, imobiliaria_nome').order('nome'),
-    supabase.from('gerentes_imobiliaria').select('id, nome, telefone, email, imobiliaria_id, imobiliaria_nome').order('nome'),
-    supabase.from('outros_tipos').select('id, nome').order('nome'),
+  // RESILIENTE: cada query tem tempo-limite próprio (nunca TRAVA a chamada) e,
+  // se uma falhar/estourar, a lista correspondente NÃO é zerada — mantém o que já
+  // estava. Isso evita dois bugs graves nos cadastros:
+  //  1) uma query com hiccup zerava a lista pra [] (sumia da tela);
+  //  2) Promise.all sem timeout deixava o `await loadLists()` preso pra sempre
+  //     (tela "agarrada", só resolvia com F5).
+  const q = (sel) => Promise.race([
+    sel,
+    new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 15000)),
   ]);
-  state.imobiliarias    = imob.data    || [];
-  state.empreendimentos = emp.data     || [];
-  state.motivosVisita   = mv.data      || [];
-  state.motivosOrulo    = mo.data      || [];
-  state.motivosDwv      = mo.data      || []; // alias - unificado
-  state.locaisVisita    = lv.data      || [];
-  state.gerentesHouse   = gh.data      || [];
-  state.corretores      = cor.data     || [];
-  state.gerentesImob    = gim.data     || [];
-  state.outrosTipos     = ot.data      || [];
+  const [imob, emp, mv, mo, lv, gh, cor, gim, ot] = await Promise.all([
+    q(supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome')),
+    q(supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url, cidades_visiveis').order('nome')),
+    q(supabase.from('motivos_visita').select('id, nome').order('nome')),
+    q(supabase.from('motivos_orulo').select('id, nome').order('nome')),
+    q(supabase.from('locais_visita').select('id, nome').order('nome')),
+    q(supabase.from('gerentes_house').select('id, nome, ativo').eq('ativo', true).order('nome')),
+    q(supabase.from('corretores').select('id, nome, telefone, email, imobiliaria_id, imobiliaria_nome').order('nome')),
+    q(supabase.from('gerentes_imobiliaria').select('id, nome, telefone, email, imobiliaria_id, imobiliaria_nome').order('nome')),
+    q(supabase.from('outros_tipos').select('id, nome').order('nome')),
+  ]);
+  // Só sobrescreve quando a query REALMENTE trouxe dados (data é array, mesmo que []).
+  // Se veio null (erro/timeout), preserva a lista anterior — não apaga a tela.
+  const set = (key, res) => { if (res && Array.isArray(res.data)) state[key] = res.data; };
+  set('imobiliarias', imob);
+  set('empreendimentos', emp);
+  set('motivosVisita', mv);
+  if (mo && Array.isArray(mo.data)) { state.motivosOrulo = mo.data; state.motivosDwv = mo.data; } // alias unificado
+  set('locaisVisita', lv);
+  set('gerentesHouse', gh);
+  set('corretores', cor);
+  set('gerentesImob', gim);
+  set('outrosTipos', ot);
   emitStateChange();
 }
 

@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.43';
+export const APP_VERSION = '1.9.44';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.44',
+    date: '14/09/2026',
+    changes: [
+      'CORREÇÃO SÉRIA nos cadastros (Listas): não trava mais depois de excluir/editar/incluir. A tela atualiza na hora, sem precisar dar F5. Também deixou de "sumir" a lista quando a conexão dava um soluço',
+    ],
+  },
   {
     version: '1.9.43',
     date: '28/07/2026',
