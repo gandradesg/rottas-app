@@ -275,7 +275,7 @@ export async function agendaFormView(params, app) {
       el('option', { value: '' }, 'Não repetir'),
       el('option', { value: 'diaria' }, 'Diária'),
       el('option', { value: 'semanal' }, 'Semanal'),
-      el('option', { value: 'quinzenal' }, 'Quinzenal (a cada 15 dias)'),
+      el('option', { value: 'quinzenal' }, 'Quinzenal'),
       el('option', { value: 'mensal' }, 'Mensal'),
     );
     recTotalInput = el('input', { class: 'input', type: 'number', min: '2', max: '52', value: '4', inputmode: 'numeric' });
