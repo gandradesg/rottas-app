@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.44';
+export const APP_VERSION = '1.9.45';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.45',
+    date: '14/09/2026',
+    changes: [
+      'RECORRÊNCIA na agenda: ao criar um agendamento dá pra escolher Repetir (Diária, Semanal, Quinzenal, Mensal) e quantas vezes — cria um agendamento para cada data. No calendário, entra como evento recorrente (você adiciona 1 vez e vem a série toda). Agendamentos recorrentes ganham o selo 🔁 Recorrente',
+    ],
+  },
   {
     version: '1.9.44',
     date: '14/09/2026',

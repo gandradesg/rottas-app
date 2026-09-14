@@ -28,12 +28,30 @@ function icsEscape(s) {
     .replace(/\n/g, '\\n');
 }
 
+// Constrói a regra de recorrência (RRULE, RFC 5545) a partir dos campos do
+// agendamento. Retorna null quando não é recorrente.
+export function recorrenciaRule(ag) {
+  if (!ag || !ag.recorrencia_freq) return null;
+  const n = Math.max(parseInt(ag.recorrencia_total, 10) || 0, 1);
+  const map = {
+    diaria: 'FREQ=DAILY',
+    semanal: 'FREQ=WEEKLY',
+    quinzenal: 'FREQ=WEEKLY;INTERVAL=2',
+    mensal: 'FREQ=MONTHLY',
+  };
+  const base = map[ag.recorrencia_freq];
+  return base ? `${base};COUNT=${n}` : null;
+}
+
 // Gera arquivo ICS de um agendamento
 export function buildIcsForAgendamento(ag) {
   const tipo = TIPO_ATIVIDADE[ag.tipo];
   const start = new Date(ag.data_prevista);
   const end = new Date(start.getTime() + 60 * 60 * 1000); // duração default 1h
-  const uid = `${ag.id}@imobrottas.app`;
+  // Série recorrente: mesmo UID pra todas as ocorrências → o calendário trata
+  // como UM evento recorrente (não duplica se importar de ocorrências diferentes).
+  const rrule = recorrenciaRule(ag);
+  const uid = (rrule && ag.recorrencia_id) ? `${ag.recorrencia_id}@imobrottas.app` : `${ag.id}@imobrottas.app`;
   const summary = (tipo?.label || ag.tipo) + (ag.titulo ? ` - ${ag.titulo}` : '');
   const locationParts = [ag.local_visita, ag.imobiliaria, ag.empreendimento].filter(Boolean);
   const description = [
@@ -58,6 +76,7 @@ export function buildIcsForAgendamento(ag) {
     `DTSTAMP:${icsDate(new Date())}`,
     `DTSTART:${icsDate(start)}`,
     `DTEND:${icsDate(end)}`,
+    rrule && `RRULE:${rrule}`,
     `SUMMARY:${icsEscape(summary)}`,
     locationParts.length && `LOCATION:${icsEscape(locationParts.join(' - '))}`,
     `DESCRIPTION:${icsEscape(description)}`,
@@ -108,6 +127,8 @@ export function buildGoogleCalendarUrl(ag) {
     details: details,
     location: location,
   });
+  const rrule = recorrenciaRule(ag);
+  if (rrule) params.set('recur', 'RRULE:' + rrule); // evento recorrente no Google
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 

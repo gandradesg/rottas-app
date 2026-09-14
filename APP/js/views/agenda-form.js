@@ -266,9 +266,36 @@ export async function agendaFormView(params, app) {
       '⚠ Nenhum gerente no seu escopo para agendar. Verifique os cadastros.');
   }
 
+  // === Recorrência (só na CRIAÇÃO) ===
+  // Repete o mesmo agendamento nas próximas datas e sincroniza como evento
+  // recorrente no calendário (RRULE).
+  let recorrenciaSel = null, recTotalWrap = null, recTotalInput = null;
+  if (!id) {
+    recorrenciaSel = el('select', { class: 'select' },
+      el('option', { value: '' }, 'Não repetir'),
+      el('option', { value: 'diaria' }, 'Diária'),
+      el('option', { value: 'semanal' }, 'Semanal'),
+      el('option', { value: 'quinzenal' }, 'Quinzenal (a cada 15 dias)'),
+      el('option', { value: 'mensal' }, 'Mensal'),
+    );
+    recTotalInput = el('input', { class: 'input', type: 'number', min: '2', max: '52', value: '4', inputmode: 'numeric' });
+    recTotalWrap = field('Repetir quantas vezes (contando a 1ª)', recTotalInput, {
+      help: 'Ex.: 4 = a data escolhida + mais 3 ocorrências.',
+    });
+    recTotalWrap.style.display = 'none';
+    recorrenciaSel.addEventListener('change', () => {
+      recTotalWrap.style.display = recorrenciaSel.value ? '' : 'none';
+    });
+  }
+  const recorrenciaField = recorrenciaSel ? field('Repetir (recorrência)', recorrenciaSel, {
+    help: 'Cria o mesmo agendamento nas próximas datas e entra no calendário como evento recorrente.',
+  }) : null;
+
   const form = el('form', { class: 'flex flex-col gap-4' },
     field('Tipo', el('div', { class: 'flex gap-2' }, ...tipoButtons), { required: true }),
     field('Data e hora prevista', dataInput, { required: true }),
+    recorrenciaField,
+    recTotalWrap,
     responsavelField,
     ctx,
     submitBtn, cancelBtn,
@@ -333,11 +360,36 @@ export async function agendaFormView(params, app) {
       // tempo-limite por tentativa. Se a rede travar (iOS suspende), tenta de novo
       // sem duplicar (mesmo id) — resolve o "ficou carregando e não foi".
       const uuid = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
-      const rows = presentes.map(pid => ({ ...payload, gerente_id: pid, id: uuid() }));
+      // Recorrência (só criação): calcula as datas das ocorrências.
+      const freq = (recorrenciaSel && recorrenciaSel.value) ? recorrenciaSel.value : '';
+      const total = freq ? Math.min(Math.max(parseInt(recTotalInput.value, 10) || 1, 1), 52) : 1;
+      const recorrenciaId = freq ? uuid() : null;
+      const base = new Date(dataIso);
+      const dataDaOcorrencia = (i) => {
+        const d = new Date(base);
+        if (freq === 'diaria') d.setDate(d.getDate() + i);
+        else if (freq === 'semanal') d.setDate(d.getDate() + 7 * i);
+        else if (freq === 'quinzenal') d.setDate(d.getDate() + 14 * i);
+        else if (freq === 'mensal') d.setMonth(d.getMonth() + i);
+        return d.toISOString();
+      };
+      // Uma linha por (presente × ocorrência). Campos de recorrência só entram
+      // quando há recorrência (mantém a criação normal à prova de coluna faltando).
+      const rows = [];
+      for (const pid of presentes) {
+        for (let i = 0; i < total; i++) {
+          const row = { ...payload, gerente_id: pid, id: uuid(), data_prevista: dataDaOcorrencia(i) };
+          if (freq) { row.recorrencia_id = recorrenciaId; row.recorrencia_freq = freq; row.recorrencia_total = total; }
+          rows.push(row);
+        }
+      }
       const temIds = rows.every(r => r.id);
       const r = await salvarAgendamentosResiliente(rows, temIds ? 3 : 1);
       if (!r.ok) throw (r.error || new Error('Falha ao salvar'));
-      toast(ehGrupo ? `✓ Agendado para ${rows.length} gerentes!` : '✓ Agendado!', 'success');
+      toast(
+        freq ? `✓ ${total} agendamentos criados (recorrência ${recorrenciaSel.options[recorrenciaSel.selectedIndex].text.toLowerCase()})!`
+             : (ehGrupo ? `✓ Agendado para ${presentes.length} gerentes!` : '✓ Agendado!'),
+        'success');
       navigate('/', true);
     } catch (err) {
       console.error('[agenda] erro:', err);

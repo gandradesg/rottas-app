@@ -605,6 +605,7 @@ async function agendaGerenteView(app) {
           el('span', { class: `chip ${status.chip}` }, status.icon, ' ', status.label),
           item.remarcada && el('span', { class: 'chip chip-yellow text-[10px]' },
             '↻ Remarcada' + (item.remarcacoes > 1 ? ` ${item.remarcacoes}x` : '')),
+          item.recorrencia_freq && el('span', { class: 'chip chip-blue text-[10px]' }, '🔁 Recorrente'),
           respChip,
         ),
         el('div', { class: 'text-xs text-fg-muted mt-0.5' },
