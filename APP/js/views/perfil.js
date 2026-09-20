@@ -238,10 +238,59 @@ export async function perfilView(_params, app) {
     sucesso:     { txt: '✓ Sucesso',    cor: 'text-success' },
     falha:       { txt: '✕ Falha',      cor: 'text-danger' },
   };
+  // Detalhe TÉCNICO completo de uma etapa (é aqui que se vê "o código por trás").
+  function abrirDetalheLog(l) {
+    const linha = (k, v) => v == null || v === '' ? null : el('div', { class: 'flex gap-2 py-1.5 border-b border-border text-xs' },
+      el('span', { class: 'text-fg-muted flex-shrink-0', style: { minWidth: '42%' } }, k),
+      el('span', { class: 'font-mono break-all' }, String(v)),
+    );
+    const bruto = JSON.stringify(l, null, 2);
+    const btnCopiar = el('button', { class: 'btn btn-secondary' }, '📋 Copiar tudo');
+    const btnFechar = el('button', { class: 'btn btn-primary' }, 'Fechar');
+    const m = modal({
+      title: '🔎 Detalhe técnico da etapa',
+      size: 'md',
+      content: el('div', { class: 'flex flex-col' },
+        linha('Etapa', l.etapa),
+        linha('Tipo de registro', l.tipo),
+        linha('Deu certo?', l.ok === null || l.ok === undefined ? '—' : (l.ok ? 'sim' : 'NÃO')),
+        linha('Tentativa', l.tentativa),
+        linha('Duração', l.duracao_ms != null ? `${l.duracao_ms} ms` : null),
+        linha('Quando', fmt.dateTime(l.criado_em)),
+        linha('Usuário', l.user_nome),
+        linha('Estava online?', l.online === null || l.online === undefined ? '—' : (l.online ? 'sim' : 'NÃO (sem internet)')),
+        linha('Versão do app', l.app_version),
+        linha('Aparelho', l.dispositivo),
+        linha('Mensagem do erro', l.erro),
+        linha('Código do erro', l.erro_codigo),
+        linha('Detalhe do erro', l.erro_detalhe),
+        linha('ID do registro (liga as etapas)', l.registro_id),
+        linha('ID do log', l.id),
+        el('div', { class: 'mt-3' },
+          el('div', { class: 'text-xs text-fg-muted mb-1' }, 'Dados brutos (para enviar ao suporte):'),
+          el('pre', {
+            class: 'text-[10px] bg-bg-elev rounded-lg p-2 overflow-x-auto',
+            style: { maxHeight: '11rem', whiteSpace: 'pre-wrap', wordBreak: 'break-all' },
+          }, bruto),
+        ),
+      ),
+      footer: [btnCopiar, btnFechar],
+    });
+    btnFechar.addEventListener('click', () => m.close());
+    btnCopiar.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(bruto); toast('Copiado', 'success', 2000); }
+      catch (e) { toast('Não consegui copiar automaticamente — selecione o texto.', 'warning', 4000); }
+    });
+  }
+
   function logRow(l) {
     const info = ETAPA_INFO[l.etapa] || { txt: l.etapa || '?', cor: 'text-fg-muted' };
     const dur = l.duracao_ms != null ? `${(l.duracao_ms / 1000).toFixed(1)}s` : '';
-    return el('div', { class: 'card p-2.5 flex flex-col gap-0.5' },
+    return el('div', {
+      class: 'card p-2.5 flex flex-col gap-0.5 cursor-pointer hover:bg-bg-elev transition',
+      title: 'Toque para ver o detalhe técnico',
+      onclick: () => abrirDetalheLog(l),
+    },
       el('div', { class: 'flex items-center gap-2 text-sm flex-wrap' },
         el('span', { class: 'font-semibold ' + info.cor }, info.txt),
         el('span', { class: 'text-fg-muted' }, l.tipo || '—'),
@@ -251,8 +300,47 @@ export async function perfilView(_params, app) {
       ),
       el('div', { class: 'text-xs text-fg-muted' },
         (l.user_nome || 'eu') + (l.online === false ? ' · 📵 sem internet' : '') + (l.app_version ? ` · v${l.app_version}` : '')),
-      l.erro ? el('div', { class: 'text-xs text-danger break-words' }, '⚠ ' + l.erro) : null,
+      l.erro ? el('div', { class: 'text-xs text-danger break-words' },
+        '⚠ ' + l.erro + (l.erro_codigo ? ` (código ${l.erro_codigo})` : '')) : null,
+      el('div', { class: 'text-[10px] text-rottas-500' }, 'ver detalhe técnico →'),
     );
+  }
+
+  // Agrupa as etapas de UM registro e mostra a história dele em ordem, dizendo
+  // onde parou. É assim que se enxerga "em que ponto travou".
+  function grupoRow(grupo) {
+    const etapas = grupo.slice().sort((a, b) => String(a.criado_em).localeCompare(String(b.criado_em)));
+    const ultima = etapas[etapas.length - 1];
+    const falhou = etapas.some(e => e.ok === false) || ultima.etapa === 'falha';
+    const concluiu = etapas.some(e => e.etapa === 'sucesso');
+    const totalMs = etapas.reduce((mx, e) => Math.max(mx, e.duracao_ms || 0), 0);
+    const trilha = etapas.map(e => {
+      const inf = ETAPA_INFO[e.etapa] || { txt: e.etapa, cor: '' };
+      const marca = e.ok === false ? '✕' : (e.ok === true ? '✓' : '·');
+      return `${marca} ${inf.txt.replace(/^[✓✕]\s*/, '')}`;
+    }).join('  →  ');
+    const status = concluiu ? { txt: '✓ Concluído', cls: 'text-success' }
+      : falhou ? { txt: '✕ Parou aqui', cls: 'text-danger' }
+      : { txt: '… Sem conclusão', cls: 'text-warning' };
+    const corpo = el('div', { class: 'flex flex-col gap-1.5 mt-2 hidden' },
+      ...etapas.map(e => logRow(e)));
+    const cab = el('button', { class: 'w-full text-left flex flex-col gap-0.5' },
+      el('div', { class: 'flex items-center gap-2 text-sm flex-wrap' },
+        el('span', { class: 'font-semibold ' + status.cls }, status.txt),
+        el('span', { class: 'text-fg-muted' }, ultima.tipo || '—'),
+        el('span', { class: 'chip text-[10px]' }, `${etapas.length} etapa(s)`),
+        totalMs ? el('span', { class: 'text-xs text-fg-subtle' }, `${(totalMs / 1000).toFixed(1)}s`) : null,
+        el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(ultima.criado_em)),
+      ),
+      el('div', { class: 'text-xs text-fg-muted' },
+        (ultima.user_nome || 'eu') + (ultima.online === false ? ' · 📵 sem internet' : '')),
+      el('div', { class: 'text-[11px] text-fg-subtle font-mono break-words' }, trilha),
+      falhou && ultima.erro ? el('div', { class: 'text-xs text-danger break-words' },
+        '⚠ ' + ultima.erro + (ultima.erro_codigo ? ` (código ${ultima.erro_codigo})` : '')) : null,
+      el('div', { class: 'text-[10px] text-rottas-500' }, 'toque para ver as etapas →'),
+    );
+    cab.addEventListener('click', () => corpo.classList.toggle('hidden'));
+    return el('div', { class: 'card p-3' }, cab, corpo);
   }
   async function loadLogs() {
     if (!isM) return;
@@ -276,13 +364,27 @@ export async function perfilView(_params, app) {
     const todos = data || [];
     function pintar() {
       lista.innerHTML = '';
-      const arr = apenasFalhas ? todos.filter(l => l.ok === false || l.etapa === 'falha') : todos;
-      if (!arr.length) {
+      // Agrupa por registro: cada grupo é a HISTÓRIA de um registro (início →
+      // fotos → gravação → confirmação). Etapas antigas (sem registro_id) ficam
+      // cada uma no seu grupo, pra não sumir.
+      const mapa = new Map();
+      todos.forEach(l => {
+        const chave = l.registro_id || ('solto:' + l.id);
+        if (!mapa.has(chave)) mapa.set(chave, []);
+        mapa.get(chave).push(l);
+      });
+      let grupos = [...mapa.values()];
+      if (apenasFalhas) grupos = grupos.filter(g => g.some(l => l.ok === false || l.etapa === 'falha'));
+      // mais recentes primeiro
+      grupos.sort((a, b) => String(b[b.length - 1].criado_em).localeCompare(String(a[a.length - 1].criado_em)));
+      if (!grupos.length) {
         lista.appendChild(el('div', { class: 'text-sm text-fg-muted' },
           apenasFalhas ? 'Nenhuma falha registrada. 🎉' : 'Nenhum log ainda. Assim que a equipe registrar algo, aparece aqui.'));
         return;
       }
-      arr.forEach(l => lista.appendChild(logRow(l)));
+      lista.appendChild(el('div', { class: 'text-xs text-fg-muted' },
+        `${grupos.length} registro(s) · toque num para ver as etapas e o detalhe técnico`));
+      grupos.forEach(g => lista.appendChild(grupoRow(g)));
     }
     btnFalhas.addEventListener('click', () => {
       apenasFalhas = !apenasFalhas;

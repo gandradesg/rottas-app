@@ -25,15 +25,29 @@ function gravarLocal(ev) {
   } catch (e) { /* localStorage cheio/bloqueado: ignora */ }
 }
 
+// Gera o id que liga todas as etapas de UM registro (a "história" dele).
+export function novoRegistroId() {
+  return (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'r-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
 // Registra uma etapa. Nunca lança, nunca espera — é "dispare e esqueça".
-export function logRegistro({ tipo, etapa, ok = null, duracao_ms = null, erro = null, tentativa = null }) {
+export function logRegistro({ tipo, etapa, ok = null, duracao_ms = null, erro = null, tentativa = null, registroId = null }) {
+  // Erros do Supabase/Postgres trazem code/details/hint — é o que explica a
+  // causa técnica real (ex.: 23505 duplicado, 42501 bloqueado por permissão).
+  const cod = erro && (erro.code || erro.status) ? String(erro.code || erro.status) : null;
+  const det = erro && (erro.details || erro.hint)
+    ? String([erro.details, erro.hint].filter(Boolean).join(' | ')).slice(0, 400)
+    : null;
   const ev = {
     tipo: tipo || null,
     etapa: etapa || null,
     ok,
     duracao_ms: duracao_ms == null ? null : Math.round(duracao_ms),
     erro: erro ? String(erro.message || erro).slice(0, 300) : null,
+    erro_codigo: cod,
+    erro_detalhe: det,
     tentativa,
+    registro_id: registroId,
     app_version: APP_VERSION,
     online: typeof navigator !== 'undefined' ? navigator.onLine : null,
     criado_em: new Date().toISOString(),

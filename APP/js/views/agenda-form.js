@@ -5,7 +5,7 @@ import { state, supabase, getScopedImobiliarias } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
-import { logRegistro, cronometro } from '../diag.js';
+import { logRegistro, cronometro, novoRegistroId } from '../diag.js';
 
 // Apenas tipos que fazem sentido planejar com antecedência
 const TIPOS = [
@@ -21,8 +21,10 @@ const PREFILL_DATE_KEY = 'agenda-prefill-date';
 // conexão), tenta de novo sem duplicar. Retorna { ok, error }.
 async function salvarAgendamentosResiliente(rows, tentativas = 3) {
   const ids = rows.map(r => r.id).filter(Boolean);
+  // Liga todas as etapas deste agendamento numa história só (ver Logs no Perfil)
+  const regId = novoRegistroId();
   const tTotal = cronometro();
-  logRegistro({ tipo: 'agendamento', etapa: 'inicio' });
+  logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'inicio' });
   let lastErr = null;
   for (let i = 0; i < tentativas; i++) {
     const tGrav = cronometro();
@@ -36,7 +38,7 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
         // existirem no banco. Evita o "deu tudo certo mas não apareceu na agenda":
         // se a resposta do upsert vier ok mas a linha não persistir/for filtrada,
         // reenvia; se depois de confirmar não achar nada, reporta erro honesto.
-        const okLog = (extra) => { logRegistro({ tipo: 'agendamento', etapa: 'sucesso', ok: true, duracao_ms: tTotal(), tentativa: i + 1, erro: extra || null }); return { ok: true }; };
+        const okLog = (extra) => { logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'sucesso', ok: true, duracao_ms: tTotal(), tentativa: i + 1, erro: extra || null }); return { ok: true }; };
         if (!ids.length) return okLog();
         try {
           const chk = await Promise.race([
@@ -48,19 +50,19 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
           if (achou >= ids.length) return okLog();
           if (achou > 0) return okLog(`parcial ${achou}/${ids.length}`); // gravou parte — não trava
           lastErr = new Error('O agendamento não foi confirmado no servidor'); // 0 confirmadas: reenvia
-          logRegistro({ tipo: 'agendamento', etapa: 'confirmacao', ok: false, duracao_ms: tGrav(), erro: lastErr, tentativa: i + 1 });
+          logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'confirmacao', ok: false, duracao_ms: tGrav(), erro: lastErr, tentativa: i + 1 });
         } catch (e) { return okLog('sem rede para confirmar'); }
       } else {
         lastErr = res.error;
-        logRegistro({ tipo: 'agendamento', etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: res.error, tentativa: i + 1 });
+        logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: res.error, tentativa: i + 1 });
       }
     } catch (e) {
       lastErr = e;
-      logRegistro({ tipo: 'agendamento', etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: e, tentativa: i + 1 });
+      logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: e, tentativa: i + 1 });
     }
     await new Promise(r => setTimeout(r, 1200 * (i + 1)));
   }
-  logRegistro({ tipo: 'agendamento', etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: lastErr });
+  logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: lastErr });
   return { ok: false, error: lastErr };
 }
 

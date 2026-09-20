@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.54';
+export const APP_VERSION = '1.9.55';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.55',
+    date: '20/09/2026',
+    changes: [
+      'LOGS agora contam a HISTÓRIA de cada registro: as etapas (início → fotos → gravação → confirmação) ficam agrupadas, com a trilha visual e o aviso "✕ Parou aqui" no ponto exato onde travou',
+      'Toque numa etapa para ver o DETALHE TÉCNICO: mensagem e CÓDIGO do erro, duração em ms, aparelho, versão, se estava sem internet, e os dados brutos com botão de copiar para enviar ao suporte',
+    ],
+  },
   {
     version: '1.9.54',
     date: '20/09/2026',
