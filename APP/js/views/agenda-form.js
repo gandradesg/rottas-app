@@ -25,7 +25,7 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
     try {
       const res = await Promise.race([
         supabase.from('agendamentos').upsert(rows, { onConflict: 'id', ignoreDuplicates: true }).select('id'),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 9000)),
       ]);
       if (!res.error) {
         // CONFIRMAÇÃO read-after-write: só declara sucesso se as linhas realmente

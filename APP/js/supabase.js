@@ -96,24 +96,54 @@ function avisarTravado() {
   document.body.appendChild(b);
 }
 
-// Executa uma query/promise do Supabase com tempo-limite + auto-recuperação.
-// Uso: const { data, error } = await q(supabase.from('x').select('*'));
-// `error` sempre vem preenchido em caso de falha — nada fica pendurado.
-export async function q(promise, { ms = 12000, label = 'consulta', retry = true } = {}) {
-  const comLimite = (p) => Promise.race([
-    p,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), ms)),
-  ]);
-  try {
-    return await comLimite(promise);
-  } catch (e) {
-    if (!retry) { avisarTravado(); return { data: null, error: e }; }
-    // 1ª falha: tenta consertar a sessão. Se conseguir, quem chamou repete.
-    const ok = await repararSessao();
-    if (!ok) avisarTravado();
-    return { data: null, error: e, sessaoReparada: ok };
+// Executa uma consulta do Supabase com tempo-limite + REPETIÇÃO AUTOMÁTICA.
+//
+// Por que repetir: a causa nº1 do "fica pensando e não vai" depois de alguns
+// minutos parado é a CONEXÃO DE REDE MORRER em silêncio (operadora/roteador
+// derrubam conexões ociosas). O navegador reaproveita essa conexão morta e a
+// requisição fica pendurada por minutos. Ao estourar o tempo e tentar de novo,
+// o navegador abre uma conexão NOVA — e aí funciona na hora.
+//
+// Passe uma FÁBRICA pra permitir a repetição:  q(() => supabase.from('x').select())
+// Passe o builder direto pra NÃO repetir (use em gravações, que não podem duplicar).
+export async function q(fonte, { ms = 10000, label = 'consulta', tentativas = 2 } = {}) {
+  const ehFabrica = typeof fonte === 'function';
+  const max = ehFabrica ? tentativas : 1;   // sem fábrica, não dá pra repetir com segurança
+  let ultimo = null;
+  for (let i = 0; i < max; i++) {
+    try {
+      return await Promise.race([
+        ehFabrica ? fonte() : fonte,
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), ms)),
+      ]);
+    } catch (e) {
+      ultimo = e;
+      if (i === 0) await repararSessao();   // revalida a sessão antes de repetir
+    }
   }
+  avisarTravado();
+  return { data: null, error: ultimo || new Error(`Falha na ${label}`) };
 }
+
+// ─── KEEP-ALIVE ────────────────────────────────────────────────────────────
+// Mantém a conexão viva enquanto o app está na frente: um toque minúsculo no
+// servidor a cada 60s evita que a conexão ociosa seja derrubada (que é o que
+// deixava o app "pensando" depois de poucos minutos parado).
+let _keepAliveTimer = null;
+function pingServidor() {
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+  if (!state.user) return; // só faz sentido logado
+  Promise.race([
+    supabase.from('outros_tipos').select('id').limit(1),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]).catch(() => {});
+}
+export function iniciarKeepAlive() {
+  if (_keepAliveTimer) return;
+  _keepAliveTimer = setInterval(pingServidor, 60000);
+}
+// Liga sozinho logo após o boot (o setTimeout garante que `state` já existe).
+if (typeof window !== 'undefined') setTimeout(iniciarKeepAlive, 5000);
 
 // Ao VOLTAR pro app (aba/PWA que estava em 2º plano), valida a sessão antes das
 // próximas queries. Sem isso, a primeira ação depois de voltar costumava ficar
@@ -318,8 +348,8 @@ export async function getScopedGerenteIds() {
 // skeleton pra sempre, ou mentir "nenhum usuário cadastrado").
 export async function loadAllProfiles() {
   const { data, error } = await q(
-    supabase.from('profiles').select('*').order('nome'),
-    { ms: 15000, label: 'usuários' },
+    () => supabase.from('profiles').select('*').order('nome'),
+    { ms: 10000, label: 'usuários' },
   );
   if (error) { console.error('[profiles]', error); return null; }
   state.profiles = data || [];

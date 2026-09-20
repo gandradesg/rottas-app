@@ -91,8 +91,8 @@ export async function painelGestorView(_params, app) {
   // Com tempo-limite: se travar, o painel ainda abre (sem a lista de gerentes)
   // em vez de a tela inteira ficar em branco pra sempre.
   const { data: gerentes } = await runQuery(
-    supabase.from('profiles').select('*').eq('role', 'gerente').eq('ativo', true).order('nome'),
-    { ms: 12000, label: 'gerentes' },
+    () => supabase.from('profiles').select('*').eq('role', 'gerente').eq('ativo', true).order('nome'),
+    { ms: 10000, label: 'gerentes' },
   );
   (gerentes || []).forEach(g => gerSel.appendChild(el('option', { value: g.id }, g.nome)));
 
@@ -111,7 +111,8 @@ export async function painelGestorView(_params, app) {
     if (filters.empreendimento !== 'todos') q = q.or(`empreendimento.eq.${filters.empreendimento},produto.eq.${filters.empreendimento}`);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
 
-    const { data, error } = await runQuery(q.limit(2000), { ms: 20000, label: 'painel' });
+    const qFinal = q.limit(2000);
+    const { data, error } = await runQuery(() => qFinal, { ms: 15000, label: 'painel' });
     if (error) {
       // Erro visível na tela + "Tentar de novo" (antes o painel ficava vazio).
       dash.innerHTML = '';

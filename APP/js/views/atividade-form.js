@@ -137,7 +137,7 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
     try {
       const res = await Promise.race([
         supabase.from('atividades').upsert(row, { onConflict: 'id' }).select('id'),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (conexão lenta)')), 12000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (conexão lenta)')), 9000)),
       ]);
       if (!res.error) { semErro = true; break; }
       lastErr = res.error; break; // rejeição real do banco (RLS/constraint): não repete

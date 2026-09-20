@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.49';
+export const APP_VERSION = '1.9.50';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.50',
+    date: '20/09/2026',
+    changes: [
+      'TRAVAMENTO APÓS POUCOS MINUTOS: a conexão ociosa era derrubada em silêncio e o app ficava "pensando" pra sempre. Agora o app mantém a conexão viva e, se ela morrer, REFAZ a consulta numa conexão nova automaticamente',
+      'Registro avisa muito mais rápido quando algo falha (antes levava ~45s até dizer qualquer coisa)',
+    ],
+  },
   {
     version: '1.9.49',
     date: '20/09/2026',

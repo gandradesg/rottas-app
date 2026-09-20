@@ -133,9 +133,9 @@ export async function historicoView(_params, app) {
   // estado, gestor_regional os da sua cidade, gestor/master todos).
   if (isTeamView) {
     const { data: gerentes } = await runQuery(
-      supabase.from('profiles').select('id, nome')
+      () => supabase.from('profiles').select('id, nome')
         .in('role', ['gerente', 'supervisor']).eq('ativo', true).order('nome'),
-      { ms: 12000, label: 'gerentes' },
+      { ms: 10000, label: 'gerentes' },
     );
     (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
   }
@@ -170,7 +170,8 @@ export async function historicoView(_params, app) {
       q = q.gte('created_at', d.toISOString());
     }
 
-    const { data, error } = await runQuery(q.limit(500), { ms: 20000, label: 'histórico' });
+    const qFinal = q.limit(500);
+    const { data, error } = await runQuery(() => qFinal, { ms: 15000, label: 'histórico' });
     if (error) {
       console.error(error);
       summary.textContent = '';
