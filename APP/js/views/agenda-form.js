@@ -1,5 +1,5 @@
 // Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
-import { el, icon, toast, loadingBtn } from '../ui.js';
+import { el, icon, toast, loadingBtn, modal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
@@ -410,7 +410,44 @@ export async function agendaFormView(params, app) {
       }
       const temIds = rows.every(r => r.id);
       const r = await salvarAgendamentosResiliente(rows, temIds ? 3 : 1);
-      if (!r.ok) throw (r.error || new Error('Falha ao salvar'));
+      if (!r.ok) {
+        // Não perde o agendamento: oferece guardar no aparelho e enviar depois.
+        loadingBtn(submitBtn, false);
+        const motivo = (r.error && (r.error.message || r.error)) || 'conexão travada';
+        const bTentar = el('button', { class: 'btn btn-primary' }, 'Tentar novamente');
+        const bFila = el('button', { class: 'btn btn-secondary' }, '📥 Salvar no aparelho');
+        const bFechar = el('button', { class: 'btn btn-ghost' }, 'Fechar');
+        const mm = modal({
+          title: '❌ Agendamento não salvo',
+          size: 'sm',
+          content: el('div', { class: 'flex flex-col gap-2' },
+            el('p', { class: 'text-sm text-fg-muted' }, `Não foi possível gravar no servidor (${motivo}).`),
+            el('p', { class: 'text-xs text-fg-subtle' },
+              'Com "Salvar no aparelho", o agendamento fica guardado aqui e sobe sozinho quando a conexão voltar — nada se perde e não duplica.'),
+          ),
+          footer: [bFechar, bFila, bTentar],
+        });
+        bFechar.addEventListener('click', () => mm.close());
+        bTentar.addEventListener('click', () => { mm.close(); form.requestSubmit(); });
+        bFila.addEventListener('click', async () => {
+          mm.close();
+          try {
+            const outbox = await import('../outbox.js');
+            for (const linha of rows) {
+              await outbox.guardar({
+                id: linha.id, tipo: 'agendamento', tabela: 'agendamentos',
+                row: linha, fotos: [], posSync: null,
+                criadoEm: new Date().toISOString(), tentativas: 0,
+              });
+            }
+            toast('📥 Agendamento salvo no aparelho. Sobe sozinho quando a conexão voltar.', 'success', 7000);
+            navigate('/', true);
+          } catch (e) {
+            toast('Não consegui guardar no aparelho: ' + (e.message || e), 'error', 7000);
+          }
+        });
+        return;
+      }
       toast(
         freq ? `✓ ${datas.length} agendamentos criados (${recorrenciaSel.options[recorrenciaSel.selectedIndex].text.toLowerCase()})!`
              : (ehGrupo ? `✓ Agendado para ${presentes.length} gerentes!` : '✓ Agendado!'),

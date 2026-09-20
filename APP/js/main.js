@@ -319,6 +319,10 @@ boot().catch(err => {
   document.getElementById('app').innerHTML = `<div class="p-6 text-center"><p class="text-danger">Erro ao iniciar: ${err.message}</p></div>`;
 });
 
+// FILA OFFLINE: ativa desde o começo pra mostrar o selo "aguardando envio" e
+// reenviar sozinho o que ficou guardado no aparelho.
+import('./outbox.js').catch(() => {});
+
 // Global: re-render ao mudar estado de auth (login/logout em outras abas)
 onStateChange(() => {
   const path = location.hash.slice(1) || '/';

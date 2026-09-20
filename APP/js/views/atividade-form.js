@@ -1,5 +1,5 @@
 // Formulário unificado de atividade - discriminado por tipo
-import { el, icon, toast, loadingBtn, fmt, confirmModal } from '../ui.js';
+import { el, icon, toast, loadingBtn, fmt, confirmModal, modal } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, addOutroTipo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
@@ -686,17 +686,48 @@ export async function atividadeFormView(params, app) {
     // Falha honesta no registro: mostra a etapa/motivo e um botão "Tentar novamente"
     // que re-executa o mesmo envio. O formulário e as fotos permanecem intactos
     // (não navegamos), então o gerente não perde nada.
-    async function tratarFalhaRegistro(r) {
+    // ctx = { payload, files, agendamento } — permite guardar na FILA OFFLINE.
+    async function tratarFalhaRegistro(r, ctx = null) {
       clearTimeout(safetyTimeout);
       loadingBtn(submitBtn, false);
-      const retry = await confirmModal({
+      const btnTentar = el('button', { class: 'btn btn-primary' }, 'Tentar novamente');
+      const btnFila = ctx ? el('button', { class: 'btn btn-secondary' }, '📥 Salvar no aparelho') : null;
+      const btnFechar = el('button', { class: 'btn btn-ghost' }, 'Fechar');
+      const m = modal({
         title: '❌ Atividade não registrada',
-        message: mensagemFalhaRegistro(r),
-        confirmLabel: 'Tentar novamente',
-        cancelLabel: 'Fechar',
-        danger: true,
+        size: 'sm',
+        content: el('div', { class: 'flex flex-col gap-2' },
+          el('p', { class: 'text-fg-muted text-sm' }, mensagemFalhaRegistro(r)),
+          ctx ? el('p', { class: 'text-xs text-fg-subtle' },
+            'Com "Salvar no aparelho", nada se perde: o registro (e as fotos) ficam guardados aqui e são enviados sozinhos assim que a conexão voltar.') : null,
+        ),
+        footer: btnFila ? [btnFechar, btnFila, btnTentar] : [btnFechar, btnTentar],
       });
-      if (retry) form.requestSubmit();
+      btnFechar.addEventListener('click', () => m.close());
+      btnTentar.addEventListener('click', () => { m.close(); form.requestSubmit(); });
+      if (btnFila) btnFila.addEventListener('click', async () => {
+        m.close();
+        try {
+          const outbox = await import('../outbox.js');
+          const novoId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+          await outbox.guardar({
+            id: novoId,
+            tipo: ctx.payload?.tipo || tipo,
+            tabela: 'atividades',
+            row: { ...ctx.payload, id: novoId, fotos: [] },
+            fotos: (ctx.files || []).slice(),
+            posSync: ctx.agendamento
+              ? { agendamentoId: ctx.agendamento.id, grupoId: ctx.agendamento.grupo_id || null }
+              : null,
+            criadoEm: new Date().toISOString(),
+            tentativas: 0,
+          });
+          toast('📥 Salvo no aparelho. Será enviado sozinho quando a conexão voltar.', 'success', 7000);
+          navigate(ctx.agendamento ? '/agenda' : '/', true);
+        } catch (e) {
+          toast('Não consegui guardar no aparelho: ' + (e.message || e), 'error', 7000);
+        }
+      });
     }
 
     const payload = {
@@ -782,7 +813,7 @@ export async function atividadeFormView(params, app) {
               break;
             }
           }
-          if (!r.ok) { await tratarFalhaRegistro(r); return; }
+          if (!r.ok) { await tratarFalhaRegistro(r, { payload, files: semFoto ? [] : files, agendamento }); return; }
           clearTimeout(safetyTimeout);
           if (agendamento) { try { await marcarAgendamentoRealizado(agendamento, r.row.id); } catch (e) {} }
           toast(semFoto ? '✓ Check-in registrado (sem foto).' : '✓ Check-in registrado e confirmado!',
@@ -984,7 +1015,7 @@ export async function atividadeFormView(params, app) {
         // Criação CONFIRMADA: grava e checa no banco que entrou de verdade.
         // Em falha, erro honesto + "Tentar novamente" (não perde o formulário).
         const r = await registrarAtividadeConfirmado(payload, []);
-        if (!r.ok) { await tratarFalhaRegistro(r); return; }
+        if (!r.ok) { await tratarFalhaRegistro(r, { payload, files: [], agendamento }); return; }
         data = [r.row];
       }
       // Edição direta (gestor/master): registra no histórico de auditoria

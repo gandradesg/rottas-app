@@ -1,10 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.51';
+export const APP_VERSION = '1.9.52';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.52',
+    date: '20/09/2026',
+    changes: [
+      'FILA OFFLINE: se a gravação falhar, dá pra "Salvar no aparelho" — o registro E AS FOTOS ficam guardados e sobem sozinhos quando a conexão voltar. Nada se perde',
+      'Selo "📥 N aguardando envio" na tela: toque para VER o que está pendente (assim ninguém registra de novo achando que não foi) e enviar na hora',
+      'Reenvio é idempotente: o mesmo registro nunca vira dois',
+    ],
+  },
   {
     version: '1.9.51',
     date: '20/09/2026',
