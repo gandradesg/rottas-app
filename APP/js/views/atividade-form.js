@@ -4,6 +4,7 @@ import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, addOutroTipo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
+import { logRegistro, cronometro } from '../diag.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { audioField } from '../components/audio-field.js';
@@ -112,6 +113,9 @@ async function uploadPhotosResiliente(files, tentativas = 3) {
 async function registrarAtividadeConfirmado(payload, files, opts = {}) {
   const { permitirSemFoto = false } = opts;
   const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+  const tipoLog = payload?.tipo || 'atividade';
+  const tTotal = cronometro();
+  logRegistro({ tipo: tipoLog, etapa: 'inicio' });
 
   // 1) FOTOS primeiro. Se falharem (rede, HEIC, etc.) e o usuário AINDA não tiver
   // decidido, NÃO grava nada — devolve etapa:'fotos' pra quem chamou perguntar:
@@ -120,8 +124,12 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
   let fotos = Array.isArray(payload.fotos) ? payload.fotos : [];
   let semFoto = false;
   if (files && files.length) {
-    try { fotos = await uploadPhotosResiliente(files, 3); }
-    catch (e) {
+    const tFotos = cronometro();
+    try {
+      fotos = await uploadPhotosResiliente(files, 3);
+      logRegistro({ tipo: tipoLog, etapa: 'fotos', ok: true, duracao_ms: tFotos() });
+    } catch (e) {
+      logRegistro({ tipo: tipoLog, etapa: 'fotos', ok: false, duracao_ms: tFotos(), erro: e });
       if (!permitirSemFoto) return { ok: false, etapa: 'fotos', error: e };
       semFoto = true; fotos = [];
     }
@@ -134,33 +142,57 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
   const tentativas = newId ? 3 : 1;
   let lastErr = null, semErro = false;
   for (let i = 0; i < tentativas; i++) {
+    const tGrav = cronometro();
     try {
       const res = await Promise.race([
         supabase.from('atividades').upsert(row, { onConflict: 'id' }).select('id'),
         new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (conexão lenta)')), 9000)),
       ]);
-      if (!res.error) { semErro = true; break; }
-      lastErr = res.error; break; // rejeição real do banco (RLS/constraint): não repete
-    } catch (e) { lastErr = e; } // timeout/rede: tenta de novo (mesmo id, não duplica)
+      if (!res.error) {
+        semErro = true;
+        logRegistro({ tipo: tipoLog, etapa: 'gravacao', ok: true, duracao_ms: tGrav(), tentativa: i + 1 });
+        break;
+      }
+      lastErr = res.error;
+      logRegistro({ tipo: tipoLog, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: res.error, tentativa: i + 1 });
+      break; // rejeição real do banco (RLS/constraint): não repete
+    } catch (e) {
+      lastErr = e; // timeout/rede: tenta de novo (mesmo id, não duplica)
+      logRegistro({ tipo: tipoLog, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: e, tentativa: i + 1 });
+    }
     await new Promise(r => setTimeout(r, 1200 * (i + 1)));
   }
 
   // 3) CONFIRMAÇÃO read-after-write. Mesmo que o upsert tenha dado "timeout", a
   //    linha pode ter entrado — então a verdade é o que está no banco.
   if (newId) {
+    const tConf = cronometro();
     try {
       const chk = await Promise.race([
         supabase.from('atividades').select('id, fotos').eq('id', newId).maybeSingle(),
         new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 8000)),
       ]);
-      if (chk.error) return { ok: false, etapa: 'confirmacao', error: chk.error };
-      if (chk.data && chk.data.id) return { ok: true, row: chk.data, semFoto };
-      return { ok: false, etapa: 'gravacao', error: lastErr || new Error('a atividade não apareceu no banco') };
+      if (chk.error) {
+        logRegistro({ tipo: tipoLog, etapa: 'confirmacao', ok: false, duracao_ms: tConf(), erro: chk.error });
+        logRegistro({ tipo: tipoLog, etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: chk.error });
+        return { ok: false, etapa: 'confirmacao', error: chk.error };
+      }
+      if (chk.data && chk.data.id) {
+        logRegistro({ tipo: tipoLog, etapa: 'confirmacao', ok: true, duracao_ms: tConf() });
+        logRegistro({ tipo: tipoLog, etapa: 'sucesso', ok: true, duracao_ms: tTotal() });
+        return { ok: true, row: chk.data, semFoto };
+      }
+      const semLinha = lastErr || new Error('a atividade não apareceu no banco');
+      logRegistro({ tipo: tipoLog, etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: semLinha });
+      return { ok: false, etapa: 'gravacao', error: semLinha };
     } catch (e) {
+      logRegistro({ tipo: tipoLog, etapa: 'confirmacao', ok: false, duracao_ms: tConf(), erro: e });
+      logRegistro({ tipo: tipoLog, etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: e });
       return { ok: false, etapa: 'confirmacao', error: e };
     }
   }
   // Navegador sem crypto.randomUUID (raro): confia no upsert sem erro
+  logRegistro({ tipo: tipoLog, etapa: semErro ? 'sucesso' : 'falha', ok: semErro, duracao_ms: tTotal(), erro: semErro ? null : lastErr });
   return semErro ? { ok: true, row: { id: null, fotos }, semFoto } : { ok: false, etapa: 'gravacao', error: lastErr };
 }
 

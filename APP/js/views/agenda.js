@@ -7,6 +7,55 @@ import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { calendarButton } from '../calendar-sync.js';
 
+// Janela "Ver detalhes": mostra TODAS as informações do agendamento.
+// Disponível para Master/Gestor/Superintendente/Gestor Regional (inspeção).
+const ROTULOS_AG = {
+  tipo: 'Tipo', status: 'Status', data_prevista: 'Data prevista', titulo: 'Título',
+  imobiliaria: 'Imobiliária', local_visita: 'Local da visita', empreendimento: 'Empreendimento',
+  cliente: 'Cliente', corretor: 'Corretor', motivo_visita: 'Motivo da visita',
+  observacoes: 'Observações', motivo_cancelamento: 'Motivo do cancelamento',
+  remarcada: 'Remarcada', remarcacoes: 'Nº de remarcações',
+  data_prevista_original: 'Data prevista original', realizado_em: 'Realizado em',
+  recorrencia_freq: 'Recorrência', recorrencia_total: 'Ocorrências da série',
+  teste: 'Registro de teste', created_at: 'Criado em', updated_at: 'Atualizado em',
+};
+const DATAS_AG = new Set(['data_prevista', 'data_prevista_original', 'realizado_em', 'created_at', 'updated_at']);
+
+export function abrirDetalhesAgendamento(item) {
+  const linha = (rotulo, valor) => el('div', { class: 'flex gap-2 py-1.5 border-b border-border text-sm' },
+    el('span', { class: 'text-fg-muted flex-shrink-0', style: { minWidth: '44%' } }, rotulo),
+    el('span', { class: 'font-medium break-words' }, valor),
+  );
+  const linhas = [];
+  linhas.push(linha('Responsável', item.profiles?.nome || '—'));
+  for (const [campo, rotulo] of Object.entries(ROTULOS_AG)) {
+    let v = item[campo];
+    if (v === null || v === undefined || v === '' || v === false) continue;
+    if (DATAS_AG.has(campo)) v = fmt.dateTime(v);
+    else if (v === true) v = 'Sim';
+    else if (campo === 'tipo') v = (TIPO_ATIVIDADE[v]?.label || v);
+    else if (campo === 'status') v = (STATUS_INFO[v]?.label || v);
+    linhas.push(linha(rotulo, String(v)));
+  }
+  if (Array.isArray(item.participantes) && item.participantes.length > 1) {
+    linhas.push(linha('Participantes', `${item.participantes.length} pessoas (agenda compartilhada)`));
+  }
+  linhas.push(linha('ID do agendamento', item.id));
+  if (item.atividade_id) linhas.push(linha('ID da atividade gerada', item.atividade_id));
+
+  const fechar = el('button', { class: 'btn btn-primary' }, 'Fechar');
+  const verAtividade = item.atividade_id
+    ? el('button', { class: 'btn btn-secondary', onclick: () => { m.close(); navigate(`/atividade/${item.atividade_id}`); } }, 'Abrir atividade')
+    : null;
+  const m = modal({
+    title: '📋 Detalhes do agendamento',
+    size: 'md',
+    content: el('div', { class: 'flex flex-col' }, ...linhas),
+    footer: verAtividade ? [verAtividade, fechar] : [fechar],
+  });
+  fechar.addEventListener('click', () => m.close());
+}
+
 const STATUS_INFO = {
   pendente:   { label: 'Pendente',   chip: 'chip-yellow', icon: '⏳' },
   realizado:  { label: 'Realizado',  chip: 'chip-green',  icon: '✓'  },
@@ -623,6 +672,15 @@ async function agendaGerenteView(app) {
     ));
 
     const actions = el('div', { class: 'flex gap-1.5 flex-wrap' });
+    // Ver detalhes completos — Master/Gestor/Superintendente/Gestor Regional.
+    // Aparece em qualquer status (pendente, realizado, cancelado).
+    if (isAdmin()) {
+      actions.appendChild(el('button', {
+        class: 'btn btn-secondary btn-sm flex items-center gap-1.5',
+        title: 'Ver todas as informações deste agendamento',
+        onclick: () => abrirDetalhesAgendamento(item),
+      }, icon('fileText', 14), 'Ver detalhes'));
+    }
     // Ações na própria agenda/equipe. Admin (ex.: Master na visão Gerente) age em
     // qualquer agenda (inspeção/teste). Gerente comum só lê a agenda de colega.
     if (viewFilter === 'minha' || isAdmin()) {

@@ -1,7 +1,7 @@
 // Perfil do usuário: ver/editar dados, alterar senha, configurar Whisper, logout
 import { el, icon, toast, loadingBtn, fmt, modal, confirmModal } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, q as runQuery } from '../supabase.js';
 import { signOut, setPassword, isMaster } from '../auth.js';
 import { ESTADOS_BR, APP_VERSION, ROLES } from '../config.js';
 import { navigate } from '../router.js';
@@ -228,6 +228,70 @@ export async function perfilView(_params, app) {
       changes.length ? el('div', { class: 'flex flex-col gap-0.5 mt-0.5' }, ...changes) : null,
     );
   }
+  // ── Logs de registro (diagnóstico) ────────────────────────────────────────
+  const logsWrap = isM ? el('div', { class: 'flex flex-col gap-2' }) : null;
+  const ETAPA_INFO = {
+    inicio:      { txt: 'Início',       cor: 'text-fg-muted' },
+    fotos:       { txt: 'Fotos',        cor: 'text-info' },
+    gravacao:    { txt: 'Gravação',     cor: 'text-warning' },
+    confirmacao: { txt: 'Confirmação',  cor: 'text-warning' },
+    sucesso:     { txt: '✓ Sucesso',    cor: 'text-success' },
+    falha:       { txt: '✕ Falha',      cor: 'text-danger' },
+  };
+  function logRow(l) {
+    const info = ETAPA_INFO[l.etapa] || { txt: l.etapa || '?', cor: 'text-fg-muted' };
+    const dur = l.duracao_ms != null ? `${(l.duracao_ms / 1000).toFixed(1)}s` : '';
+    return el('div', { class: 'card p-2.5 flex flex-col gap-0.5' },
+      el('div', { class: 'flex items-center gap-2 text-sm flex-wrap' },
+        el('span', { class: 'font-semibold ' + info.cor }, info.txt),
+        el('span', { class: 'text-fg-muted' }, l.tipo || '—'),
+        l.tentativa ? el('span', { class: 'chip text-[10px]' }, `tentativa ${l.tentativa}`) : null,
+        dur ? el('span', { class: 'text-xs text-fg-subtle' }, dur) : null,
+        el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(l.criado_em)),
+      ),
+      el('div', { class: 'text-xs text-fg-muted' },
+        (l.user_nome || 'eu') + (l.online === false ? ' · 📵 sem internet' : '') + (l.app_version ? ` · v${l.app_version}` : '')),
+      l.erro ? el('div', { class: 'text-xs text-danger break-words' }, '⚠ ' + l.erro) : null,
+    );
+  }
+  async function loadLogs() {
+    if (!isM) return;
+    logsWrap.innerHTML = '';
+    logsWrap.appendChild(el('div', { class: 'text-xs text-fg-muted' }, 'Carregando...'));
+    const { data, error } = await runQuery(
+      () => supabase.from('registro_logs').select('*').order('criado_em', { ascending: false }).limit(200),
+      { ms: 12000, label: 'logs' },
+    );
+    logsWrap.innerHTML = '';
+    // Barra de ações (atualizar + só falhas)
+    let apenasFalhas = false;
+    const btnAtualizar = el('button', { class: 'btn btn-secondary btn-sm', onclick: () => loadLogs() }, '↻ Atualizar');
+    const btnFalhas = el('button', { class: 'btn btn-ghost btn-sm' }, 'Mostrar só as falhas');
+    const lista = el('div', { class: 'flex flex-col gap-2 mt-2 max-h-[28rem] overflow-y-auto' });
+    logsWrap.append(el('div', { class: 'flex gap-2 flex-wrap' }, btnAtualizar, btnFalhas), lista);
+    if (error) {
+      lista.appendChild(el('div', { class: 'text-sm text-danger' }, 'Não foi possível carregar os logs: ' + (error.message || '')));
+      return;
+    }
+    const todos = data || [];
+    function pintar() {
+      lista.innerHTML = '';
+      const arr = apenasFalhas ? todos.filter(l => l.ok === false || l.etapa === 'falha') : todos;
+      if (!arr.length) {
+        lista.appendChild(el('div', { class: 'text-sm text-fg-muted' },
+          apenasFalhas ? 'Nenhuma falha registrada. 🎉' : 'Nenhum log ainda. Assim que a equipe registrar algo, aparece aqui.'));
+        return;
+      }
+      arr.forEach(l => lista.appendChild(logRow(l)));
+    }
+    btnFalhas.addEventListener('click', () => {
+      apenasFalhas = !apenasFalhas;
+      btnFalhas.textContent = apenasFalhas ? 'Mostrar todos' : 'Mostrar só as falhas';
+      pintar();
+    });
+    pintar();
+  }
+
   async function loadHistorico() {
     if (!isM) return;
     const { data, error } = await supabase.from('atividades_historico').select('*').order('em', { ascending: false }).limit(300);
@@ -302,6 +366,14 @@ export async function perfilView(_params, app) {
       histWrap,
     ),
 
+    // Logs de registro (diagnóstico — hierarquia)
+    isM && el('div', { class: 'card p-4' },
+      el('h2', { class: 'font-bold' }, '🩺 Logs de registro (diagnóstico)'),
+      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
+        'Cada etapa dos registros da equipe (início → fotos → gravação → confirmação) com o tempo que levou e o erro real. Serve para ver EM QUE PONTO um registro travou.'),
+      logsWrap,
+    ),
+
     // Whisper (só para master)
     isMaster() && el('div', { class: 'card p-4' },
       el('h2', { class: 'font-bold' }, 'Transcrição de áudio'),
@@ -348,4 +420,5 @@ export async function perfilView(_params, app) {
   loadMinhas();
   loadTodas();
   loadHistorico();
+  loadLogs();
 }

@@ -5,6 +5,7 @@ import { state, supabase, getScopedImobiliarias } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
+import { logRegistro, cronometro } from '../diag.js';
 
 // Apenas tipos que fazem sentido planejar com antecedência
 const TIPOS = [
@@ -20,8 +21,11 @@ const PREFILL_DATE_KEY = 'agenda-prefill-date';
 // conexão), tenta de novo sem duplicar. Retorna { ok, error }.
 async function salvarAgendamentosResiliente(rows, tentativas = 3) {
   const ids = rows.map(r => r.id).filter(Boolean);
+  const tTotal = cronometro();
+  logRegistro({ tipo: 'agendamento', etapa: 'inicio' });
   let lastErr = null;
   for (let i = 0; i < tentativas; i++) {
+    const tGrav = cronometro();
     try {
       const res = await Promise.race([
         supabase.from('agendamentos').upsert(rows, { onConflict: 'id', ignoreDuplicates: true }).select('id'),
@@ -32,22 +36,31 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
         // existirem no banco. Evita o "deu tudo certo mas não apareceu na agenda":
         // se a resposta do upsert vier ok mas a linha não persistir/for filtrada,
         // reenvia; se depois de confirmar não achar nada, reporta erro honesto.
-        if (!ids.length) return { ok: true };
+        const okLog = (extra) => { logRegistro({ tipo: 'agendamento', etapa: 'sucesso', ok: true, duracao_ms: tTotal(), tentativa: i + 1, erro: extra || null }); return { ok: true }; };
+        if (!ids.length) return okLog();
         try {
           const chk = await Promise.race([
             supabase.from('agendamentos').select('id').in('id', ids),
             new Promise((_, rej) => setTimeout(() => rej(new Error('to')), 6000)),
           ]);
-          if (chk.error) return { ok: true }; // não deu pra checar: aceita o upsert sem erro
+          if (chk.error) return okLog('confirmacao indisponivel'); // não deu pra checar: aceita
           const achou = (chk.data || []).length;
-          if (achou >= ids.length) return { ok: true };
-          if (achou > 0) return { ok: true }; // gravou ao menos parte — não trava
+          if (achou >= ids.length) return okLog();
+          if (achou > 0) return okLog(`parcial ${achou}/${ids.length}`); // gravou parte — não trava
           lastErr = new Error('O agendamento não foi confirmado no servidor'); // 0 confirmadas: reenvia
-        } catch (e) { return { ok: true }; } // sem rede pra checar: aceita
-      } else lastErr = res.error;
-    } catch (e) { lastErr = e; }
+          logRegistro({ tipo: 'agendamento', etapa: 'confirmacao', ok: false, duracao_ms: tGrav(), erro: lastErr, tentativa: i + 1 });
+        } catch (e) { return okLog('sem rede para confirmar'); }
+      } else {
+        lastErr = res.error;
+        logRegistro({ tipo: 'agendamento', etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: res.error, tentativa: i + 1 });
+      }
+    } catch (e) {
+      lastErr = e;
+      logRegistro({ tipo: 'agendamento', etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: e, tentativa: i + 1 });
+    }
     await new Promise(r => setTimeout(r, 1200 * (i + 1)));
   }
+  logRegistro({ tipo: 'agendamento', etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: lastErr });
   return { ok: false, error: lastErr };
 }
 

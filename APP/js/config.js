@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.50';
+export const APP_VERSION = '1.9.51';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.51',
+    date: '20/09/2026',
+    changes: [
+      'VER DETALHES: na agenda, Master/Gestor/Superintendente/Gestor Regional têm um botão que abre TODAS as informações do agendamento (inclusive IDs e datas de criação)',
+      'LOGS DE REGISTRO: nova seção no Perfil mostra cada etapa dos registros da equipe (início → fotos → gravação → confirmação), com o tempo de cada uma e o erro real — dá pra ver exatamente onde travou, com filtro "só as falhas"',
+    ],
+  },
   {
     version: '1.9.50',
     date: '20/09/2026',
