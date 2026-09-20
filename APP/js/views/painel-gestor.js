@@ -1,7 +1,7 @@
 // Painel do Gestor (Master) - visão consolidada de todos os gerentes
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase, getScopedImobiliarias } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias, q as runQuery } from '../supabase.js';
 import { addImobiliaria } from '../components/form-fields.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, ESTADOS_BR } from '../config.js';
@@ -88,8 +88,12 @@ export async function painelGestorView(_params, app) {
   content.appendChild(dash);
 
   // Carrega gerentes (só quem registra atividades)
-  const { data: gerentes } = await supabase.from('profiles')
-    .select('*').eq('role', 'gerente').eq('ativo', true).order('nome');
+  // Com tempo-limite: se travar, o painel ainda abre (sem a lista de gerentes)
+  // em vez de a tela inteira ficar em branco pra sempre.
+  const { data: gerentes } = await runQuery(
+    supabase.from('profiles').select('*').eq('role', 'gerente').eq('ativo', true).order('nome'),
+    { ms: 12000, label: 'gerentes' },
+  );
   (gerentes || []).forEach(g => gerSel.appendChild(el('option', { value: g.id }, g.nome)));
 
   let baseAtividades = [];
@@ -107,8 +111,17 @@ export async function painelGestorView(_params, app) {
     if (filters.empreendimento !== 'todos') q = q.or(`empreendimento.eq.${filters.empreendimento},produto.eq.${filters.empreendimento}`);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
 
-    const { data, error } = await q.limit(2000);
-    if (error) { toast(error.message, 'error'); return; }
+    const { data, error } = await runQuery(q.limit(2000), { ms: 20000, label: 'painel' });
+    if (error) {
+      // Erro visível na tela + "Tentar de novo" (antes o painel ficava vazio).
+      dash.innerHTML = '';
+      dash.appendChild(el('div', { class: 'card p-4 flex flex-col gap-2 text-sm' },
+        el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar o painel.'),
+        el('div', { class: 'text-fg-muted' }, error.message || 'A conexão demorou demais.'),
+        el('button', { class: 'btn btn-secondary btn-sm self-start', onclick: () => reload() }, '↻ Tentar de novo'),
+      ));
+      return;
+    }
     let filtered = data;
     if (filters.estado !== 'todos') {
       filtered = filtered.filter(a => a.profiles?.estado === filters.estado);

@@ -2,19 +2,30 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
 
-// Lock à prova de deadlock: o supabase-js usa navigator.locks pra serializar o
-// refresh de token entre abas, mas essa trava pode ficar PRESA (deadlock) e
-// travar getSession()/todas as queries — deixando o app no "Carregando..." e
-// congelando cadastros. Aqui usamos o lock só se estiver livre (ifAvailable);
-// se estiver ocupado/preso, seguimos em frente em vez de esperar pra sempre.
-async function safeLock(name, _acquireTimeout, fn) {
-  try {
-    if (!navigator?.locks?.request) return await fn();
-    return await navigator.locks.request(name, { ifAvailable: true }, async () => await fn());
-  } catch (e) {
-    // qualquer falha na trava não pode impedir a operação
-    return await fn();
-  }
+// ─── TRAVA DE SESSÃO (serialização do refresh de token) ────────────────────
+// CAUSA RAIZ do bug "depois de um tempo tudo trava e só F5 resolve":
+// o supabase-js usa uma trava pra garantir que só UMA renovação de token rode
+// por vez. A versão anterior daqui usava navigator.locks com `ifAvailable`, o
+// que na prática DESLIGAVA a serialização: quando o token expirava, várias
+// renovações disparavam ao mesmo tempo com o MESMO refresh token. Como o
+// Supabase rotaciona esse token (uso único), uma renovação invalidava a outra e
+// a sessão ficava num estado quebrado — aí TODA query ficava pendurada
+// (Usuários/Painel/Histórico vazios, registro girando pra sempre).
+//
+// Aqui usamos uma fila em memória: as operações rodam UMA DE CADA VEZ, na ordem.
+// E, pra nunca repetir o problema oposto (deadlock), a fila anda sozinha depois
+// de 35s mesmo se uma operação ficar pendurada. 35s é DE PROPÓSITO maior que o
+// tempo-limite do fetch (30s): assim a requisição já foi abortada antes de a
+// fila liberar a próxima — nunca há duas renovações de token ao mesmo tempo.
+let _filaSessao = Promise.resolve();
+function serialLock(_name, _acquireTimeout, fn) {
+  const exec = () => fn();
+  const resultado = _filaSessao.then(exec, exec);
+  _filaSessao = Promise.race([
+    resultado.then(() => {}, () => {}),          // segue quando terminar (ok ou erro)
+    new Promise((r) => setTimeout(r, 35000)),    // ...ou depois de 35s, sem travar a fila
+  ]);
+  return resultado;
 }
 
 // Fetch com timeout GLOBAL: a causa nº1 de "tela carregando pra sempre" é uma
@@ -27,7 +38,7 @@ function fetchWithTimeout(input, init = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => {
     try { ctrl.abort(new DOMException('Tempo esgotado', 'AbortError')); } catch { ctrl.abort(); }
-  }, 45000);
+  }, 30000);
   // Encadeia com um signal externo, se houver
   if (init.signal) {
     if (init.signal.aborted) ctrl.abort();
@@ -43,10 +54,79 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
     detectSessionInUrl: true,
     storage: window.localStorage,
     storageKey: 'rottas-app-auth',
-    lock: safeLock,
+    lock: serialLock,
   },
   global: { fetch: fetchWithTimeout },
 });
+
+// ─── SAÚDE DA CONEXÃO / AUTO-RECUPERAÇÃO ───────────────────────────────────
+// Toda query passa por `q()`. Se ela estourar o tempo, tentamos CONSERTAR a
+// sessão (renovar o token) e repetir uma vez. Se ainda assim falhar, marcamos o
+// app como "travado" e mostramos um aviso com "Reconectar" — em vez de deixar a
+// tela girando pra sempre (que era o que obrigava o usuário a dar F5).
+let _consertando = null;
+export async function repararSessao() {
+  if (_consertando) return _consertando;           // um conserto por vez
+  _consertando = (async () => {
+    try {
+      const r = await Promise.race([
+        supabase.auth.refreshSession(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+      ]);
+      return !!(r && r.data && r.data.session);
+    } catch (e) { return false; }
+    finally { setTimeout(() => { _consertando = null; }, 1000); }
+  })();
+  return _consertando;
+}
+
+// Mostra (uma vez) o aviso de conexão travada com botão de reconectar.
+function avisarTravado() {
+  if (document.getElementById('conn-banner')) return;
+  const b = document.createElement('div');
+  b.id = 'conn-banner';
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#B91C1C;color:#fff;padding:10px 14px;font:14px/1.4 sans-serif;display:flex;gap:10px;align-items:center;justify-content:space-between;';
+  b.innerHTML = '<div><b>Conexão travada.</b> Toque em Reconectar para voltar a salvar/carregar.</div>'
+    + '<button style="background:#fff;color:#B91C1C;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">Reconectar</button>';
+  b.querySelector('button').onclick = async () => {
+    b.querySelector('button').textContent = 'Reconectando...';
+    try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+    location.reload();
+  };
+  document.body.appendChild(b);
+}
+
+// Executa uma query/promise do Supabase com tempo-limite + auto-recuperação.
+// Uso: const { data, error } = await q(supabase.from('x').select('*'));
+// `error` sempre vem preenchido em caso de falha — nada fica pendurado.
+export async function q(promise, { ms = 12000, label = 'consulta', retry = true } = {}) {
+  const comLimite = (p) => Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), ms)),
+  ]);
+  try {
+    return await comLimite(promise);
+  } catch (e) {
+    if (!retry) { avisarTravado(); return { data: null, error: e }; }
+    // 1ª falha: tenta consertar a sessão. Se conseguir, quem chamou repete.
+    const ok = await repararSessao();
+    if (!ok) avisarTravado();
+    return { data: null, error: e, sessaoReparada: ok };
+  }
+}
+
+// Ao VOLTAR pro app (aba/PWA que estava em 2º plano), valida a sessão antes das
+// próximas queries. Sem isso, a primeira ação depois de voltar costumava ficar
+// pendurada esperando um refresh de token que nunca completava.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise((r) => setTimeout(r, 6000)),
+    ]).catch(() => {});
+  });
+}
 
 // Estado global da aplicação
 export const state = {
@@ -233,12 +313,15 @@ export async function getScopedGerenteIds() {
 }
 
 // Helper: carrega todos os profiles (apenas master)
+// Devolve o array de profiles, ou NULL quando a consulta falha/estoura o tempo
+// (a tela usa isso pra mostrar erro + "Tentar de novo" em vez de ficar no
+// skeleton pra sempre, ou mentir "nenhum usuário cadastrado").
 export async function loadAllProfiles() {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .order('nome');
-  if (error) { console.error(error); return []; }
+  const { data, error } = await q(
+    supabase.from('profiles').select('*').order('nome'),
+    { ms: 15000, label: 'usuários' },
+  );
+  if (error) { console.error('[profiles]', error); return null; }
   state.profiles = data || [];
   emitStateChange();
   return data;

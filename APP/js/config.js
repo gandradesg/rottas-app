@@ -1,10 +1,20 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.48';
+export const APP_VERSION = '1.9.49';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.49',
+    date: '20/09/2026',
+    changes: [
+      'CORREÇÃO DE RAIZ do travamento: a renovação do login podia rodar várias vezes ao mesmo tempo e quebrar a sessão — daí TUDO travava (registro girando, Usuários/Painel/Histórico vazios) e só F5 resolvia. Agora a renovação é serializada e o app se reconecta sozinho',
+      'Nenhuma tela fica mais "carregando pra sempre": Usuários, Painel e Histórico agora mostram erro com "Tentar de novo" se a conexão falhar',
+      'Cadastros em Listas não "mentem" mais: se a gravação travar, o item é desfeito na tela e aparece o aviso de que NÃO salvou',
+      'Aviso "Conexão travada — Reconectar" quando a conexão morre, em vez de deixar o app mudo',
+    ],
+  },
   {
     version: '1.9.48',
     date: '14/09/2026',

@@ -1,7 +1,7 @@
 // Histórico de atividades - para o Gerente vê suas próprias, Master vê todas
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, q as runQuery } from '../supabase.js';
 import { isAdmin, activeViewRole } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -132,8 +132,11 @@ export async function historicoView(_params, app) {
   // Carrega gerentes para o filtro (RLS escopa: superintendente vê os do seu
   // estado, gestor_regional os da sua cidade, gestor/master todos).
   if (isTeamView) {
-    const { data: gerentes } = await supabase.from('profiles').select('id, nome')
-      .in('role', ['gerente', 'supervisor']).eq('ativo', true).order('nome');
+    const { data: gerentes } = await runQuery(
+      supabase.from('profiles').select('id, nome')
+        .in('role', ['gerente', 'supervisor']).eq('ativo', true).order('nome'),
+      { ms: 12000, label: 'gerentes' },
+    );
     (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
   }
 
@@ -167,10 +170,16 @@ export async function historicoView(_params, app) {
       q = q.gte('created_at', d.toISOString());
     }
 
-    const { data, error } = await q.limit(500);
+    const { data, error } = await runQuery(q.limit(500), { ms: 20000, label: 'histórico' });
     if (error) {
       console.error(error);
-      summary.textContent = 'Erro: ' + error.message;
+      summary.textContent = '';
+      list.innerHTML = '';
+      list.appendChild(el('div', { class: 'card p-4 flex flex-col gap-2 text-sm' },
+        el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar o histórico.'),
+        el('div', { class: 'text-fg-muted' }, error.message || 'A conexão demorou demais.'),
+        el('button', { class: 'btn btn-secondary btn-sm self-start', onclick: () => reload() }, '↻ Tentar de novo'),
+      ));
       return;
     }
     let filtered = data;

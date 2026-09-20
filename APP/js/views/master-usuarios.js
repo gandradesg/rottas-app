@@ -81,6 +81,17 @@ async function reload() {
   if (!listEl) return;
   if (!listEl.children.length) listEl.innerHTML = '<div class="skeleton h-20"></div>';
   const allProfiles = await loadAllProfiles();
+  // null = a consulta falhou/estourou o tempo. Mostra erro + "Tentar de novo"
+  // em vez de ficar no skeleton pra sempre (era preciso dar F5).
+  if (allProfiles === null) {
+    listEl.innerHTML = '';
+    listEl.appendChild(el('div', { class: 'card p-4 flex flex-col gap-2 text-sm' },
+      el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar os usuários.'),
+      el('div', { class: 'text-fg-muted' }, 'A conexão com o servidor demorou demais.'),
+      el('button', { class: 'btn btn-secondary btn-sm self-start', onclick: () => reload() }, '↻ Tentar de novo'),
+    ));
+    return;
+  }
   // Filtra a lista: usuario so ve quem pode gerenciar
   const profiles = allProfiles.filter(p => canManageProfile(p));
   listEl.innerHTML = '';
