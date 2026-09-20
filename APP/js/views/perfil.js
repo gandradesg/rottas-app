@@ -1,5 +1,5 @@
 // Perfil do usuário: ver/editar dados, alterar senha, configurar Whisper, logout
-import { el, icon, toast, loadingBtn, fmt, modal, confirmModal } from '../ui.js';
+import { el, icon, toast, loadingBtn, fmt, modal, confirmModal, secaoRecolhivel } from '../ui.js';
 import { shell } from './shell.js';
 import { state, supabase, q as runQuery } from '../supabase.js';
 import { signOut, setPassword, isMaster } from '../auth.js';
@@ -302,6 +302,74 @@ export async function perfilView(_params, app) {
     data.forEach(h => histWrap.appendChild(histCard(h)));
   }
 
+  // ── Seções recolhíveis ────────────────────────────────────────────────────
+  // Todas começam FECHADAS (a tela fica limpa) e há um botão pra abrir/fechar
+  // todas de uma vez.
+  const secoes = [
+    secaoRecolhivel({
+      titulo: 'Meus dados',
+      conteudo: el('div', { class: 'flex flex-col gap-3' },
+        el('div', {}, el('label', { class: 'label' }, 'Nome'), nome),
+        el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
+        el('div', { class: 'grid grid-cols-3 gap-2' },
+          el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade'), cidade, cidadeDL),
+          el('div', {}, el('label', { class: 'label' }, 'UF'), estado),
+        ),
+        saveBtn,
+      ),
+    }),
+    secaoRecolhivel({
+      titulo: 'Senha',
+      conteudo: el('div', { class: 'flex flex-col gap-3' }, newPwd, confirmPwd, pwdBtn),
+    }),
+    secaoRecolhivel({
+      titulo: '💡 Sugestões de melhoria',
+      descricao: 'Tem uma ideia para melhorar o app? Mande pra cá — toda sugestão é registrada e analisada.',
+      conteudo: [
+        el('div', { class: 'flex flex-col gap-2' }, sugTxt, sugDitar, sugCat, sugBtn),
+        minhasWrap,
+      ],
+    }),
+    isM && secaoRecolhivel({
+      titulo: '📋 Todas as sugestões (insights)',
+      descricao: 'Tudo que a equipe sugeriu, mais recente primeiro.',
+      conteudo: todasWrap,
+    }),
+    isM && secaoRecolhivel({
+      titulo: '🗂️ Histórico de edições e exclusões',
+      descricao: 'Auditoria de tudo que foi editado ou excluído nas atividades. Toque num item para abrir a atividade.',
+      conteudo: histWrap,
+    }),
+    isM && secaoRecolhivel({
+      titulo: '🩺 Logs de registro (diagnóstico)',
+      descricao: 'Cada etapa dos registros da equipe (início → fotos → gravação → confirmação) com o tempo que levou e o erro real. Serve para ver EM QUE PONTO um registro travou.',
+      conteudo: logsWrap,
+    }),
+    isMaster() && secaoRecolhivel({
+      titulo: 'Transcrição de áudio',
+      descricao: 'Para transcrever áudios automaticamente nas observações, configure sua chave da OpenAI Whisper. A chave fica salva apenas neste dispositivo.',
+      conteudo: [
+        el('label', { class: 'label' }, 'OpenAI API Key'),
+        apiKey,
+        el('div', { class: 'flex gap-2 mt-2' }, saveKey, removeKey),
+        el('p', { class: 'text-[10px] text-fg-subtle mt-2' },
+          'Pegue sua chave em platform.openai.com/api-keys (modelo whisper-1). Custo ~US$ 0,006/min.'),
+      ],
+    }),
+  ].filter(Boolean);
+
+  let todasAbertas = false;
+  const btnTodas = el('button', { class: 'btn btn-secondary btn-sm' }, 'Expandir todas');
+  btnTodas.addEventListener('click', () => {
+    todasAbertas = !todasAbertas;
+    secoes.forEach(s => s.setAberta(todasAbertas));
+    btnTodas.textContent = todasAbertas ? 'Recolher todas' : 'Expandir todas';
+  });
+  const barraSecoes = el('div', { class: 'flex items-center justify-between gap-2' },
+    el('span', { class: 'text-xs text-fg-subtle' }, 'Toque num título para abrir'),
+    btnTodas,
+  );
+
   const content = el('div', { class: 'flex flex-col gap-4' },
     // Cabeçalho
     el('div', { class: 'card p-5 flex items-center gap-4' },
@@ -319,75 +387,8 @@ export async function perfilView(_params, app) {
       ),
     ),
 
-    // Dados
-    el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold mb-3' }, 'Meus dados'),
-      el('div', { class: 'flex flex-col gap-3' },
-        el('div', {}, el('label', { class: 'label' }, 'Nome'), nome),
-        el('div', {}, el('label', { class: 'label' }, 'Telefone'), tel),
-        el('div', { class: 'grid grid-cols-3 gap-2' },
-          el('div', { class: 'col-span-2' }, el('label', { class: 'label' }, 'Cidade'), cidade, cidadeDL),
-          el('div', {}, el('label', { class: 'label' }, 'UF'), estado),
-        ),
-        saveBtn,
-      ),
-    ),
-
-    // Alterar senha
-    el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold mb-3' }, 'Senha'),
-      el('div', { class: 'flex flex-col gap-3' },
-        newPwd, confirmPwd, pwdBtn,
-      ),
-    ),
-
-    // Sugestões de melhoria (todos enviam e veem as suas)
-    el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold' }, '💡 Sugestões de melhoria'),
-      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
-        'Tem uma ideia para melhorar o app? Mande pra cá — toda sugestão é registrada e analisada.'),
-      el('div', { class: 'flex flex-col gap-2' }, sugTxt, sugDitar, sugCat, sugBtn),
-      minhasWrap,
-    ),
-
-    // Todas as sugestões (só Master — consulta de insights)
-    isM && el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold' }, '📋 Todas as sugestões (insights)'),
-      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
-        'Tudo que a equipe sugeriu, mais recente primeiro.'),
-      todasWrap,
-    ),
-
-    // Histórico de edições e exclusões (só Master — auditoria)
-    isM && el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold' }, '🗂️ Histórico de edições e exclusões'),
-      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
-        'Auditoria de tudo que foi editado ou excluído nas atividades. Toque num item para abrir a atividade.'),
-      histWrap,
-    ),
-
-    // Logs de registro (diagnóstico — hierarquia)
-    isM && el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold' }, '🩺 Logs de registro (diagnóstico)'),
-      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
-        'Cada etapa dos registros da equipe (início → fotos → gravação → confirmação) com o tempo que levou e o erro real. Serve para ver EM QUE PONTO um registro travou.'),
-      logsWrap,
-    ),
-
-    // Whisper (só para master)
-    isMaster() && el('div', { class: 'card p-4' },
-      el('h2', { class: 'font-bold' }, 'Transcrição de áudio'),
-      el('p', { class: 'text-xs text-fg-muted mb-3 mt-1' },
-        'Para transcrever áudios automaticamente nas observações, configure sua chave da OpenAI Whisper. ',
-        'A chave fica salva apenas neste dispositivo (localStorage).'
-      ),
-      el('label', { class: 'label' }, 'OpenAI API Key'),
-      apiKey,
-      el('div', { class: 'flex gap-2 mt-2' }, saveKey, removeKey),
-      el('p', { class: 'text-[10px] text-fg-subtle mt-2' },
-        'Pegue sua chave em platform.openai.com/api-keys (modelo whisper-1). Custo ~US$ 0,006/min.'
-      ),
-    ),
+    barraSecoes,
+    ...secoes,
 
     // Logout
     el('button', {

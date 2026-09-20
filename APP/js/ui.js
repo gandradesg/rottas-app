@@ -85,6 +85,40 @@ export function toast(message, type = 'info', duration = 3500) {
 }
 
 // ----- Modal -----
+// Seção recolhível: um card com título clicável que abre/fecha o conteúdo.
+// Vem FECHADA por padrão (deixa a tela limpa). Expõe setAberta()/estaAberta()
+// pra um botão "Expandir/Recolher todas" controlar várias de uma vez.
+export function secaoRecolhivel({ titulo, descricao, conteudo, aberta = false }) {
+  const seta = icon('chevronDown', 18, 'text-fg-subtle flex-shrink-0');
+  seta.style.transition = 'transform .15s';
+  const corpo = el('div', { class: 'mt-3' },
+    ...(Array.isArray(conteudo) ? conteudo.filter(Boolean) : [conteudo]));
+  const cabecalho = el('button', {
+    type: 'button',
+    class: 'w-full flex items-center gap-2 text-left',
+    'aria-expanded': 'false',
+  },
+    el('div', { class: 'flex-1 min-w-0' },
+      el('h2', { class: 'font-bold' }, titulo),
+      descricao ? el('p', { class: 'text-xs text-fg-muted mt-0.5' }, descricao) : null,
+    ),
+    seta,
+  );
+  const card = el('div', { class: 'card p-4' }, cabecalho, corpo);
+  let estado = !!aberta;
+  function setAberta(v) {
+    estado = !!v;
+    corpo.classList.toggle('hidden', !estado);
+    seta.style.transform = estado ? 'rotate(180deg)' : 'rotate(0deg)';
+    cabecalho.setAttribute('aria-expanded', estado ? 'true' : 'false');
+  }
+  cabecalho.addEventListener('click', () => setAberta(!estado));
+  setAberta(estado);
+  card.setAberta = setAberta;
+  card.estaAberta = () => estado;
+  return card;
+}
+
 export function modal({ title, content, footer, onClose, size = 'md', dismissible = false }) {
   const root = document.getElementById('modal-root');
   const overlay = el('div', { class: 'modal-overlay' });

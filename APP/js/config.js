@@ -1,10 +1,17 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.53';
+export const APP_VERSION = '1.9.54';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.54',
+    date: '20/09/2026',
+    changes: [
+      'PERFIL mais limpo: todas as seções (Meus dados, Senha, Sugestões, Auditoria, Logs, Transcrição) agora vêm RECOLHIDAS. Toque no título para abrir, ou use "Expandir todas / Recolher todas"',
+    ],
+  },
   {
     version: '1.9.53',
     date: '20/09/2026',
