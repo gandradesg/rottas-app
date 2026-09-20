@@ -17,9 +17,10 @@ const ROTULOS_AG = {
   remarcada: 'Remarcada', remarcacoes: 'Nº de remarcações',
   data_prevista_original: 'Data prevista original', realizado_em: 'Realizado em',
   recorrencia_freq: 'Recorrência', recorrencia_total: 'Ocorrências da série',
-  teste: 'Registro de teste', created_at: 'Criado em', updated_at: 'Atualizado em',
+  teste: 'Registro de teste', registrado_em: 'Registrado em (hora do aparelho)',
+  created_at: 'Chegou no servidor em', updated_at: 'Atualizado em',
 };
-const DATAS_AG = new Set(['data_prevista', 'data_prevista_original', 'realizado_em', 'created_at', 'updated_at']);
+const DATAS_AG = new Set(['data_prevista', 'data_prevista_original', 'realizado_em', 'registrado_em', 'created_at', 'updated_at']);
 
 export function abrirDetalhesAgendamento(item) {
   const linha = (rotulo, valor) => el('div', { class: 'flex gap-2 py-1.5 border-b border-border text-sm' },
@@ -27,7 +28,7 @@ export function abrirDetalhesAgendamento(item) {
     el('span', { class: 'font-medium break-words' }, valor),
   );
   const linhas = [];
-  linhas.push(linha('Responsável', item.profiles?.nome || '—'));
+  linhas.push(linha('Responsável', item.profiles?.nome || item.gerente_nome || '—'));
   for (const [campo, rotulo] of Object.entries(ROTULOS_AG)) {
     let v = item[campo];
     if (v === null || v === undefined || v === '' || v === false) continue;
@@ -39,6 +40,15 @@ export function abrirDetalhesAgendamento(item) {
   }
   if (Array.isArray(item.participantes) && item.participantes.length > 1) {
     linhas.push(linha('Participantes', `${item.participantes.length} pessoas (agenda compartilhada)`));
+  }
+  // Se demorou mais de 2 min entre registrar e chegar no servidor, ficou na fila
+  // offline — deixa isso explícito pra não parecer inconsistência de horário.
+  if (item.registrado_em && item.created_at) {
+    const atraso = new Date(item.created_at) - new Date(item.registrado_em);
+    if (atraso > 120000) {
+      const min = Math.round(atraso / 60000);
+      linhas.push(linha('Envio', `📥 Ficou guardado no aparelho e subiu ${min >= 60 ? `${Math.round(min / 60)}h` : `${min} min`} depois`));
+    }
   }
   linhas.push(linha('ID do agendamento', item.id));
   if (item.atividade_id) linhas.push(linha('ID da atividade gerada', item.atividade_id));
@@ -666,8 +676,8 @@ async function agendaGerenteView(app) {
         ),
         // Data/hora de CRIAÇÃO (Brasília) — pra identificar quando foi criado e
         // confirmar que o registro realmente entrou.
-        item.created_at && el('div', { class: 'text-[10px] text-fg-subtle mt-1' },
-          '🕒 Criado em ' + fmt.dateTime(item.created_at)),
+        (item.registrado_em || item.created_at) && el('div', { class: 'text-[10px] text-fg-subtle mt-1' },
+          '🕒 Criado em ' + fmt.dateTime(item.registrado_em || item.created_at)),
       ),
     ));
 
@@ -993,11 +1003,21 @@ async function agendaGestorView(app) {
             fmt.time(item.data_prevista), ' · ', tipo.label,
             item.gerente_nome ? ' · 👤 ' + item.gerente_nome : '',
           ),
+          (item.registrado_em || item.created_at) && el('div', { class: 'text-[10px] text-fg-subtle mt-1' },
+            '🕒 Criado em ' + fmt.dateTime(item.registrado_em || item.created_at)),
+          el('div', { class: 'flex gap-1.5 flex-wrap mt-2' },
+            // Ver TODAS as informações do agendamento (visão Master/Gestor)
+            el('button', {
+              class: 'btn btn-secondary btn-sm flex items-center gap-1.5',
+              title: 'Ver todas as informações deste agendamento',
+              onclick: () => abrirDetalhesAgendamento(item),
+            }, icon('fileText', 14), 'Ver detalhes'),
+            item.atividade_id && el('button', {
+              class: 'btn btn-ghost btn-sm',
+              onclick: () => navigate(`/atividade/${item.atividade_id}`)
+            }, 'Ver atividade'),
+          ),
         ),
-        item.atividade_id && el('button', {
-          class: 'btn btn-ghost btn-sm',
-          onclick: () => navigate(`/atividade/${item.atividade_id}`)
-        }, 'Ver'),
       ),
     );
   }

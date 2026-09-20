@@ -333,6 +333,8 @@ export async function agendaFormView(params, app) {
       participantes: ehGrupo ? presentes : [],
       grupo_id: grupoId,
       teste: (!id && !!state.profile?.conta_teste) || undefined, // só na criação; não polui os números reais
+      // HORA REAL em que foi agendado, medida no aparelho (sobrevive à fila offline)
+      registrado_em: !id ? new Date().toISOString() : undefined,
       tipo: chosenTipo,
       data_prevista: dataIso,
       titulo: (fd.get('titulo') || '').toString().trim() || null,

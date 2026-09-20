@@ -176,7 +176,7 @@ export async function atividadeDetailView(params, app) {
         t.label,
         numLabel && el('span', { class: 'text-rottas-500 font-bold' }, numLabel + vendaLabel),
       ),
-      el('div', { class: 'font-bold' }, fmt.dateTime(a.created_at)),
+      el('div', { class: 'font-bold' }, fmt.dateTime(a.registrado_em || a.created_at)),
       isMaster() && a.profiles && el('div', { class: 'text-xs text-fg-muted mt-0.5' },
         'Por: ' + a.profiles.nome
       ),

@@ -738,6 +738,10 @@ export async function atividadeFormView(params, app) {
       // Conta de teste: não entra nos contadores/relatórios gerais.
       // Só na CRIAÇÃO (no update fica undefined → não altera o registro existente).
       teste: (!id && !!state.profile?.conta_teste) || undefined,
+      // HORA REAL do registro, medida no aparelho neste instante. É ela que vale
+      // como "quando foi registrado" — se o envio acontecer depois (fila
+      // offline), o horário continua sendo o do momento em que o gerente fez.
+      registrado_em: !id ? new Date().toISOString() : undefined,
     };
     // Se veio da agenda, vincula ao agendamento
     if (agendamento && !id) {

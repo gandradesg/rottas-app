@@ -32,7 +32,7 @@ export async function exportAtividadesExcel(atividades, filename = null) {
   const all = atividades.map(a => ({
     'Nº':              a.numero_sequencial || '',
     'Nº Reserva':      a.numero_venda || '',
-    'Data':            fmt.dateTime(a.created_at),
+    'Data':            fmt.dateTime(a.registrado_em || a.created_at),
     'Tipo':            a.tipo,
     'Gerente':         a.profiles?.nome || '',
     'Imobiliária':     a.imobiliaria || a.local_visita || '',

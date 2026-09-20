@@ -1,10 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.52';
+export const APP_VERSION = '1.9.53';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.53',
+    date: '20/09/2026',
+    changes: [
+      'HORA REAL DO REGISTRO: agora é gravada a hora do APARELHO no momento em que o gerente registra. Se o envio acontecer depois (fila offline), o horário continua sendo o do momento real — e não o da hora em que subiu',
+      'Onde aparece a data (Histórico, Painel, Início, detalhe da atividade e Excel) passou a mostrar essa hora real',
+      'VER DETALHES também na visão Master da agenda (antes só aparecia na visão de Gerente), mostrando "Registrado em" x "Chegou no servidor em" e avisando quando o registro ficou guardado no aparelho',
+    ],
+  },
   {
     version: '1.9.52',
     date: '20/09/2026',

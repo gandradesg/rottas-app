@@ -244,7 +244,7 @@ export async function historicoView(_params, app) {
 function historyRow(a) {
   const gerenteName = a.profiles?.nome || '';
   const t = TIPO_ATIVIDADE[a.tipo];
-  const date = fmt.dateTime(a.created_at);
+  const date = fmt.dateTime(a.registrado_em || a.created_at);
   const numTag = a.numero_sequencial ? `#${a.numero_sequencial} ` : '';
   let title = '';
   let chips = [{ label: t.label, cls: a.tipo === 'checkin' ? 'chip-blue' : a.tipo === 'atendimento' ? 'chip-purple' : a.tipo === 'proposta' ? (a.reserva ? 'chip-green' : 'chip-yellow') : a.tipo === 'outro' ? 'chip-gray' : 'chip-green' }];

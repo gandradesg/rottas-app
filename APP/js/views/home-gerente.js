@@ -352,7 +352,7 @@ function kpiCard(label, value, suffix, color, ic, onClick) {
 
 function activityRow(a) {
   const t = TIPO_ATIVIDADE[a.tipo];
-  const time = fmt.time(a.created_at);
+  const time = fmt.time(a.registrado_em || a.created_at);
   const numTag = a.numero_sequencial ? `#${a.numero_sequencial} ` : '';
   let title = '';
   let chips = [];
@@ -395,9 +395,9 @@ function activityRow(a) {
       el('div', { class: 'flex items-center justify-between gap-2 mb-1' },
         el('span', { class: 'font-semibold text-sm truncate' }, numTag + title),
         el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' },
-          (a.created_at && new Date(a.created_at).toDateString() === new Date().toDateString())
+          ((a.registrado_em || a.created_at) && new Date(a.registrado_em || a.created_at).toDateString() === new Date().toDateString())
             ? time
-            : fmt.dateTime(a.created_at)
+            : fmt.dateTime(a.registrado_em || a.created_at)
         ),
       ),
       el('div', { class: 'flex items-center gap-2 flex-wrap' },

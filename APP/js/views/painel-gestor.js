@@ -790,7 +790,7 @@ export async function painelGestorView(_params, app) {
         el('div', { class: 'flex-1 min-w-0' },
           el('div', { class: 'flex items-center justify-between gap-2' },
             el('span', { class: 'font-semibold text-sm truncate' }, title),
-            el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' }, fmt.relative(a.created_at)),
+            el('span', { class: 'text-xs text-fg-subtle flex-shrink-0' }, fmt.relative(a.registrado_em || a.created_at)),
           ),
           el('div', { class: 'flex items-center gap-1.5 flex-wrap mt-1' },
             el('span', { class: `chip chip-${a.tipo === 'checkin' ? 'blue' : a.tipo === 'atendimento' ? 'purple' : a.tipo === 'proposta' ? (a.reserva ? 'green' : 'yellow') : 'green'}` },
