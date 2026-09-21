@@ -149,6 +149,11 @@ function avisarConexao(estado) {
   if (estado === 'travado') iniciarSonda(); else pararSonda();
 }
 
+// Versões públicas: as GRAVAÇÕES (registro/agendamento) não passam por q(),
+// então precisam acender o mesmo aviso por conta própria.
+export function avisarConexaoLenta() { avisarConexao('lenta'); }
+export function avisarConexaoTravada() { avisarConexao('travado'); }
+
 // Apaga o aviso (chamado por QUALQUER consulta que responda).
 export function limparAvisoConexao() {
   if (!_connEstado || _connEstado === 'voltou') return;

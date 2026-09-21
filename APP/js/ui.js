@@ -310,6 +310,23 @@ export function loadingBtn(btn, loading) {
   }
 }
 
+// Painel de progresso durante uma gravação demorada.
+// PROBLEMA QUE ISSO RESOLVE: o botão ficava só girando por mais de 30s, sem
+// dizer nada, e o gerente não sabia se estava salvando, travado ou perdido.
+// Agora, a cada tentativa, ele lê o que está acontecendo — e já na 1ª falha
+// aparece um atalho pra guardar no aparelho, sem esperar todas as tentativas.
+export function painelSalvando(btn, textoInicial = 'Salvando...') {
+  const linha = el('div', { class: 'text-xs text-fg-muted text-center mt-2' }, textoInicial);
+  const acao = el('button', { type: 'button', class: 'btn btn-secondary btn-sm w-full mt-2 hidden' }, '📥 Salvar no aparelho agora');
+  const wrap = el('div', {}, linha, acao);
+  if (btn && btn.parentNode) btn.parentNode.insertBefore(wrap, btn.nextSibling);
+  return {
+    progresso(txt) { linha.textContent = txt; },
+    oferecerFila(cb) { acao.classList.remove('hidden'); acao.onclick = cb; },
+    limpar() { try { wrap.remove(); } catch (e) {} },
+  };
+}
+
 // Formatadores
 // Fuso de Brasília — usado em toda formatação de data/hora do app.
 const TZ_BR = 'America/Sao_Paulo';

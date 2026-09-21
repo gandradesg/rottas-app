@@ -1,10 +1,21 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.58';
+export const APP_VERSION = '1.9.59';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.59',
+    date: '21/09/2026',
+    changes: [
+      'FIM DO BOTÃO GIRANDO MUDO: durante o registro, a tela agora DIZ o que está acontecendo — "Enviando a foto...", "Gravando no servidor...", "Conexão lenta. Tentando de novo (2 de 3)...", "Confirmando no banco..."',
+      'ATALHO NA 1ª FALHA: assim que a primeira tentativa falha (~6s), aparece o botão "📥 Salvar no aparelho agora" — o gerente não precisa mais esperar todas as tentativas para decidir',
+      'ESPERA MUITO MENOR ATÉ O AVISO DE ERRO: agendamento caiu de ~34s para ~14s e o registro de atividade de ~42s para ~18s (tentativas de 9s → 6s, confirmação 8s → 5s, esperas de 1,2s → 0,7s e sem a espera inútil depois da última tentativa)',
+      'Foto: tempo-limite de 25s → 20s por tentativa, com o número da tentativa visível na tela',
+      'O aviso de conexão (laranja/vermelho) agora também aparece durante as GRAVAÇÕES, não só ao carregar telas',
+    ],
+  },
   {
     version: '1.9.58',
     date: '21/09/2026',

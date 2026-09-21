@@ -1,7 +1,7 @@
 // Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
-import { el, icon, toast, loadingBtn, modal } from '../ui.js';
+import { el, icon, toast, loadingBtn, modal, painelSalvando } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase, getScopedImobiliarias } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
@@ -19,7 +19,7 @@ const PREFILL_DATE_KEY = 'agenda-prefill-date';
 // Salva agendamento(s) de forma RESILIENTE: upsert idempotente (ids do cliente) +
 // repetição com tempo-limite por tentativa. Se a rede travar (iOS suspende a
 // conexão), tenta de novo sem duplicar. Retorna { ok, error }.
-async function salvarAgendamentosResiliente(rows, tentativas = 3) {
+async function salvarAgendamentosResiliente(rows, tentativas = 3, onProgresso = null) {
   const ids = rows.map(r => r.id).filter(Boolean);
   // Liga todas as etapas deste agendamento numa história só (ver Logs no Perfil)
   const regId = novoRegistroId();
@@ -31,7 +31,7 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
     try {
       const res = await Promise.race([
         supabase.from('agendamentos').upsert(rows, { onConflict: 'id', ignoreDuplicates: true }).select('id'),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 9000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 6000)),
       ]);
       if (!res.error) {
         // CONFIRMAÇÃO read-after-write: só declara sucesso se as linhas realmente
@@ -43,7 +43,7 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
         try {
           const chk = await Promise.race([
             supabase.from('agendamentos').select('id').in('id', ids),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('to')), 6000)),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('to')), 4000)),
           ]);
           if (chk.error) return okLog('confirmacao indisponivel'); // não deu pra checar: aceita
           const achou = (chk.data || []).length;
@@ -60,8 +60,14 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3) {
       lastErr = e;
       logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: e, tentativa: i + 1 });
     }
-    await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+    if (i < tentativas - 1) {
+      // Avisa o usuario NA HORA (nao deixa o botao girando muda) e espera pouco.
+      try { avisarConexaoLenta(); } catch (e) {}
+      if (onProgresso) { try { onProgresso({ tentativa: i + 2, total: tentativas, motivo: String((lastErr && lastErr.message) || lastErr || '') }); } catch (e) {} }
+      await new Promise(r => setTimeout(r, 700 * (i + 1)));
+    }
   }
+  try { avisarConexaoTravada(); } catch (e) {}
   logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: lastErr });
   return { ok: false, error: lastErr };
 }
@@ -413,7 +419,37 @@ export async function agendaFormView(params, app) {
         }
       }
       const temIds = rows.every(r => r.id);
-      const r = await salvarAgendamentosResiliente(rows, temIds ? 3 : 1);
+      // Guardar no aparelho. Serve pro atalho DURANTE as tentativas e pro botão
+      // do aviso de falha. Mesmo id do upsert → nunca duplica.
+      let saiuPelaFila = false;
+      const guardarNaFila = async () => {
+        if (saiuPelaFila) return;
+        saiuPelaFila = true;
+        try {
+          const outbox = await import('../outbox.js');
+          for (const linha of rows) {
+            await outbox.guardar({
+              id: linha.id, tipo: 'agendamento', tabela: 'agendamentos',
+              row: linha, fotos: [], posSync: null,
+              criadoEm: new Date().toISOString(), tentativas: 0,
+            });
+          }
+          toast('📥 Agendamento salvo no aparelho. Sobe sozinho quando a conexão voltar.', 'success', 7000);
+          navigate('/', true);
+        } catch (e) {
+          saiuPelaFila = false;
+          toast('Não consegui guardar no aparelho: ' + (e.message || e), 'error', 7000);
+        }
+      };
+      // Painel de progresso: o gerente LÊ em que tentativa está e, já na 1ª
+      // falha (~6s), pode guardar no aparelho sem esperar o resto.
+      const painel = painelSalvando(submitBtn, 'Salvando agendamento...');
+      const r = await salvarAgendamentosResiliente(rows, temIds ? 3 : 1, ({ tentativa, total }) => {
+        painel.progresso(`Conexão lenta. Tentando de novo (${tentativa} de ${total})...`);
+        painel.oferecerFila(() => { painel.limpar(); loadingBtn(submitBtn, false); guardarNaFila(); });
+      });
+      painel.limpar();
+      if (saiuPelaFila) return;   // o gerente já resolveu pelo atalho
       if (!r.ok) {
         // Não perde o agendamento: oferece guardar no aparelho e enviar depois.
         loadingBtn(submitBtn, false);
@@ -433,23 +469,7 @@ export async function agendaFormView(params, app) {
         });
         bFechar.addEventListener('click', () => mm.close());
         bTentar.addEventListener('click', () => { mm.close(); form.requestSubmit(); });
-        bFila.addEventListener('click', async () => {
-          mm.close();
-          try {
-            const outbox = await import('../outbox.js');
-            for (const linha of rows) {
-              await outbox.guardar({
-                id: linha.id, tipo: 'agendamento', tabela: 'agendamentos',
-                row: linha, fotos: [], posSync: null,
-                criadoEm: new Date().toISOString(), tentativas: 0,
-              });
-            }
-            toast('📥 Agendamento salvo no aparelho. Sobe sozinho quando a conexão voltar.', 'success', 7000);
-            navigate('/', true);
-          } catch (e) {
-            toast('Não consegui guardar no aparelho: ' + (e.message || e), 'error', 7000);
-          }
-        });
+        bFila.addEventListener('click', () => { mm.close(); guardarNaFila(); });
         return;
       }
       toast(

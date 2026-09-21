@@ -1,7 +1,7 @@
 // Formulário unificado de atividade - discriminado por tipo
-import { el, icon, toast, loadingBtn, fmt, confirmModal, modal } from '../ui.js';
+import { el, icon, toast, loadingBtn, fmt, confirmModal, modal, painelSalvando } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, addOutroTipo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { logRegistro, cronometro, novoRegistroId } from '../diag.js';
@@ -10,6 +10,23 @@ import { TIPO_ATIVIDADE } from '../config.js';
 import { audioField } from '../components/audio-field.js';
 import { isGestor, isAdmin } from '../auth.js';
 import { buildDiff, auditarEdicaoDireta } from '../activity-actions.js';
+
+// ─── PROGRESSO VISÍVEL DA GRAVAÇÃO ─────────────────────────────────────────
+// O botão ficava girando MUDO por mais de 30s (3 tentativas × 9s + esperas) e o
+// gerente não sabia se estava salvando, travado ou perdido. Agora cada tentativa
+// é anunciada na tela e, já na 1ª falha, aparece o atalho "Salvar no aparelho".
+let _painel = null;
+let _onFila = null;   // definido pelo formulário: guarda no aparelho e sai
+function abrirPainel(btn) {
+  if (!_painel) _painel = painelSalvando(btn, 'Salvando...');
+  return _painel;
+}
+function fecharPainel() { if (_painel) { _painel.limpar(); _painel = null; } }
+function passo(txt, oferecerFila = false) {
+  if (!_painel) return;
+  _painel.progresso(txt);
+  if (oferecerFila && _onFila) _painel.oferecerFila(_onFila);
+}
 
 // Marca o agendamento como realizado. Se for parte de um GRUPO (vários gerentes
 // presentes), realiza TODAS as agendas do grupo de uma vez via RPC (SECURITY
@@ -93,12 +110,16 @@ async function salvarAtividadeResiliente(payload) {
 async function uploadPhotosResiliente(files, tentativas = 3) {
   let lastErr = null;
   for (let i = 0; i < tentativas; i++) {
+    passo(i === 0 ? 'Enviando a foto...' : `Foto: tentando de novo (${i + 1} de ${tentativas})...`, i > 0);
     try {
       return await Promise.race([
         uploadPhotos(files),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao enviar as fotos')), 25000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao enviar as fotos')), 20000)),
       ]);
-    } catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 1200 * (i + 1))); }
+    } catch (e) {
+      lastErr = e;
+      if (i < tentativas - 1) await new Promise(r => setTimeout(r, 700 * (i + 1)));
+    }
   }
   throw (lastErr || new Error('falha ao enviar as fotos'));
 }
@@ -145,10 +166,12 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
   let lastErr = null, semErro = false;
   for (let i = 0; i < tentativas; i++) {
     const tGrav = cronometro();
+    if (i > 0) passo(`Conexão lenta. Tentando de novo (${i + 1} de ${tentativas})...`, true);
+    else passo('Gravando no servidor...');
     try {
       const res = await Promise.race([
         supabase.from('atividades').upsert(row, { onConflict: 'id' }).select('id'),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (conexão lenta)')), 9000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado (conexão lenta)')), 6000)),
       ]);
       if (!res.error) {
         semErro = true;
@@ -162,17 +185,21 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
       lastErr = e; // timeout/rede: tenta de novo (mesmo id, não duplica)
       logRegistro({ tipo: tipoLog, registroId: regId, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: e, tentativa: i + 1 });
     }
-    await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+    if (i < tentativas - 1) {
+      try { avisarConexaoLenta(); } catch (e) {}
+      await new Promise(r => setTimeout(r, 700 * (i + 1)));
+    }
   }
 
   // 3) CONFIRMAÇÃO read-after-write. Mesmo que o upsert tenha dado "timeout", a
   //    linha pode ter entrado — então a verdade é o que está no banco.
   if (newId) {
     const tConf = cronometro();
+    passo('Confirmando no banco...');
     try {
       const chk = await Promise.race([
         supabase.from('atividades').select('id, fotos').eq('id', newId).maybeSingle(),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 8000)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 5000)),
       ]);
       if (chk.error) {
         logRegistro({ tipo: tipoLog, registroId: regId, etapa: 'confirmacao', ok: false, duracao_ms: tConf(), erro: chk.error });
@@ -254,7 +281,7 @@ function reservaOnlyForm(app, atividade) {
     e.preventDefault();
     const reserva = reservaInput.value.trim();
     if (!reserva) { toast('Informe o código da reserva', 'error'); return; }
-    loadingBtn(submitBtn, true);
+    loadingBtn(submitBtn, true); abrirPainel(submitBtn);
     try {
       const { data, error } = await supabase
         .from('atividades')
@@ -273,6 +300,8 @@ function reservaOnlyForm(app, atividade) {
       console.error('[reserva] erro:', err);
       toast(err.message || 'Erro ao salvar', 'error', 6000);
       loadingBtn(submitBtn, false);
+    } finally {
+      fecharPainel();
     }
   });
 
@@ -691,7 +720,10 @@ export async function atividadeFormView(params, app) {
     // ctx = { payload, files, agendamento } — permite guardar na FILA OFFLINE.
     async function tratarFalhaRegistro(r, ctx = null) {
       clearTimeout(safetyTimeout);
+      if (_saiuPelaFila) return;   // o gerente já guardou no aparelho pelo atalho
+      fecharPainel();
       loadingBtn(submitBtn, false);
+      try { avisarConexaoTravada(); } catch (e) {}
       const btnTentar = el('button', { class: 'btn btn-primary' }, 'Tentar novamente');
       const btnFila = ctx ? el('button', { class: 'btn btn-secondary' }, '📥 Salvar no aparelho') : null;
       const btnFechar = el('button', { class: 'btn btn-ghost' }, 'Fechar');
@@ -707,29 +739,37 @@ export async function atividadeFormView(params, app) {
       });
       btnFechar.addEventListener('click', () => m.close());
       btnTentar.addEventListener('click', () => { m.close(); form.requestSubmit(); });
-      if (btnFila) btnFila.addEventListener('click', async () => {
-        m.close();
-        try {
-          const outbox = await import('../outbox.js');
-          const novoId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
-          await outbox.guardar({
-            id: novoId,
-            tipo: ctx.payload?.tipo || tipo,
-            tabela: 'atividades',
-            row: { ...ctx.payload, id: novoId, fotos: [] },
-            fotos: (ctx.files || []).slice(),
-            posSync: ctx.agendamento
-              ? { agendamentoId: ctx.agendamento.id, grupoId: ctx.agendamento.grupo_id || null }
-              : null,
-            criadoEm: new Date().toISOString(),
-            tentativas: 0,
-          });
-          toast('📥 Salvo no aparelho. Será enviado sozinho quando a conexão voltar.', 'success', 7000);
-          navigate(ctx.agendamento ? '/agenda' : '/', true);
-        } catch (e) {
-          toast('Não consegui guardar no aparelho: ' + (e.message || e), 'error', 7000);
-        }
-      });
+      if (btnFila) btnFila.addEventListener('click', () => { m.close(); guardarNaFila(ctx); });
+    }
+
+    // Guarda o registro (com as fotos) no aparelho. Usado pelo atalho que
+    // aparece JÁ na 1ª falha e pelo botão do aviso de erro. Marca _saiuPelaFila
+    // pra não mostrar o aviso de erro depois que o gerente já resolveu.
+    let _saiuPelaFila = false;
+    async function guardarNaFila(ctx) {
+      if (!ctx || _saiuPelaFila) return;
+      _saiuPelaFila = true;
+      try {
+        const outbox = await import('../outbox.js');
+        const novoId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+        await outbox.guardar({
+          id: novoId,
+          tipo: ctx.payload?.tipo || tipo,
+          tabela: 'atividades',
+          row: { ...ctx.payload, id: novoId, fotos: [] },
+          fotos: (ctx.files || []).slice(),
+          posSync: ctx.agendamento
+            ? { agendamentoId: ctx.agendamento.id, grupoId: ctx.agendamento.grupo_id || null }
+            : null,
+          criadoEm: new Date().toISOString(),
+          tentativas: 0,
+        });
+        toast('📥 Salvo no aparelho. Será enviado sozinho quando a conexão voltar.', 'success', 7000);
+        navigate(ctx.agendamento ? '/agenda' : '/', true);
+      } catch (e) {
+        _saiuPelaFila = false;
+        toast('Não consegui guardar no aparelho: ' + (e.message || e), 'error', 7000);
+      }
     }
 
     const payload = {
@@ -793,7 +833,9 @@ export async function atividadeFormView(params, app) {
           payload.imobiliarias_participantes = trei.imobiliarias_participantes;
         }
         const files = photoPickerEl?.getFiles?.() || [];
-        loadingBtn(submitBtn, true);
+        loadingBtn(submitBtn, true); abrirPainel(submitBtn);
+        // Atalho que aparece na 1ª falha: guarda no aparelho sem esperar o resto.
+        _onFila = () => { fecharPainel(); loadingBtn(submitBtn, false); guardarNaFila({ payload, files, agendamento }); };
 
         if (!id) {
           // CONFIRMADO: sobe a foto, grava e SÓ confirma sucesso depois de checar
@@ -819,7 +861,9 @@ export async function atividadeFormView(params, app) {
               break;
             }
           }
+          if (_saiuPelaFila) return;   // guardou no aparelho pelo atalho
           if (!r.ok) { await tratarFalhaRegistro(r, { payload, files: semFoto ? [] : files, agendamento }); return; }
+          fecharPainel();
           clearTimeout(safetyTimeout);
           if (agendamento) { try { await marcarAgendamentoRealizado(agendamento, r.row.id); } catch (e) {} }
           toast(semFoto ? '✓ Check-in registrado (sem foto).' : '✓ Check-in registrado e confirmado!',
@@ -865,7 +909,7 @@ export async function atividadeFormView(params, app) {
         for (const k of ['local_visita','produto','imobiliaria','corretor','cliente','termometro']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
-        loadingBtn(submitBtn, true);
+        loadingBtn(submitBtn, true); abrirPainel(submitBtn);
       }
 
       if (tipo === 'proposta') {
@@ -889,7 +933,7 @@ export async function atividadeFormView(params, app) {
           payload.reserva = reserva;
           payload.reserva_data = new Date().toISOString();
         }
-        loadingBtn(submitBtn, true);
+        loadingBtn(submitBtn, true); abrirPainel(submitBtn);
       }
 
       if (tipo === 'orulo' || tipo === 'dwv') {
@@ -907,7 +951,7 @@ export async function atividadeFormView(params, app) {
         for (const k of ['imobiliaria','corretor','empreendimento','motivo_contato']) {
           if (!payload[k]) throw new Error(`Campo obrigatório: ${k}`);
         }
-        loadingBtn(submitBtn, true);
+        loadingBtn(submitBtn, true); abrirPainel(submitBtn);
       }
 
       if (tipo === 'outro') {
@@ -915,7 +959,7 @@ export async function atividadeFormView(params, app) {
         if (!id && coords) { payload.latitude = coords.latitude; payload.longitude = coords.longitude; }
         payload.motivo_visita = (fd.get('motivo_visita')||'').toString().trim();
         if (!payload.motivo_visita) throw new Error('Selecione o tipo (Outro)');
-        loadingBtn(submitBtn, true);
+        loadingBtn(submitBtn, true); abrirPainel(submitBtn);
       }
 
       // Marca se a localização foi definida manualmente (busca) em vez do GPS
@@ -1020,7 +1064,9 @@ export async function atividadeFormView(params, app) {
       } else {
         // Criação CONFIRMADA: grava e checa no banco que entrou de verdade.
         // Em falha, erro honesto + "Tentar novamente" (não perde o formulário).
+        _onFila = () => { fecharPainel(); loadingBtn(submitBtn, false); guardarNaFila({ payload, files: [], agendamento }); };
         const r = await registrarAtividadeConfirmado(payload, []);
+        if (_saiuPelaFila) return;
         if (!r.ok) { await tratarFalhaRegistro(r, { payload, files: [], agendamento }); return; }
         data = [r.row];
       }
@@ -1045,6 +1091,9 @@ export async function atividadeFormView(params, app) {
       console.error('[atividade] erro:', err);
       toast(err.message || JSON.stringify(err) || 'Erro ao salvar', 'error', 6000);
       loadingBtn(submitBtn, false);
+    } finally {
+      fecharPainel();   // nunca deixa o painel de progresso preso na tela
+      _onFila = null;
     }
   });
 
