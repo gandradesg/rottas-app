@@ -92,7 +92,7 @@ export async function painelGestorView(_params, app) {
   // em vez de a tela inteira ficar em branco pra sempre.
   const { data: gerentes } = await runQuery(
     () => supabase.from('profiles').select('*').eq('role', 'gerente').eq('ativo', true).order('nome'),
-    { ms: 7000, label: 'gerentes' },
+    { ms: 5000, label: 'gerentes' },
   );
   (gerentes || []).forEach(g => gerSel.appendChild(el('option', { value: g.id }, g.nome)));
 

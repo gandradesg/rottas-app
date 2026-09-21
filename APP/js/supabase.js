@@ -106,21 +106,84 @@ export async function repararSessao() {
   return _consertando;
 }
 
-// Mostra (uma vez) o aviso de conexão travada com botão de reconectar.
-function avisarTravado() {
-  if (document.getElementById('conn-banner')) return;
-  const b = document.createElement('div');
-  b.id = 'conn-banner';
-  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#B91C1C;color:#fff;padding:10px 14px;font:14px/1.4 sans-serif;display:flex;gap:10px;align-items:center;justify-content:space-between;';
-  b.innerHTML = '<div><b>Conexão travada.</b> Toque em Reconectar para voltar a salvar/carregar.</div>'
-    + '<button style="background:#fff;color:#B91C1C;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">Reconectar</button>';
-  b.querySelector('button').onclick = async () => {
-    b.querySelector('button').textContent = 'Reconectando...';
+// ─── AVISO DE CONEXÃO EM 2 ESTÁGIOS ────────────────────────────────────────
+// O usuário não pode ficar olhando tela girando. Então:
+//   1) "lenta"   → aparece em ~5s, assim que a 1ª tentativa estoura. Laranja,
+//                  avisando que o app está tentando de novo POR BAIXO (a
+//                  repetição continua rodando; nada é perdido nem duplicado).
+//   2) "travado" → só se a repetição também falhar (~12s). Aí fica vermelho com
+//                  "Reconectar" e o app passa a sondar o servidor a cada 6s.
+// Qualquer consulta que dê certo APAGA o aviso sozinha — não precisa de F5.
+const CONN = {
+  lenta:   { cor: '#B45309', html: '<b>Conexão lenta.</b> Tentando de novo…', botao: null },
+  travado: { cor: '#B91C1C', html: '<b>Conexão travada.</b> Toque em Reconectar para voltar a salvar/carregar.', botao: 'Reconectar' },
+  voltou:  { cor: '#15803D', html: '<b>Conexão restabelecida.</b> Pode continuar.', botao: null },
+};
+let _connEstado = null;
+let _sondaTimer = null;
+
+function avisarConexao(estado) {
+  if (_connEstado === estado) return;
+  // Nunca "melhora" sozinho: só um sucesso real apaga o vermelho.
+  if (_connEstado === 'travado' && estado === 'lenta') return;
+  _connEstado = estado;
+  const cfg = CONN[estado];
+  let b = document.getElementById('conn-banner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'conn-banner';
+    document.body.appendChild(b);
+  }
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9999;color:#fff;padding:10px 14px;'
+    + 'font:14px/1.4 sans-serif;display:flex;gap:10px;align-items:center;justify-content:space-between;background:' + cfg.cor;
+  b.innerHTML = '<div>' + cfg.html + '</div>'
+    + (cfg.botao
+      ? '<button style="background:#fff;color:' + cfg.cor + ';border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">' + cfg.botao + '</button>'
+      : '');
+  const btn = b.querySelector('button');
+  if (btn) btn.onclick = async () => {
+    btn.textContent = 'Reconectando...';
     try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
     location.reload();
   };
-  document.body.appendChild(b);
+  if (estado === 'travado') iniciarSonda(); else pararSonda();
 }
+
+// Apaga o aviso (chamado por QUALQUER consulta que responda).
+export function limparAvisoConexao() {
+  if (!_connEstado || _connEstado === 'voltou') return;
+  const vinhaDeTravado = _connEstado === 'travado';
+  pararSonda();
+  _connEstado = null;
+  const b = document.getElementById('conn-banner');
+  if (!vinhaDeTravado) { if (b) b.remove(); return; }
+  // Se estava vermelho, confirma em verde por 3s — pro usuário entender que
+  // voltou sozinho e que NÃO precisa dar F5.
+  avisarConexao('voltou');
+  setTimeout(() => {
+    if (_connEstado !== 'voltou') return;
+    _connEstado = null;
+    const x = document.getElementById('conn-banner');
+    if (x) x.remove();
+  }, 3000);
+}
+
+// Enquanto está travado, o app testa o servidor sozinho a cada 6s. Se voltar,
+// o aviso some por conta própria — o usuário não fica preso no vermelho.
+function iniciarSonda() {
+  if (_sondaTimer) return;
+  _sondaTimer = setInterval(async () => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    try {
+      await Promise.race([
+        supabase.from('outros_tipos').select('id').limit(1).then((r) => { if (r.error) throw r.error; return r; }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('sem resposta')), 4500)),
+      ]);
+      limparAvisoConexao();
+    } catch (e) { /* continua travado, tenta de novo no próximo ciclo */ }
+  }, 6000);
+}
+function pararSonda() { if (_sondaTimer) { clearInterval(_sondaTimer); _sondaTimer = null; } }
 
 // Executa uma consulta do Supabase com tempo-limite + REPETIÇÃO AUTOMÁTICA.
 //
@@ -130,28 +193,34 @@ function avisarTravado() {
 // requisição fica pendurada por minutos. Ao estourar o tempo e tentar de novo,
 // o navegador abre uma conexão NOVA — e aí funciona na hora.
 //
+// Tempos: 1ª tentativa 5s → avisa "conexão lenta" JÁ (sem parar a repetição);
+// 2ª tentativa 7s → se falhar também, aviso vermelho. Ou seja: resposta visual
+// em 5s, sem sacrificar a tentativa que costuma salvar o registro.
+//
 // Passe uma FÁBRICA pra permitir a repetição:  q(() => supabase.from('x').select())
 // Passe o builder direto pra NÃO repetir (use em gravações, que não podem duplicar).
-export async function q(fonte, { ms = 7000, label = 'consulta', tentativas = 2 } = {}) {
+export async function q(fonte, { ms = 5000, label = 'consulta', tentativas = 2 } = {}) {
   const ehFabrica = typeof fonte === 'function';
   const max = ehFabrica ? tentativas : 1;   // sem fábrica, não dá pra repetir com segurança
   let ultimo = null;
   for (let i = 0; i < max; i++) {
-    const limite = ms + i * 2000;           // 1ª tentativa 7s, 2ª 9s → erro em ~16s
+    const limite = ms + i * 2000;           // 1ª tentativa 5s, 2ª 7s
     try {
-      return await Promise.race([
+      const r = await Promise.race([
         ehFabrica ? fonte() : fonte,
         new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), limite)),
       ]);
+      limparAvisoConexao();                 // respondeu: a conexão está viva
+      return r;
     } catch (e) {
       ultimo = e;
-      // Revalida a sessão EM PARALELO (sem await): a próxima tentativa já abre
-      // conexão nova por conta própria. Era este await que fazia a tela ficar
-      // mais de 30s muda antes de mostrar qualquer coisa.
-      if (i === 0) repararSessao();
+      if (i < max - 1) {
+        avisarConexao('lenta');             // ~5s: o usuário JÁ sabe que está tentando
+        repararSessao();                    // sem await: não bloqueia a repetição
+      }
     }
   }
-  avisarTravado();
+  avisarConexao('travado');
   return { data: null, error: ultimo || new Error(`Falha na ${label}`) };
 }
 
@@ -164,8 +233,8 @@ function pingServidor() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
   if (!state.user) return; // só faz sentido logado
   Promise.race([
-    supabase.from('outros_tipos').select('id').limit(1),
-    new Promise((r) => setTimeout(r, 8000)),
+    supabase.from('outros_tipos').select('id').limit(1).then((r) => { if (r.error) throw r.error; limparAvisoConexao(); return r; }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('sem resposta')), 8000)),
   ]).catch(() => {});
 }
 export function iniciarKeepAlive() {
@@ -244,7 +313,7 @@ export async function loadLists() {
   //     (tela "agarrada", só resolvia com F5).
   const q = (sel) => Promise.race([
     sel,
-    new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 15000)),
+    new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 8000)),
   ]);
   const [imob, emp, mv, mo, lv, gh, cor, gim, ot] = await Promise.all([
     q(supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome')),
@@ -379,7 +448,7 @@ export async function getScopedGerenteIds() {
 export async function loadAllProfiles() {
   const { data, error } = await q(
     () => supabase.from('profiles').select('*').order('nome'),
-    { ms: 7000, label: 'usuários' },
+    { ms: 5000, label: 'usuários' },
   );
   if (error) { console.error('[profiles]', error); return null; }
   state.profiles = data || [];

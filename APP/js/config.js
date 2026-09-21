@@ -1,10 +1,21 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.57';
+export const APP_VERSION = '1.9.58';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.58',
+    date: '21/09/2026',
+    changes: [
+      'AVISO RÁPIDO DE CONEXÃO: em ~5s aparece o aviso laranja "Conexão lenta — tentando de novo" (antes só aparecia algo depois de ~16s). A repetição automática continua rodando por baixo, então nada é perdido',
+      'O aviso vermelho "Conexão travada" agora só aparece se a repetição também falhar (~12s), e o app passa a testar o servidor sozinho a cada 6s',
+      'QUANDO A CONEXÃO VOLTA, O AVISO SOME SOZINHO e mostra "Conexão restabelecida" em verde — não precisa mais dar F5',
+      'Consultas com tempo-limite de 5s (antes 7s) e carregamento de listas com 8s (antes 15s): a tela responde bem mais rápido quando a rede falha',
+      'Tela de Logs mais leve (120 registros em vez de 200) para carregar mais rápido no celular',
+    ],
+  },
   {
     version: '1.9.57',
     date: '21/09/2026',

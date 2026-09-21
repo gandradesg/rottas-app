@@ -135,7 +135,7 @@ export async function historicoView(_params, app) {
     const { data: gerentes } = await runQuery(
       () => supabase.from('profiles').select('id, nome')
         .in('role', ['gerente', 'supervisor']).eq('ativo', true).order('nome'),
-      { ms: 7000, label: 'gerentes' },
+      { ms: 5000, label: 'gerentes' },
     );
     (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
   }
