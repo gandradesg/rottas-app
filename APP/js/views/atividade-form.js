@@ -132,8 +132,9 @@ async function uploadPhotosResiliente(files, tentativas = 3) {
 // Só devolve { ok:true } quando confirmou. Em falha, diz em QUAL etapa parou e por quê:
 //   { ok:false, etapa:'fotos'|'gravacao'|'confirmacao', error }
 async function registrarAtividadeConfirmado(payload, files, opts = {}) {
-  const { permitirSemFoto = false } = opts;
-  const newId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+  const { permitirSemFoto = false, idFixo = null } = opts;
+  // idFixo vem da tela: garante que repetir NAO cria linha nova (upsert no mesmo id).
+  const newId = idFixo || ((self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined);
   const tipoLog = payload?.tipo || 'atividade';
   // Liga todas as etapas deste registro numa história só (ver Logs no Perfil)
   const regId = novoRegistroId();
@@ -703,6 +704,18 @@ export async function atividadeFormView(params, app) {
 
   form.append(submitBtn, cancelBtn);
 
+  // ID ESTÁVEL ENTRE TENTATIVAS — corrige duplicação.
+  // "Tentar novamente" (e o laço de "tentar de novo com a foto") re-executam a
+  // gravação. Antes, cada execução sorteava um id novo, então o upsert INSERIA
+  // outra linha. E como a gravação pode ter dado certo no servidor mesmo com
+  // "Tempo esgotado" no aparelho, cada tentativa deixava um registro.
+  // Com o id fixo por formulário, repetir SEMPRE cai na mesma linha.
+  let _idFixo = null;
+  const idFixo = () => {
+    if (!_idFixo) _idFixo = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
+    return _idFixo;
+  };
+
   // Submit handler com safety timeout
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -751,7 +764,9 @@ export async function atividadeFormView(params, app) {
       _saiuPelaFila = true;
       try {
         const outbox = await import('../outbox.js');
-        const novoId = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now());
+        // MESMO id das tentativas: se alguma gravacao tiver entrado no servidor,
+        // o envio da fila apenas atualiza a linha em vez de criar outra.
+        const novoId = idFixo() || String(Date.now());
         await outbox.guardar({
           id: novoId,
           tipo: ctx.payload?.tipo || tipo,
@@ -841,7 +856,7 @@ export async function atividadeFormView(params, app) {
           // CONFIRMADO: sobe a foto, grava e SÓ confirma sucesso depois de checar
           // no banco que entrou. Em falha, erro honesto + "Tentar novamente"
           // (nada some — formulário e fotos ficam preenchidos).
-          let r = await registrarAtividadeConfirmado(payload, files);
+          let r = await registrarAtividadeConfirmado(payload, files, { idFixo: idFixo() });
           // Se a FOTO falhar, NÃO registra sozinho: pergunta o que fazer.
           let semFoto = false;
           while (!r.ok && r.etapa === 'fotos') {
@@ -854,10 +869,10 @@ export async function atividadeFormView(params, app) {
               danger: false,
             });
             if (tentarComFoto) {
-              r = await registrarAtividadeConfirmado(payload, files);
+              r = await registrarAtividadeConfirmado(payload, files, { idFixo: idFixo() });
             } else {
               semFoto = true;
-              r = await registrarAtividadeConfirmado(payload, [], { permitirSemFoto: true });
+              r = await registrarAtividadeConfirmado(payload, [], { permitirSemFoto: true, idFixo: idFixo() });
               break;
             }
           }
@@ -1065,7 +1080,7 @@ export async function atividadeFormView(params, app) {
         // Criação CONFIRMADA: grava e checa no banco que entrou de verdade.
         // Em falha, erro honesto + "Tentar novamente" (não perde o formulário).
         _onFila = () => { fecharPainel(); loadingBtn(submitBtn, false); guardarNaFila({ payload, files: [], agendamento }); };
-        const r = await registrarAtividadeConfirmado(payload, []);
+        const r = await registrarAtividadeConfirmado(payload, [], { idFixo: idFixo() });
         if (_saiuPelaFila) return;
         if (!r.ok) { await tratarFalhaRegistro(r, { payload, files: [], agendamento }); return; }
         data = [r.row];

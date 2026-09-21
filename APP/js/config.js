@@ -1,10 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.59';
+export const APP_VERSION = '1.9.60';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.60',
+    date: '21/09/2026',
+    changes: [
+      'CORREÇÃO GRAVE — "Tentar novamente" DUPLICAVA o registro: cada clique sorteava um código novo para a linha, então o app inseria outro agendamento/atividade em vez de reaproveitar o mesmo. Piorava porque "Tempo esgotado" no aparelho NÃO significa que falhou no servidor: a gravação às vezes entrava, e a tentativa seguinte criava uma cópia. 3 cliques = 3 linhas',
+      'Agora o código da linha é FIXO por formulário: tentar de novo (ou tentar de novo com a foto, ou enviar pela fila offline) sempre atualiza A MESMA linha — nunca cria outra',
+      'Vale também para recorrência (a série não se multiplica mais) e para o "Salvar no aparelho", que passou a usar o mesmo código das tentativas',
+    ],
+  },
   {
     version: '1.9.59',
     date: '21/09/2026',

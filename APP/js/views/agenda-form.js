@@ -322,6 +322,21 @@ export async function agendaFormView(params, app) {
 
   paintTipo();
 
+  // IDs ESTÁVEIS ENTRE TENTATIVAS — corrige duplicação.
+  // "Tentar novamente" re-executa este submit. Antes, cada execução sorteava um
+  // id novo, então o upsert INSERIA outra linha — e como o gravar pode ter dado
+  // certo no servidor mesmo com "Tempo esgotado" no aparelho, cada tentativa
+  // deixava um agendamento. Resultado: 3 cliques = 3 linhas.
+  // Agora o id é fixo por (gerente × data): repetir SEMPRE cai na mesma linha.
+  const _idsFixos = new Map();
+  const idFixo = (pid, occ) => {
+    const k = pid + '|' + occ;
+    if (!_idsFixos.has(k)) {
+      _idsFixos.set(k, (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined);
+    }
+    return _idsFixos.get(k);
+  };
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     // Lista de presentes (criação = multi; edição = 1)
@@ -380,7 +395,6 @@ export async function agendaFormView(params, app) {
       // CRIAÇÃO resiliente: id gerado no cliente + upsert idempotente + retry com
       // tempo-limite por tentativa. Se a rede travar (iOS suspende), tenta de novo
       // sem duplicar (mesmo id) — resolve o "ficou carregando e não foi".
-      const uuid = () => (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
       // Recorrência (só criação): repete a partir da data escolhida ATÉ a data limite.
       const freq = (recorrenciaSel && recorrenciaSel.value) ? recorrenciaSel.value : '';
       const base = new Date(dataIso);
@@ -407,13 +421,14 @@ export async function agendaFormView(params, app) {
       } else {
         datas.push(dataIso);
       }
-      const recorrenciaId = freq ? uuid() : null;
+      // Estável também: senão cada tentativa criaria uma "série" diferente.
+      const recorrenciaId = freq ? idFixo('recorrencia', freq + '|' + dataIso) : null;
       // Uma linha por (presente × ocorrência). Campos de recorrência só entram
       // quando há recorrência (mantém a criação normal à prova de coluna faltando).
       const rows = [];
       for (const pid of presentes) {
         for (const occ of datas) {
-          const row = { ...payload, gerente_id: pid, id: uuid(), data_prevista: occ };
+          const row = { ...payload, gerente_id: pid, id: idFixo(pid, occ), data_prevista: occ };
           if (freq) { row.recorrencia_id = recorrenciaId; row.recorrencia_freq = freq; row.recorrencia_total = datas.length; }
           rows.push(row);
         }
