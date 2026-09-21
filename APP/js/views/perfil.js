@@ -355,8 +355,56 @@ export async function perfilView(_params, app) {
     let apenasFalhas = false;
     const btnAtualizar = el('button', { class: 'btn btn-secondary btn-sm', onclick: () => loadLogs() }, '↻ Atualizar');
     const btnFalhas = el('button', { class: 'btn btn-ghost btn-sm' }, 'Mostrar só as falhas');
+
+    // Teste de conexão ao vivo: mostra em qual etapa está a demora, com números.
+    const btnTeste = el('button', { class: 'btn btn-secondary btn-sm' }, '🔌 Testar conexão');
+    const resultadoTeste = el('div', { class: 'mt-2' });
+    btnTeste.addEventListener('click', async () => {
+      btnTeste.disabled = true; btnTeste.textContent = 'Testando...';
+      resultadoTeste.innerHTML = '';
+      try {
+        const { testarConexao } = await import('../diag.js');
+        const etapas = await testarConexao();
+        resultadoTeste.appendChild(el('div', { class: 'card p-3 flex flex-col gap-1' },
+          el('div', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle' }, 'Resultado do teste'),
+          ...etapas.map(e => el('div', { class: 'flex items-center gap-2 text-sm' },
+            el('span', { class: e.ok ? 'text-success' : 'text-danger' }, e.ok ? '✓' : '✕'),
+            el('span', { class: 'flex-1 min-w-0 truncate' }, e.etapa),
+            el('span', { class: 'font-mono text-xs ' + (e.ms > 3000 ? 'text-danger font-bold' : 'text-fg-muted') }, `${e.ms} ms`),
+          )),
+          ...etapas.filter(e => e.erro).map(e => el('div', { class: 'text-xs text-danger break-words' }, `⚠ ${e.etapa}: ${e.erro}`)),
+          el('div', { class: 'text-[10px] text-fg-subtle mt-1' },
+            'Referência: no servidor essas consultas levam 2 a 16 ms. Acima de 3.000 ms o problema está na conexão/rede do aparelho, não no banco.'),
+        ));
+      } catch (e) {
+        resultadoTeste.appendChild(el('div', { class: 'text-sm text-danger' }, 'Falha no teste: ' + (e.message || e)));
+      }
+      btnTeste.disabled = false; btnTeste.textContent = '🔌 Testar conexão';
+    });
+
+    // Simulador de conexão travada (para testar fila offline / avisos / logs)
+    const { simulandoTravamento, simularTravamento } = await import('../supabase.js');
+    const btnSim = el('button', { class: 'btn btn-ghost btn-sm' });
+    function pintarSim() {
+      const on = simulandoTravamento();
+      btnSim.textContent = on ? '🧪 Simulação LIGADA — desligar' : '🧪 Simular conexão travada';
+      btnSim.classList.toggle('text-danger', on);
+    }
+    btnSim.addEventListener('click', () => {
+      const novo = !simulandoTravamento();
+      simularTravamento(novo);
+      pintarSim();
+      toast(novo
+        ? '🧪 Simulação LIGADA. Tente registrar algo: vai falhar e oferecer "Salvar no aparelho". Desligue aqui depois.'
+        : '✓ Simulação desligada. Conexão normal.', novo ? 'warning' : 'success', 7000);
+    });
+    pintarSim();
+
     const lista = el('div', { class: 'flex flex-col gap-2 mt-2 max-h-[28rem] overflow-y-auto' });
-    logsWrap.append(el('div', { class: 'flex gap-2 flex-wrap' }, btnAtualizar, btnFalhas), lista);
+    logsWrap.append(
+      el('div', { class: 'flex gap-2 flex-wrap' }, btnAtualizar, btnFalhas, btnTeste, btnSim),
+      resultadoTeste, lista,
+    );
     if (error) {
       lista.appendChild(el('div', { class: 'text-sm text-danger' }, 'Não foi possível carregar os logs: ' + (error.message || '')));
       return;

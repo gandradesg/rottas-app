@@ -1,10 +1,18 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.56';
+export const APP_VERSION = '1.9.57';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.57',
+    date: '21/09/2026',
+    changes: [
+      'TESTE DE CONEXÃO (Perfil → Logs): botão "🔌 Testar conexão" mede em milissegundos cada etapa (ler sessão, consulta pequena, consulta real, renovar sessão) e mostra EXATAMENTE onde está a demora',
+      'SIMULADOR (Perfil → Logs): botão "🧪 Simular conexão travada" permite testar a fila offline, os avisos e os logs sem precisar de rede ruim de verdade',
+    ],
+  },
   {
     version: '1.9.56',
     date: '21/09/2026',

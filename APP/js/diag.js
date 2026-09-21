@@ -74,3 +74,37 @@ export function cronometro() {
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   return () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
 }
+
+// ─── TESTE DE CONEXÃO (diagnóstico ao vivo) ────────────────────────────────
+// Mede, em etapas, onde está a demora: ler a sessão (local), uma consulta
+// minúscula e uma consulta real. Assim dá pra ver se o problema é sessão,
+// rede/conexão ou a consulta em si — com números, não com achismo.
+export async function testarConexao() {
+  const etapas = [];
+  const medir = async (nome, fn, limiteMs = 12000) => {
+    const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const passou = () => Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0);
+    try {
+      const r = await Promise.race([
+        fn(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`sem resposta em ${limiteMs / 1000}s`)), limiteMs)),
+      ]);
+      const erro = r && r.error ? (r.error.message || String(r.error)) : null;
+      etapas.push({ etapa: nome, ms: passou(), ok: !erro, erro });
+    } catch (e) {
+      etapas.push({ etapa: nome, ms: passou(), ok: false, erro: String((e && e.message) || e) });
+    }
+  };
+
+  await medir('1. Ler sessão (no aparelho)', () => supabase.auth.getSession(), 8000);
+  await medir('2. Consulta minúscula (1 linha)', () => supabase.from('outros_tipos').select('id').limit(1));
+  await medir('3. Consulta real (usuários)', () => supabase.from('profiles').select('id').limit(50));
+  await medir('4. Renovar a sessão (rede)', () => supabase.auth.refreshSession(), 10000);
+
+  // Guarda no log pra aparecer junto com o resto do diagnóstico
+  etapas.forEach(e => logRegistro({
+    tipo: 'teste-conexao', etapa: e.etapa, ok: e.ok, duracao_ms: e.ms,
+    erro: e.erro ? { message: e.erro } : null,
+  }));
+  return etapas;
+}

@@ -36,6 +36,15 @@ function serialLock(_name, _acquireTimeout, fn) {
 // Aqui abortamos qualquer requisição que passar de 45s, então ela REJEITA (as
 // telas mostram erro/retry) em vez de congelar. 45s é folgado pra uploads de
 // foto em 3G, mas ainda finito.
+// Liga/desliga o modo de teste de conexão travada (fica salvo no aparelho).
+const SIM_KEY = 'rottas-simular-conexao-travada';
+export function simulandoTravamento() {
+  try { return localStorage.getItem(SIM_KEY) === '1'; } catch (e) { return false; }
+}
+export function simularTravamento(ligar) {
+  try { ligar ? localStorage.setItem(SIM_KEY, '1') : localStorage.removeItem(SIM_KEY); } catch (e) {}
+}
+
 function fetchWithTimeout(input, init = {}) {
   const ctrl = new AbortController();
   // Consultas normais: 12s. Foi o tempo-limite LONGO (30-45s) que fazia a tela
@@ -45,6 +54,14 @@ function fetchWithTimeout(input, init = {}) {
   // uma conexão nova. Upload de foto continua com folga (45s), porque é pesado.
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   const ehUpload = url.includes('/storage/v1/');
+  // MODO DE TESTE: finge que a conexão morreu (requisição fica pendurada até
+  // estourar). Serve pra testar a fila offline, os avisos e os logs sem precisar
+  // de rede ruim de verdade. Não afeta o login (/auth/v1/), pra não deslogar.
+  if (simulandoTravamento() && (url.includes('/rest/v1/') || url.includes('/storage/v1/'))) {
+    return new Promise((_, rej) => setTimeout(
+      () => rej(new TypeError('Failed to fetch — SIMULAÇÃO de conexão travada')),
+      ehUpload ? 45000 : 12000));
+  }
   const timer = setTimeout(() => {
     try { ctrl.abort(new DOMException('Tempo esgotado', 'AbortError')); } catch { ctrl.abort(); }
   }, ehUpload ? 45000 : 12000);
