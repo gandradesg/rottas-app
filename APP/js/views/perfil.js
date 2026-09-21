@@ -348,7 +348,7 @@ export async function perfilView(_params, app) {
     logsWrap.appendChild(el('div', { class: 'text-xs text-fg-muted' }, 'Carregando...'));
     const { data, error } = await runQuery(
       () => supabase.from('registro_logs').select('*').order('criado_em', { ascending: false }).limit(200),
-      { ms: 12000, label: 'logs' },
+      { ms: 7000, label: 'logs' },
     );
     logsWrap.innerHTML = '';
     // Barra de ações (atualizar + só falhas)

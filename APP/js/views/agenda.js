@@ -1,7 +1,7 @@
 // Agenda - calendário dia/semana/mês com itens vinculados a atividades
 import { el, icon, fmt, toast, confirmModal, modal, dictationButton } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { state, supabase, q as runQuery } from '../supabase.js';
 import { activeViewRole, isAdmin } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -797,9 +797,19 @@ async function agendaGestorView(app) {
 
   app.appendChild(shell(content, { title: 'Agenda' }));
 
-  // Carrega gerentes para o filtro
-  const { data: gerentes } = await supabase.from('profiles')
-    .select('id, nome').eq('role', 'gerente').eq('ativo', true).order('nome');
+  // Mostra que está carregando ANTES de qualquer consulta — sem isto a tela
+  // ficava totalmente em branco (sem skeleton e sem erro) enquanto a consulta
+  // abaixo estivesse pendurada.
+  cal.innerHTML = '<div class="skeleton h-32"></div>';
+
+  // Carrega gerentes para o filtro. COM tempo-limite: se travar, a agenda abre
+  // mesmo assim (sem a lista de gerentes) e o reload() abaixo ainda roda — antes,
+  // travando aqui, a tela inteira ficava muda pra sempre.
+  const { data: gerentes } = await runQuery(
+    () => supabase.from('profiles')
+      .select('id, nome').eq('role', 'gerente').eq('ativo', true).order('nome'),
+    { ms: 7000, label: 'gerentes' },
+  );
   (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
 
   async function reload() {

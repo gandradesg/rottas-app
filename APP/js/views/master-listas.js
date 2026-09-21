@@ -165,7 +165,7 @@ export async function masterListasView(_params, app) {
             const idx = arr.indexOf(it);
             if (idx >= 0) arr.splice(idx, 1);
             renderActive();
-            runQuery(supabase.from(tab.table).delete().eq('id', it.id).select(), { ms: 15000, label: 'exclusão' }).then(({ data, error }) => {
+            runQuery(supabase.from(tab.table).delete().eq('id', it.id).select(), { ms: 8000, label: 'exclusão' }).then(({ data, error }) => {
               // .select() retorna o que foi deletado — se vazio, RLS bloqueou (sem permissão)
               if (error || !data || !data.length) {
                 if (idx >= 0) { arr.splice(Math.min(idx, arr.length), 0, it); renderActive(); } // rollback
@@ -320,7 +320,7 @@ export async function masterListasView(_params, app) {
       renderActive();
       // Com tempo-limite: se a requisição ficar pendurada, DESFAZ o item na tela
       // e avisa — antes ele ficava exibido como se tivesse salvo, e não tinha.
-      runQuery(supabase.from(tab.table).insert(payload).select(), { ms: 15000, label: 'cadastro' }).then(({ data, error }) => {
+      runQuery(supabase.from(tab.table).insert(payload).select(), { ms: 8000, label: 'cadastro' }).then(({ data, error }) => {
         const idx = state[tab.stateKey].indexOf(tempItem);
         if (error) {
           console.error('[lista insert] erro:', error);
@@ -371,7 +371,7 @@ export async function masterListasView(_params, app) {
       m.close();
       Object.assign(item, patch);
       renderActive();
-      runQuery(supabase.from(tab.table).update(patch).eq('id', item.id).select(), { ms: 15000, label: 'edição' }).then(({ data, error }) => {
+      runQuery(supabase.from(tab.table).update(patch).eq('id', item.id).select(), { ms: 8000, label: 'edição' }).then(({ data, error }) => {
         if (error) {
           console.error('[lista update] erro:', error);
           Object.assign(item, snapshot); renderActive();

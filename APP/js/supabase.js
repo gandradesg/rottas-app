@@ -14,16 +14,18 @@ import { SUPABASE_URL, SUPABASE_ANON } from './config.js';
 //
 // Aqui usamos uma fila em memória: as operações rodam UMA DE CADA VEZ, na ordem.
 // E, pra nunca repetir o problema oposto (deadlock), a fila anda sozinha depois
-// de 35s mesmo se uma operação ficar pendurada. 35s é DE PROPÓSITO maior que o
-// tempo-limite do fetch (30s): assim a requisição já foi abortada antes de a
+// de 15s mesmo se uma operação ficar pendurada. 15s é DE PROPÓSITO maior que o
+// tempo-limite do fetch (12s): assim a requisição já foi abortada antes de a
 // fila liberar a próxima — nunca há duas renovações de token ao mesmo tempo.
+// IMPORTANTE: como o supabase-js pede a sessão (protegida por esta trava) antes
+// de CADA consulta, uma espera longa aqui congela o app inteiro. Por isso 15s.
 let _filaSessao = Promise.resolve();
 function serialLock(_name, _acquireTimeout, fn) {
   const exec = () => fn();
   const resultado = _filaSessao.then(exec, exec);
   _filaSessao = Promise.race([
     resultado.then(() => {}, () => {}),          // segue quando terminar (ok ou erro)
-    new Promise((r) => setTimeout(r, 35000)),    // ...ou depois de 35s, sem travar a fila
+    new Promise((r) => setTimeout(r, 15000)),    // ...ou depois de 15s, sem travar a fila
   ]);
   return resultado;
 }
@@ -36,9 +38,16 @@ function serialLock(_name, _acquireTimeout, fn) {
 // foto em 3G, mas ainda finito.
 function fetchWithTimeout(input, init = {}) {
   const ctrl = new AbortController();
+  // Consultas normais: 12s. Foi o tempo-limite LONGO (30-45s) que fazia a tela
+  // ficar muda por meio minuto quando a conexão morria — o navegador reusa a
+  // conexão morta e a requisição fica pendurada até estourar. Com 12s, qualquer
+  // consulta travada falha rápido, a tela mostra o erro e a repetição já abre
+  // uma conexão nova. Upload de foto continua com folga (45s), porque é pesado.
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  const ehUpload = url.includes('/storage/v1/');
   const timer = setTimeout(() => {
     try { ctrl.abort(new DOMException('Tempo esgotado', 'AbortError')); } catch { ctrl.abort(); }
-  }, 30000);
+  }, ehUpload ? 45000 : 12000);
   // Encadeia com um signal externo, se houver
   if (init.signal) {
     if (init.signal.aborted) ctrl.abort();
@@ -106,19 +115,23 @@ function avisarTravado() {
 //
 // Passe uma FÁBRICA pra permitir a repetição:  q(() => supabase.from('x').select())
 // Passe o builder direto pra NÃO repetir (use em gravações, que não podem duplicar).
-export async function q(fonte, { ms = 10000, label = 'consulta', tentativas = 2 } = {}) {
+export async function q(fonte, { ms = 7000, label = 'consulta', tentativas = 2 } = {}) {
   const ehFabrica = typeof fonte === 'function';
   const max = ehFabrica ? tentativas : 1;   // sem fábrica, não dá pra repetir com segurança
   let ultimo = null;
   for (let i = 0; i < max; i++) {
+    const limite = ms + i * 2000;           // 1ª tentativa 7s, 2ª 9s → erro em ~16s
     try {
       return await Promise.race([
         ehFabrica ? fonte() : fonte,
-        new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), ms)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), limite)),
       ]);
     } catch (e) {
       ultimo = e;
-      if (i === 0) await repararSessao();   // revalida a sessão antes de repetir
+      // Revalida a sessão EM PARALELO (sem await): a próxima tentativa já abre
+      // conexão nova por conta própria. Era este await que fazia a tela ficar
+      // mais de 30s muda antes de mostrar qualquer coisa.
+      if (i === 0) repararSessao();
     }
   }
   avisarTravado();
@@ -349,7 +362,7 @@ export async function getScopedGerenteIds() {
 export async function loadAllProfiles() {
   const { data, error } = await q(
     () => supabase.from('profiles').select('*').order('nome'),
-    { ms: 10000, label: 'usuários' },
+    { ms: 7000, label: 'usuários' },
   );
   if (error) { console.error('[profiles]', error); return null; }
   state.profiles = data || [];

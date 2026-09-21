@@ -1,10 +1,19 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.55';
+export const APP_VERSION = '1.9.56';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.56',
+    date: '21/09/2026',
+    changes: [
+      'TELAS NÃO FICAM MAIS MUDAS: a Agenda da equipe travava numa consulta SEM tempo-limite que rodava antes de tudo — por isso ficava em branco, sem nem mensagem de erro. Corrigido',
+      'Falha aparece MUITO mais rápido: tempo-limite geral caiu de 30s para 12s e a revalidação da sessão deixou de bloquear a nova tentativa (antes levava ~38s até mostrar algo; agora ~16s)',
+      'Upload de foto mantém folga de 45s, por ser pesado',
+    ],
+  },
   {
     version: '1.9.55',
     date: '20/09/2026',
