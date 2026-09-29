@@ -8,6 +8,7 @@ import { navigate } from '../router.js';
 import { phoneInput, cidadeEstadoField } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { FIELD_LABELS } from '../activity-actions.js';
+import { lerLogsLocais, enviarPendentes, contarPendentes } from '../diag.js';
 
 export async function perfilView(_params, app) {
   const p = state.profile;
@@ -264,6 +265,18 @@ export async function perfilView(_params, app) {
         linha('Mensagem do erro', l.erro),
         linha('Código do erro', l.erro_codigo),
         linha('Detalhe do erro', l.erro_detalhe),
+        linha('Situação do log', l._soNoAparelho ? '📵 Só no aparelho — ainda não subiu pro servidor' : null),
+        ...(l.contexto ? [
+          el('div', { class: 'text-xs font-bold uppercase tracking-wider text-fg-subtle mt-3 mb-1' }, 'Contexto do aparelho no momento'),
+          linha('Tela aberta há', l.contexto.tela_aberta_min != null ? `${l.contexto.tela_aberta_min} min` : null),
+          linha('Token vence em', l.contexto.token_expira_em_s != null ? `${l.contexto.token_expira_em_s} s` + (l.contexto.token_vencido ? ' (JÁ VENCIDO)' : '') : null),
+          linha('Sessão', l.contexto.sessao),
+          linha('Última resposta HTTP', l.contexto.http_ultimo_status != null ? `${l.contexto.http_ultimo_status} (${l.contexto.http_ultimo_alvo || '?'}, ${l.contexto.http_ultimo_ms} ms)` : null),
+          linha('Falhas de rede na sessão', l.contexto.http_falhas_rede),
+          linha('Recusas 401 (token)', l.contexto.http_falhas_401),
+          linha('Rede do aparelho', l.contexto.rede_tipo ? `${l.contexto.rede_tipo}` + (l.contexto.rede_rtt_ms != null ? ` · ${l.contexto.rede_rtt_ms} ms` : '') : null),
+          linha('Tela visível?', l.contexto.visivel),
+        ] : []),
         linha('ID do registro (liga as etapas)', l.registro_id),
         linha('ID do log', l.id),
         el('div', { class: 'mt-3' },
@@ -329,6 +342,7 @@ export async function perfilView(_params, app) {
         el('span', { class: 'font-semibold ' + status.cls }, status.txt),
         el('span', { class: 'text-fg-muted' }, ultima.tipo || '—'),
         el('span', { class: 'chip text-[10px]' }, `${etapas.length} etapa(s)`),
+        etapas.some(e => e._soNoAparelho) ? el('span', { class: 'chip chip-yellow text-[10px]' }, '📵 só no aparelho') : null,
         totalMs ? el('span', { class: 'text-xs text-fg-subtle' }, `${(totalMs / 1000).toFixed(1)}s`) : null,
         el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(ultima.criado_em)),
       ),
@@ -346,10 +360,17 @@ export async function perfilView(_params, app) {
     if (!isM) return;
     logsWrap.innerHTML = '';
     logsWrap.appendChild(el('div', { class: 'text-xs text-fg-muted' }, 'Carregando...'));
+    // Antes de ler, tenta subir o que ficou preso neste aparelho (máx. 4s).
+    try { await Promise.race([enviarPendentes(), new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
     const { data, error } = await runQuery(
       () => supabase.from('registro_logs').select('*').order('criado_em', { ascending: false }).limit(120),
       { ms: 5000, label: 'logs' },
     );
+    // Logs que AINDA estão só neste aparelho (a conexão falhou na hora de enviar).
+    // Aparecem mesmo se o servidor não responder — é justamente quando mais importam.
+    const locais = lerLogsLocais().filter(l => !l._enviado).map(l => ({
+      ...l, id: l._lid, _soNoAparelho: true, user_nome: (state.profile && state.profile.nome) || 'eu',
+    }));
     logsWrap.innerHTML = '';
     // Barra de ações (atualizar + só falhas)
     let apenasFalhas = false;
@@ -406,10 +427,16 @@ export async function perfilView(_params, app) {
       resultadoTeste, lista,
     );
     if (error) {
-      lista.appendChild(el('div', { class: 'text-sm text-danger' }, 'Não foi possível carregar os logs: ' + (error.message || '')));
-      return;
+      logsWrap.insertBefore(el('div', { class: 'text-sm text-danger' },
+        'Não foi possível carregar os logs do servidor: ' + (error.message || '') +
+        (locais.length ? ' — mostrando os que estão neste aparelho.' : '')), lista);
+      if (!locais.length) return;
     }
-    const todos = data || [];
+    if (locais.length) {
+      logsWrap.insertBefore(el('div', { class: 'text-xs text-warning' },
+        `📵 ${locais.length} log(s) deste aparelho ainda não subiram — sobem sozinhos quando a conexão responder.`), lista);
+    }
+    const todos = [...locais, ...(data || [])];
     function pintar() {
       lista.innerHTML = '';
       // Agrupa por registro: cada grupo é a HISTÓRIA de um registro (início →
@@ -451,6 +478,46 @@ export async function perfilView(_params, app) {
     histWrap.appendChild(el('p', { class: 'text-xs text-fg-muted' }, `${data.length} registro(s)`));
     data.forEach(h => histWrap.appendChild(histCard(h)));
   }
+
+  // ── Diagnóstico DESTE aparelho (para qualquer usuário) ────────────────────
+  // Quando a conexão falha, o log fica guardado aqui. O gerente consegue ver
+  // quantos estão presos, forçar o envio, ou COPIAR e mandar por WhatsApp.
+  const diagWrap = el('div', { class: 'flex flex-col gap-2' });
+  function pintarDiag() {
+    diagWrap.innerHTML = '';
+    const todosLocais = lerLogsLocais();
+    const pend = contarPendentes();
+    const falhas = todosLocais.filter(l => l.ok === false || l.etapa === 'falha').length;
+    const btnEnviar = el('button', { class: 'btn btn-secondary btn-sm' }, '⬆ Enviar agora');
+    const btnCopiar = el('button', { class: 'btn btn-secondary btn-sm' }, '📋 Copiar diagnóstico');
+    btnEnviar.addEventListener('click', async () => {
+      btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...';
+      let n = 0;
+      try { n = await Promise.race([enviarPendentes(), new Promise(r => setTimeout(() => r(0), 9000))]); } catch (e) {}
+      toast(n ? `✓ ${n} log(s) enviado(s).` : (contarPendentes() ? 'Ainda sem resposta do servidor. Continuam guardados aqui.' : 'Nada pendente.'),
+        n ? 'success' : 'info', 4000);
+      pintarDiag();
+    });
+    btnCopiar.addEventListener('click', async () => {
+      const texto = JSON.stringify({
+        usuario: (state.profile && state.profile.nome) || null,
+        versao: APP_VERSION,
+        copiado_em: new Date().toISOString(),
+        logs: todosLocais.slice(-60),
+      }, null, 1);
+      try { await navigator.clipboard.writeText(texto); toast('Copiado — cole no WhatsApp para o suporte.', 'success', 4000); }
+      catch (e) { toast('Não consegui copiar automaticamente.', 'warning', 4000); }
+    });
+    diagWrap.append(
+      el('div', { class: 'text-sm' },
+        `${todosLocais.length} etapa(s) registradas neste aparelho · `,
+        el('b', { class: falhas ? 'text-danger' : '' }, `${falhas} falha(s)`), ' · ',
+        el('b', { class: pend ? 'text-warning' : 'text-success' }, pend ? `${pend} aguardando envio` : 'tudo enviado ✓'),
+      ),
+      el('div', { class: 'flex gap-2 flex-wrap' }, btnEnviar, btnCopiar),
+    );
+  }
+  pintarDiag();
 
   // ── Seções recolhíveis ────────────────────────────────────────────────────
   // Todas começam FECHADAS (a tela fica limpa) e há um botão pra abrir/fechar
@@ -494,6 +561,11 @@ export async function perfilView(_params, app) {
       titulo: '🩺 Logs de registro (diagnóstico)',
       descricao: 'Cada etapa dos registros da equipe (início → fotos → gravação → confirmação) com o tempo que levou e o erro real. Serve para ver EM QUE PONTO um registro travou.',
       conteudo: logsWrap,
+    }),
+    !isM && secaoRecolhivel({
+      titulo: '🩺 Diagnóstico deste aparelho',
+      descricao: 'Se um registro falhar, o detalhe técnico fica guardado aqui e sobe sozinho quando a conexão voltar. Se o suporte pedir, toque em "Copiar diagnóstico" e envie por WhatsApp.',
+      conteudo: diagWrap,
     }),
     isMaster() && secaoRecolhivel({
       titulo: 'Transcrição de áudio',

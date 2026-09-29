@@ -1,10 +1,22 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.60';
+export const APP_VERSION = '1.9.61';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.61',
+    date: '29/09/2026',
+    changes: [
+      'LOGS QUE SOBREVIVEM À FALHA: antes, o log de uma falha era enviado pela mesma conexão que tinha acabado de falhar — por isso o banco só tinha logs de registros que deram certo (0 falhas registradas). Agora todo log é gravado primeiro no aparelho, fica numa fila e sobe sozinho quando a conexão responder',
+      'CONTEXTO TÉCNICO EM CADA LOG: há quanto tempo a tela estava aberta, se o token de acesso estava vencido, a última resposta real do servidor (ex.: 200, 401, falha de rede) e o tipo de rede do aparelho — é o que vai mostrar por que o app trava mesmo com internet boa',
+      'CARREGAMENTO DE TELAS TAMBÉM GERA LOG (antes só os registros geravam): se a Agenda, o Painel ou o Histórico travarem, fica registrado',
+      'Agenda e Agenda da equipe agora usam a repetição automática e o aviso de conexão (antes esperavam 12s sem repetir)',
+      'Tela de Logs mostra também os logs que ainda estão só no aparelho (📵), mesmo quando o servidor não responde',
+      'Gerentes ganharam "🩺 Diagnóstico deste aparelho" no Perfil: mostra falhas guardadas, botão para enviar agora e para COPIAR o diagnóstico e mandar por WhatsApp',
+    ],
+  },
   {
     version: '1.9.60',
     date: '21/09/2026',

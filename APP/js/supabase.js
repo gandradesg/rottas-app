@@ -70,8 +70,25 @@ function fetchWithTimeout(input, init = {}) {
     if (init.signal.aborted) ctrl.abort();
     else init.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
   }
-  return fetch(input, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  // Registra a última resposta REAL (status HTTP ou falha de rede) para o
+  // diagnóstico: separa "sem internet" de "token recusado (401)" de "servidor".
+  const t0 = Date.now();
+  const alvo = url.includes('/auth/v1/') ? 'auth' : url.includes('/storage/v1/') ? 'storage' : url.includes('/rest/v1/') ? 'rest' : 'outro';
+  return fetch(input, { ...init, signal: ctrl.signal })
+    .then((res) => {
+      redeInfo.ultimoStatus = res.status; redeInfo.ultimoMs = Date.now() - t0; redeInfo.ultimoAlvo = alvo;
+      if (res.status === 401) redeInfo.falhas401++;
+      return res;
+    }, (err) => {
+      redeInfo.ultimoStatus = (err && err.name === 'AbortError') ? 'abortado' : 'falha-rede';
+      redeInfo.ultimoMs = Date.now() - t0; redeInfo.ultimoAlvo = alvo;
+      redeInfo.falhasRede++;
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
 }
+// Contadores de rede lidos pelo diag.js (sem rede, só memória).
+export const redeInfo = { ultimoStatus: null, ultimoMs: null, ultimoAlvo: null, falhasRede: 0, falhas401: 0 };
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
@@ -190,6 +207,15 @@ function iniciarSonda() {
 }
 function pararSonda() { if (_sondaTimer) { clearInterval(_sondaTimer); _sondaTimer = null; } }
 
+// Registra falhas de CARREGAMENTO de tela (não só de registro). Import dinâmico
+// porque diag.js importa este arquivo; nunca lança, nunca espera.
+function logCarregamento(label, ok, erro, tentativa, limite) {
+  import('./diag.js').then((d) => d.logRegistro({
+    tipo: 'carregamento', etapa: label, ok, tentativa, duracao_ms: ok ? null : limite,
+    erro: typeof erro === 'string' ? { message: erro } : erro,
+  })).catch(() => {});
+}
+
 // Executa uma consulta do Supabase com tempo-limite + REPETIÇÃO AUTOMÁTICA.
 //
 // Por que repetir: a causa nº1 do "fica pensando e não vai" depois de alguns
@@ -216,9 +242,13 @@ export async function q(fonte, { ms = 5000, label = 'consulta', tentativas = 2 }
         new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), limite)),
       ]);
       limparAvisoConexao();                 // respondeu: a conexão está viva
+      // Se a 1ª travou e a 2ª respondeu, isso é a "assinatura" de conexão morta
+      // reaproveitada — registra para o diagnóstico.
+      if (i > 0) logCarregamento(label, true, `recuperou na tentativa ${i + 1}`, i + 1, limite);
       return r;
     } catch (e) {
       ultimo = e;
+      logCarregamento(label, false, e, i + 1, limite);
       if (i < max - 1) {
         avisarConexao('lenta');             // ~5s: o usuário JÁ sabe que está tentando
         repararSessao();                    // sem await: não bloqueia a repetição

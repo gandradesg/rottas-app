@@ -316,12 +316,10 @@ async function agendaGerenteView(app) {
     }
     // Timeout de segurança: se a rede/consulta travar, mostra erro com "tentar de novo"
     // em vez de ficar no skeleton pra sempre (bug de tela carregando eterna).
+    // Via q(): tempo-limite + repetição automática + aviso de conexão + LOG.
     let data, error;
     try {
-      const res = await Promise.race([
-        q,
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
-      ]);
+      const res = await runQuery(() => q, { ms: 6000, label: 'agenda' });
       data = res.data; error = res.error;
     } catch (e) { error = e; }
     if (error) {
@@ -827,12 +825,11 @@ async function agendaGestorView(app) {
     if (filters.tipo !== 'todos')   q = q.eq('tipo', filters.tipo);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
 
+    // Via q(): tempo-limite + repetição automática + aviso de conexão + LOG.
     let data, error;
     try {
-      const res = await Promise.race([
-        q.limit(2000),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado')), 12000)),
-      ]);
+      const qLim = q.limit(2000);
+      const res = await runQuery(() => qLim, { ms: 6000, label: 'agenda da equipe' });
       data = res.data; error = res.error;
     } catch (e) { error = e; }
     if (error) {
