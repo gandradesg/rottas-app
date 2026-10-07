@@ -8,7 +8,7 @@
 // Mudar esta string faz o navegador detectar um SW novo, ativar na hora, PURGAR o
 // cache antigo (no 'activate') e recarregar — garantindo que nunca fique um mix de
 // versoes de JS em cache (causa raiz de "app nao abre / versao velha").
-const SW_VERSION = '1.9.61';
+const SW_VERSION = '1.9.62';
 const CACHE_NAME = 'imob-rottas-' + SW_VERSION;
 
 self.addEventListener('install', (event) => {
@@ -73,4 +73,35 @@ self.addEventListener('fetch', (event) => {
 // Permite que a pagina mande "SKIP_WAITING" para forcar update imediato
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// ===== NOTIFICAÇÕES (lembretes da agenda, enviados pelo servidor) =====
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : '' }; }
+  // O iPhone EXIGE mostrar uma notificação a cada push recebido.
+  event.waitUntil(self.registration.showNotification(d.title || 'Imob Rottas', {
+    body: d.body || '',
+    icon: '/assets/app-icon-192.png?v=080',
+    badge: '/assets/favicon-96.png?v=imob1',
+    tag: d.tag || 'imob-rottas',
+    renotify: true,
+    data: { url: d.url || '/' },
+  }));
+});
+
+// Toque na notificação: abre (ou traz pra frente) o app na agenda.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const alvo = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil((async () => {
+    const abertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of abertas) {
+      if (c.url.startsWith(self.location.origin)) {
+        try { await c.navigate(alvo); } catch (e) {}
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(alvo);
+  })());
 });

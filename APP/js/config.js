@@ -1,10 +1,24 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.61';
+export const APP_VERSION = '1.9.62';
+// Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
+export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
 
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.62',
+    date: '07/10/2026',
+    changes: [
+      'LEMBRETES DA AGENDA POR E-MAIL: todo dia às 18h, a agenda do dia seguinte; toda segunda às 8h, a semana inteira. Só envia para quem tem atividade. Visual em cards por atividade, separados por tipo (dia seguinte) ou por dia (semana)',
+      'BOTÃO "ADICIONAR AO OUTLOOK" em cada atividade e um para adicionar todas: o evento entra no calendário com lembrete 15 minutos antes (link protegido, não dá para forjar)',
+      'LÍDERES TAMBÉM RECEBEM: gestor regional e superintendente recebem o resumo só dos gerentes deles (mesma regra de acesso do app: superintendente por estado, regional por cidade). Masters e gestores ainda não recebem',
+      'NOTIFICAÇÕES NO CELULAR: o mesmo lembrete chega como notificação do app. Novo cartão "🔔 Lembretes da sua agenda" com o passo a passo para instalar o app e ativar (no iPhone só funciona com o app na Tela de Início). Perfil → Notificações: ativar, enviar teste ou desativar',
+      'CORREÇÃO: a atualização automática do app desregistrava o service worker a cada versão nova — isso teria apagado as notificações de todos a cada atualização. Agora atualiza sem desregistrar',
+      'Ao sair da conta, este aparelho para de receber os lembretes de quem saiu. Os logs de diagnóstico ainda não enviados não são mais apagados no logout',
+    ],
+  },
   {
     version: '1.9.61',
     date: '29/09/2026',

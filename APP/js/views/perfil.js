@@ -9,6 +9,7 @@ import { phoneInput, cidadeEstadoField } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { FIELD_LABELS } from '../activity-actions.js';
 import { lerLogsLocais, enviarPendentes, contarPendentes } from '../diag.js';
+import { cartaoNotificacoes } from '../notificacoes.js';
 
 export async function perfilView(_params, app) {
   const p = state.profile;
@@ -561,6 +562,11 @@ export async function perfilView(_params, app) {
       titulo: '🩺 Logs de registro (diagnóstico)',
       descricao: 'Cada etapa dos registros da equipe (início → fotos → gravação → confirmação) com o tempo que levou e o erro real. Serve para ver EM QUE PONTO um registro travou.',
       conteudo: logsWrap,
+    }),
+    secaoRecolhivel({
+      titulo: '🔔 Notificações e lembretes',
+      descricao: 'Lembrete da agenda às 18h (dia seguinte) e na segunda às 8h (semana), por e-mail e no celular.',
+      conteudo: cartaoNotificacoes({ modo: 'perfil' }),
     }),
     !isM && secaoRecolhivel({
       titulo: '🩺 Diagnóstico deste aparelho',

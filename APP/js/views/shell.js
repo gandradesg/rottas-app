@@ -88,7 +88,11 @@ export function shell(content, opts = {}) {
   );
 
   // Main
-  const main = el('main', { class: 'max-w-screen-md mx-auto px-4 py-4 ' + (hideBottomNav ? 'pb-6' : 'pb-24') }, content);
+  // Convite "instalar o app + ativar notificações" nas telas principais (não em
+  // formulários). Some sozinho quando já está ativo, ou por 3 dias no "Agora não".
+  const avisoNotif = el('div', {});
+  if (!back) import('../notificacoes.js').then(m => { avisoNotif.appendChild(m.cartaoNotificacoes({ modo: 'banner' })); }).catch(() => {});
+  const main = el('main', { class: 'max-w-screen-md mx-auto px-4 py-4 ' + (hideBottomNav ? 'pb-6' : 'pb-24') }, avisoNotif, content);
 
   // Bottom nav decidido pelo VIEW ATIVO (respeita o toggle), nao pelo role real.
   // - view='gerente'   -> nav de gerente (Agenda + Inicio + Historico + Registrar)

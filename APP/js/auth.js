@@ -55,9 +55,15 @@ export async function signIn(email, password) {
 }
 
 // Logout AGRESSIVO - limpa TODO storage Supabase + redireciona
-export function signOut() {
+export async function signOut() {
   console.log('[signOut] iniciando logout agressivo');
   authGuards.suppressed = true;
+  // 0. Este aparelho para de receber os lembretes de quem está saindo.
+  //    Máx. 1,5s — o logout nunca pode travar por causa disso.
+  try {
+    const { desvincularAparelho } = await import('./notificacoes.js');
+    await Promise.race([desvincularAparelho(), new Promise(r => setTimeout(r, 1500))]);
+  } catch (e) {}
   // 1. Limpa estado em memória
   state.user = null;
   state.profile = null;
@@ -68,7 +74,8 @@ export function signOut() {
     const toRemove = [];
     for (let i = 0; i < ls.length; i++) {
       const k = ls.key(i);
-      if (k && (k.startsWith('rottas-') || k.startsWith('sb-') || k.toLowerCase().includes('supabase') || k.startsWith('auth-'))) {
+      // Mantém os logs de diagnóstico: falhas ainda não enviadas não podem sumir no logout.
+      if (k && k !== 'rottas-diag-logs' && (k.startsWith('rottas-') || k.startsWith('sb-') || k.toLowerCase().includes('supabase') || k.startsWith('auth-'))) {
         toRemove.push(k);
       }
     }

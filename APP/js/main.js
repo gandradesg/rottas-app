@@ -31,9 +31,12 @@ async function checkForUpdate() {
         sessionStorage.setItem(flagKey, '1');
         console.warn('[update] limpando cache + SW e recarregando para', m[1]);
         try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+        // NÃO desregistra o service worker: a inscrição das NOTIFICAÇÕES fica presa
+        // a ele e morreria a cada versão nova. update() já traz o sw.js novo, e o SW
+        // é só-rede para código, então limpar cache + recarregar basta.
         try {
           const regs = await navigator.serviceWorker?.getRegistrations?.();
-          if (regs) await Promise.all(regs.map(x => x.unregister()));
+          if (regs) await Promise.all(regs.map(x => x.update().catch(() => {})));
         } catch (e) {}
         location.reload();
         return;
@@ -53,12 +56,18 @@ function showUpdateBanner(local, server) {
   banner.querySelector('button').onclick = async () => {
     // Limpa cache + desregistra SW + reload (funciona no navegador E no PWA instalado).
     try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
-    try { const regs = await navigator.serviceWorker?.getRegistrations?.(); if (regs) await Promise.all(regs.map(x => x.unregister())); } catch (e) {}
+    // update() em vez de unregister(): preserva a inscrição das notificações.
+    try { const regs = await navigator.serviceWorker?.getRegistrations?.(); if (regs) await Promise.all(regs.map(x => x.update().catch(() => {}))); } catch (e) {}
     location.reload();
   };
   document.body.appendChild(banner);
 }
 setTimeout(checkForUpdate, 3000);
+
+// INSTALAÇÃO DO APP (Android/Chrome/Edge): guarda o convite do navegador para o
+// botão "📲 Instalar o app" usar depois. Capturado aqui porque dispara cedo.
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__rottasInstallPrompt = e; });
+window.addEventListener('appinstalled', () => { window.__rottasInstallPrompt = null; });
 
 // ===== SERVICE WORKER: garante que o app SEMPRE pega versao fresh =====
 // Funciona inclusive em PWA instalado Android (intercepta cache do WebAPK).
@@ -322,6 +331,8 @@ boot().catch(err => {
 // FILA OFFLINE: ativa desde o começo pra mostrar o selo "aguardando envio" e
 // reenviar sozinho o que ficou guardado no aparelho.
 import('./outbox.js').catch(() => {});
+// NOTIFICAÇÕES: mantém a inscrição deste aparelho em dia com o servidor.
+import('./notificacoes.js').catch(() => {});
 
 // Global: re-render ao mudar estado de auth (login/logout em outras abas)
 onStateChange(() => {
