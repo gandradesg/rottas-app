@@ -476,6 +476,30 @@ async function executar(modo: string, o: { teste?: { email: string } | null; dry
 
   const base = { modo, janela: { de: ini.toISOString(), ate: fim.toISOString(), rotulo }, atividades: (ags || []).length };
 
+  // MANUAL (botão do master no cadastro da pessoa): só aquela pessoa, só e-mail,
+  // sem trava anti-duplicidade (é um reenvio pedido explicitamente).
+  if ((o as any).apenas) {
+    const alvo: any = porId.get((o as any).apenas);
+    if (!alvo) return { ...base, manual: true, ok: false, motivo: 'Usuário inativo ou não encontrado.' };
+    if (!alvo.email) return { ...base, manual: true, ok: false, motivo: 'Este usuário não tem e-mail cadastrado.' };
+    const meus = envios.filter((e) => e.perfil.id === alvo.id);
+    if (!meus.length) {
+      const sem = ['gestor_regional', 'superintendente'].includes(alvo.role)
+        ? 'Nenhum gerente da equipe tem atividade pendente neste período.'
+        : (['gerente', 'supervisor'].includes(alvo.role) ? 'Não há atividade pendente neste período.' : 'Este perfil não recebe lembretes.');
+      return { ...base, manual: true, ok: false, motivo: sem };
+    }
+    // Em teste (agendador + teste.email) o e-mail vai para o endereço de teste, nunca para a pessoa.
+    const para = o.teste ? o.teste.email : alvo.email;
+    const out = [];
+    for (const e of meus) {
+      const assunto = o.teste ? `[TESTE · manual: ${alvo.nome}] ${e.assunto}` : e.assunto;
+      try { await enviarEmail(para, assunto, e.html); out.push({ papel: e.papel, qtd: e.qtd, email: 'enviado' }); }
+      catch (err: any) { out.push({ papel: e.papel, qtd: e.qtd, email: 'falhou: ' + String(err?.message || err).slice(0, 160) }); }
+    }
+    return { ...base, manual: true, ok: out.every((x) => x.email === 'enviado'), para, enviados: out };
+  }
+
   // TESTE: manda uma amostra para o e-mail de teste (até 3 gerentes + 2 líderes),
   // sem gravar anti-duplicidade e sem notificar ninguém além do dono do e-mail de teste.
   if (o.teste) {
@@ -521,6 +545,129 @@ async function executar(modo: string, o: { teste?: { email: string } | null; dry
   return { ...base, dryRun: !!o.dryRun, resultado };
 }
 
+// ─── Avisos SÓ no app (notificação): começo do dia e 15 minutos antes ──────
+const PAPEIS_DONO = ['gerente', 'supervisor'];
+function donoValido(dono: any, ag: any) {
+  if (!dono || dono.ativo === false || !PAPEIS_DONO.includes(dono.role)) return false;
+  return !!ag.teste === !!dono.conta_teste;   // conta de teste só com as de teste
+}
+function linhaAtividade(a: any) {
+  return `${fmtHora(new Date(a.data_prevista))} ${(TIPOS[a.tipo] || TIPOS.outro).label} · ${tituloDe(a)}`;
+}
+function payloadManha(nome: string, lista: any[]) {
+  const n = lista.length;
+  const linhas = lista.slice(0, 5).map(linhaAtividade);
+  if (n > 5) linhas.push(`+${n - 5} mais`);
+  return {
+    title: `☀️ Bom dia, ${primeiroNome(nome)}! Hoje: ${plural(n, 'atividade', 'atividades')}`,
+    body: linhas.join('\n'), url: `${URL_APP}/#/`, tag: 'lembrete-manha',
+  };
+}
+function payload15(ag: any) {
+  const ini = new Date(ag.data_prevista);
+  const min = Math.max(1, Math.round((ini.getTime() - Date.now()) / 60000));
+  const t = TIPOS[ag.tipo] || TIPOS.outro;
+  const extra = [ag.local_visita, ag.cliente && `Cliente: ${ag.cliente}`].filter(Boolean).join(' · ');
+  return {
+    title: `⏰ Em ${min} min: ${t.label}`,
+    body: `${fmtHora(ini)} · ${tituloDe(ag)}${extra ? '\n' + extra : ''}`,
+    url: `${URL_APP}/#/`, tag: `antes15-${ag.id}`,
+  };
+}
+async function enviarComChave(chave: string, userId: string, payload: unknown, extra: Record<string, unknown>) {
+  if (!(await reservar(chave, { user_id: userId, canal: 'push', ...extra }))) return 'já enviado antes';
+  try {
+    const r = await enviarPush(userId, payload);
+    await concluir(chave, r.falhas.length === 0 || r.enviados > 0);
+    return r;
+  } catch (err: any) {
+    await concluir(chave, false);
+    return 'falhou: ' + String(err?.message || err).slice(0, 160);
+  }
+}
+async function perfisDosDonos(ags: any[]) {
+  const ids = [...new Set(ags.map((a) => a.gerente_id))];
+  if (!ids.length) return new Map();
+  const { data } = await admin.from('profiles').select('id, nome, role, ativo, conta_teste').in('id', ids);
+  return new Map((data || []).map((p: any) => [p.id, p]));
+}
+
+// ☀️ Começo do dia (7h30): "Hoje: X atividades" para cada dono de agenda.
+async function executarManha(o: { dryRun?: boolean; refData?: string | null }) {
+  const h = hojeBRT(o.refData);
+  const ini = inicioDiaBRT(h.y, h.m, h.d), fim = inicioDiaBRT(h.y, h.m, h.d + 1);
+  const dataRef = chaveDia(ini);
+  const { data: ags, error } = await admin.from('agendamentos').select(CAMPOS)
+    .eq('status', 'pendente').gte('data_prevista', ini.toISOString()).lt('data_prevista', fim.toISOString())
+    .order('data_prevista');
+  if (error) throw error;
+  const porId = await perfisDosDonos(ags || []);
+  const porDono = new Map<string, any[]>();
+  for (const ag of ags || []) {
+    if (!donoValido(porId.get(ag.gerente_id), ag)) continue;
+    if (!porDono.has(ag.gerente_id)) porDono.set(ag.gerente_id, []);
+    porDono.get(ag.gerente_id)!.push(ag);
+  }
+  const resultado = [];
+  for (const [uid, lista] of porDono) {
+    const p: any = porId.get(uid);
+    resultado.push({
+      nome: p.nome, qtd: lista.length,
+      push: o.dryRun ? 'receberia'
+        : await enviarComChave(`manha:${dataRef}:${uid}:push`, uid, payloadManha(p.nome, lista), { modo: 'manha', qtd: lista.length }),
+    });
+  }
+  return { modo: 'manha', dataRef, atividades: (ags || []).length, dryRun: !!o.dryRun, resultado };
+}
+
+// ⏰ 15 minutos antes: roda a cada minuto (o banco só chama quando há o que avisar).
+// Janela: atividades que começam nos próximos 16 min e ainda não foram avisadas.
+// A chave inclui o horário: se a atividade for remarcada, avisa de novo no novo horário.
+async function executarAntes15(o: { dryRun?: boolean }) {
+  const agora = new Date();
+  const limite = new Date(agora.getTime() + 16 * 60 * 1000);
+  const { data: ags, error } = await admin.from('agendamentos').select(CAMPOS)
+    .eq('status', 'pendente').gt('data_prevista', agora.toISOString()).lte('data_prevista', limite.toISOString())
+    .order('data_prevista');
+  if (error) throw error;
+  const porId = await perfisDosDonos(ags || []);
+  const resultado = [];
+  for (const ag of ags || []) {
+    const dono: any = porId.get(ag.gerente_id);
+    if (!donoValido(dono, ag)) continue;
+    const chave = `antes15:${ag.id}:${new Date(ag.data_prevista).toISOString()}`;
+    resultado.push({
+      nome: dono.nome, atividade: linhaAtividade(ag),
+      push: o.dryRun ? 'receberia' : await enviarComChave(chave, dono.id, payload15(ag), { modo: 'antes15', qtd: 1 }),
+    });
+  }
+  return { modo: 'antes15', janela: { de: agora.toISOString(), ate: limite.toISOString() }, dryRun: !!o.dryRun, resultado };
+}
+
+// Exemplos para o próprio usuário testar no aparelho dele (Perfil → Notificações).
+async function exemploParaUsuario(userId: string, variante: string) {
+  const { data: p } = await admin.from('profiles').select('nome').eq('id', userId).single();
+  const nome = (p && p.nome) || '';
+  if (variante === 'manha') {
+    const h = hojeBRT();
+    const { data: ags } = await admin.from('agendamentos').select(CAMPOS).eq('gerente_id', userId).eq('status', 'pendente')
+      .gte('data_prevista', inicioDiaBRT(h.y, h.m, h.d).toISOString())
+      .lt('data_prevista', inicioDiaBRT(h.y, h.m, h.d + 1).toISOString()).order('data_prevista');
+    const pl = (ags && ags.length) ? payloadManha(nome, ags) : {
+      title: `☀️ Bom dia, ${primeiroNome(nome)}!`,
+      body: 'Exemplo: hoje você não tem atividades agendadas. Nos dias com agenda, a lista aparece aqui às 7h30.',
+      url: `${URL_APP}/#/`, tag: 'teste-manha',
+    };
+    return enviarPush(userId, { ...pl, title: '[TESTE] ' + pl.title });
+  }
+  // 15 min antes: usa a próxima atividade real dele (ou um exemplo), como se fosse daqui a 15 min
+  const { data: prox } = await admin.from('agendamentos').select(CAMPOS).eq('gerente_id', userId).eq('status', 'pendente')
+    .gt('data_prevista', new Date().toISOString()).order('data_prevista').limit(1);
+  const base = (prox && prox[0]) || { id: 'exemplo', tipo: 'checkin', imobiliaria: 'Imobiliária Exemplo' };
+  const pl = payload15({ ...base, data_prevista: new Date(Date.now() + 15 * 60 * 1000).toISOString() });
+  return enviarPush(userId, { ...pl, title: '[TESTE] ' + pl.title, tag: 'teste-15' });
+}
+
 async function usuarioDoToken(req: Request) {
   const h = req.headers.get('Authorization') || '';
   const tok = h.replace(/^Bearer\s+/i, '');
@@ -538,24 +685,32 @@ Deno.serve(async (req) => {
     const chamador = cronOk ? null : await usuarioDoToken(req);
 
     // Notificação de teste: cada usuário testa nos PRÓPRIOS aparelhos.
+    // variante 'manha' / 'antes15' → manda um exemplo de cada aviso, com a agenda real dele.
     if (modo === 'push-teste') {
       if (!chamador) return json({ error: 'Faça login para testar.' }, 401);
+      if (body.variante === 'manha' || body.variante === 'antes15') return json(await exemploParaUsuario(chamador.id, body.variante));
       const r = await enviarPush(chamador.id, {
         title: '🔔 Notificações ativadas!',
-        body: 'Você vai receber aqui o lembrete da sua agenda: às 18h (dia seguinte) e na segunda às 8h (semana).',
+        body: 'Você vai receber aqui: às 7h30 as atividades do dia, 15 min antes de cada uma, às 18h a agenda de amanhã e na segunda às 8h a semana.',
         url: `${URL_APP}/#/`, tag: 'teste',
       });
       return json(r);
     }
 
-    if (modo !== 'diario' && modo !== 'semanal') return json({ error: 'modo inválido (use diario, semanal ou push-teste)' }, 400);
+    if (!['diario', 'semanal', 'manha', 'antes15'].includes(modo)) {
+      return json({ error: 'modo inválido (use diario, semanal, manha, antes15 ou push-teste)' }, 400);
+    }
     if (!cronOk) {
       if (!chamador) return json({ error: 'não autorizado' }, 401);
       const { data: p } = await admin.from('profiles').select('role').eq('id', chamador.id).single();
       if (p?.role !== 'master') return json({ error: 'sem permissão' }, 403);
     }
+    if (modo === 'manha') return json(await executarManha({ dryRun: !!body.dryRun, refData: body.refData || null }));
+    if (modo === 'antes15') return json(await executarAntes15({ dryRun: !!body.dryRun }));
     const teste = body.teste && typeof body.teste.email === 'string' ? { email: body.teste.email } : null;
-    return json(await executar(modo, { teste, dryRun: !!body.dryRun, refData: body.refData || null, preview: !!body.preview } as any));
+    // Envio manual pelo master: { modo: 'diario'|'semanal', apenas: <user_id> } — exige master (não vale o segredo do agendador)
+    if (body.apenas && !chamador && !(cronOk && teste)) return json({ error: 'envio manual exige um master logado' }, 403);
+    return json(await executar(modo, { teste, dryRun: !!body.dryRun, refData: body.refData || null, preview: !!body.preview, apenas: body.apenas || null } as any));
   } catch (e: any) {
     return json({ error: String(e?.message || e) }, 500);
   }

@@ -110,8 +110,9 @@ export async function desvincularAparelho() {
   } catch (e) {}
 }
 
-export async function testarNotificacao() {
-  const { data, error } = await supabase.functions.invoke('lembretes-agenda', { body: { modo: 'push-teste' } });
+// variante: undefined = "ativadas!", 'manha' = exemplo do bom dia, 'antes15' = exemplo dos 15 min
+export async function testarNotificacao(variante) {
+  const { data, error } = await supabase.functions.invoke('lembretes-agenda', { body: { modo: 'push-teste', variante } });
   if (error) throw error;
   return data;
 }
@@ -148,7 +149,8 @@ export function cartaoNotificacoes({ modo = 'perfil' } = {}) {
     }
     const titulo = el('div', { class: 'font-bold text-sm' }, '🔔 Lembretes da sua agenda');
     const desc = el('div', { class: 'text-xs text-fg-muted' },
-      'Às 18h, a agenda do dia seguinte. Na segunda às 8h, a da semana. Também chegam por e-mail.');
+      'No celular: às 7h30, quantas atividades você tem no dia, e 15 minutos antes de cada uma. ' +
+      'Às 18h, a agenda de amanhã, e na segunda às 8h, a da semana (também por e-mail).');
     const corpo = [];
     const botoes = [];
 
@@ -182,19 +184,23 @@ export function cartaoNotificacoes({ modo = 'perfil' } = {}) {
         'Este navegador não suporta notificações. Os lembretes continuam chegando por e-mail.'));
     } else if (e.passo === 'ativo') {
       corpo.push(el('div', { class: 'text-sm text-success font-semibold' }, '✅ Ativadas neste aparelho'));
-      const bTeste = el('button', { class: 'btn btn-secondary btn-sm' }, '📨 Enviar notificação de teste');
-      bTeste.addEventListener('click', async () => {
-        bTeste.disabled = true; bTeste.textContent = 'Enviando...';
-        try {
-          const r = await testarNotificacao();
-          toast(r && r.enviados ? '✓ Enviada! Deve aparecer em segundos.' : 'O servidor não achou este aparelho. Toque em Desativar e ative de novo.',
-            r && r.enviados ? 'success' : 'warning', 5000);
-        } catch (err) { toast('Falha ao enviar: ' + (err.message || err), 'error', 6000); }
-        bTeste.disabled = false; bTeste.textContent = '📨 Enviar notificação de teste';
-      });
+      corpo.push(el('div', { class: 'text-xs text-fg-muted' }, 'Teste agora como cada aviso aparece (usa a sua agenda real):'));
+      const botaoTeste = (rotulo, variante) => {
+        const b = el('button', { class: 'btn btn-secondary btn-sm' }, rotulo);
+        b.addEventListener('click', async () => {
+          b.disabled = true; b.textContent = 'Enviando...';
+          try {
+            const r = await testarNotificacao(variante);
+            toast(r && r.enviados ? '✓ Enviada! Deve aparecer em segundos.' : 'O servidor não achou este aparelho. Toque em Desativar e ative de novo.',
+              r && r.enviados ? 'success' : 'warning', 5000);
+          } catch (err) { toast('Falha ao enviar: ' + (err.message || err), 'error', 6000); }
+          b.disabled = false; b.textContent = rotulo;
+        });
+        return b;
+      };
       const bOff = el('button', { class: 'btn btn-ghost btn-sm' }, 'Desativar');
       bOff.addEventListener('click', async () => { await desvincularAparelho(); toast('Notificações desativadas neste aparelho.', 'info', 4000); pintar(); });
-      botoes.push(bTeste, bOff);
+      botoes.push(botaoTeste('☀️ Testar “bom dia”', 'manha'), botaoTeste('⏰ Testar “15 min antes”', 'antes15'), bOff);
     }
 
     if (modo === 'banner') {

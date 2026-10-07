@@ -565,7 +565,7 @@ export async function perfilView(_params, app) {
     }),
     secaoRecolhivel({
       titulo: '🔔 Notificações e lembretes',
-      descricao: 'Lembrete da agenda às 18h (dia seguinte) e na segunda às 8h (semana), por e-mail e no celular.',
+      descricao: 'No celular: 7h30 (atividades do dia) e 15 min antes de cada uma. Por e-mail e celular: 18h (amanhã) e segunda 8h (semana).',
       conteudo: cartaoNotificacoes({ modo: 'perfil' }),
     }),
     !isM && secaoRecolhivel({

@@ -288,6 +288,41 @@ function openEditModal(p) {
     fields.form.appendChild(deleteSection);
   }
 
+  // ENVIO MANUAL DO LEMBRETE (só master): manda AGORA, por e-mail, o lembrete da
+  // agenda desta pessoa — o mesmo e-mail das 18h / segunda 8h. Para líderes,
+  // vai o resumo dos gerentes deles. Não envia se não houver atividade.
+  if (isMaster() && ['gerente', 'supervisor', 'gestor_regional', 'superintendente'].includes(p.role)) {
+    const enviarLembrete = async (modo, btn) => {
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Enviando...';
+      try {
+        const { data, error } = await supabase.functions.invoke('lembretes-agenda', { body: { modo, apenas: p.id } });
+        if (error) throw error;
+        if (data && data.ok) {
+          const n = (data.enviados || []).reduce((s, x) => s + (x.qtd || 0), 0);
+          toast(`✓ E-mail enviado para ${data.para} (${n} atividade${n === 1 ? '' : 's'}).`, 'success', 5000);
+        } else {
+          toast((data && (data.motivo || data.error)) || 'Não foi enviado.', 'warning', 6000);
+        }
+      } catch (e) {
+        toast('Falha ao enviar: ' + (e.message || e), 'error', 6000);
+      }
+      btn.disabled = false; btn.textContent = original;
+    };
+    const bAmanha = el('button', { type: 'button', class: 'btn btn-secondary btn-sm' }, '📅 Agenda de amanhã');
+    const bSemana = el('button', { type: 'button', class: 'btn btn-secondary btn-sm' }, '🗓️ Agenda da semana');
+    bAmanha.addEventListener('click', () => enviarLembrete('diario', bAmanha));
+    bSemana.addEventListener('click', () => enviarLembrete('semanal', bSemana));
+    fields.form.appendChild(el('div', { class: 'border-t border-border pt-3 mt-1 flex flex-col gap-2' },
+      el('div', { class: 'text-sm font-semibold' }, '✉️ Enviar lembrete por e-mail agora'),
+      el('div', { class: 'text-xs text-fg-muted' },
+        ['gestor_regional', 'superintendente'].includes(p.role)
+          ? 'Envia o resumo da agenda dos gerentes desta pessoa. Não envia se nenhum tiver atividade no período.'
+          : 'Envia a agenda desta pessoa para o e-mail dela. Não envia se ela não tiver atividade no período.'),
+      el('div', { class: 'flex gap-2 flex-wrap' }, bAmanha, bSemana),
+    ));
+  }
+
   const submitBtn = el('button', { class: 'btn btn-primary' }, 'Salvar');
   // Reenviar convite permitido pra qualquer um, exceto o master principal
   // (ele nao deve ser reconvidado - ja tem acesso garantido e protegido).
