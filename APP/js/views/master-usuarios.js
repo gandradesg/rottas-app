@@ -108,6 +108,51 @@ async function reload() {
   profiles.forEach(p => listEl.appendChild(userRow(p)));
 }
 
+// ENVIO MANUAL DO LEMBRETE (só master): manda AGORA, por e-mail, o lembrete da
+// agenda — o mesmo e-mail das 18h / segunda 8h. Gerente/supervisor recebem a
+// própria agenda; superintendente e gestor regional, a dos gerentes da equipe.
+// Não envia se não houver atividade no período.
+const PAPEIS_LIDER = ['gestor_regional', 'superintendente'];
+const PAPEIS_LEMBRETE = ['gerente', 'supervisor', ...PAPEIS_LIDER];
+
+async function enviarLembreteManual(p, modo, btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const { data, error } = await supabase.functions.invoke('lembretes-agenda', { body: { modo, apenas: p.id } });
+    if (error) throw error;
+    if (data && data.ok) {
+      const n = (data.enviados || []).reduce((s, x) => s + (x.qtd || 0), 0);
+      toast(`✓ ${p.nome.split(' ')[0]}: e-mail enviado para ${data.para} (${n} atividade${n === 1 ? '' : 's'}).`, 'success', 5000);
+    } else {
+      toast(`${p.nome.split(' ')[0]}: ${(data && (data.motivo || data.error)) || 'não foi enviado.'}`, 'warning', 6000);
+    }
+  } catch (e) {
+    toast('Falha ao enviar: ' + (e.message || e), 'error', 6000);
+  }
+  btn.disabled = false; btn.innerHTML = original;
+}
+
+// classeGrupo: no computador fica ao lado do editar; no celular, numa linha
+// embaixo dos dados (sempre com texto — os ícones sozinhos ficavam iguais).
+function botoesLembrete(p, classeGrupo) {
+  if (!isMaster() || !p.ativo || !PAPEIS_LEMBRETE.includes(p.role)) return null;
+  const daEquipe = PAPEIS_LIDER.includes(p.role) ? ' da equipe' : '';
+  const botao = (txt, modo, titulo) => {
+    const b = el('button', {
+      type: 'button',
+      class: 'btn btn-ghost btn-sm px-2 whitespace-nowrap text-xs',
+      title: titulo,
+    }, '✉️ ', txt);
+    b.addEventListener('click', (ev) => { ev.stopPropagation(); enviarLembreteManual(p, modo, b); });
+    return b;
+  };
+  return el('div', { class: 'items-center gap-1 flex-shrink-0 ' + classeGrupo },
+    botao('Amanhã', 'diario', `Enviar agora, por e-mail, a agenda de amanhã${daEquipe}`),
+    botao('Semana', 'semanal', `Enviar agora, por e-mail, a agenda da semana${daEquipe}`),
+  );
+}
+
 function userRow(p) {
   const meta = ROLES[p.role] || { label: p.role || '?', icon: '·', color: 'gray' };
   const colorCls = {
@@ -136,7 +181,11 @@ function userRow(p) {
           ' · ',
           p.telefone || 'sem telefone',
         ),
+        // celular: linha própria embaixo dos dados
+        botoesLembrete(p, 'flex sm:hidden mt-1.5 -ml-2'),
       ),
+      // computador: ao lado do editar
+      botoesLembrete(p, 'hidden sm:flex'),
       // Botao editar: respeita HIERARQUIA RIGIDA
       // Master > {Gestor, Superintendente, Gestor Regional} > Gerente > Supervisor
       // Cada nivel so edita quem esta ABAIXO + a si mesmo
@@ -286,41 +335,6 @@ function openEditModal(p) {
         'O histórico de atividades será mantido.'),
     );
     fields.form.appendChild(deleteSection);
-  }
-
-  // ENVIO MANUAL DO LEMBRETE (só master): manda AGORA, por e-mail, o lembrete da
-  // agenda desta pessoa — o mesmo e-mail das 18h / segunda 8h. Para líderes,
-  // vai o resumo dos gerentes deles. Não envia se não houver atividade.
-  if (isMaster() && ['gerente', 'supervisor', 'gestor_regional', 'superintendente'].includes(p.role)) {
-    const enviarLembrete = async (modo, btn) => {
-      const original = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Enviando...';
-      try {
-        const { data, error } = await supabase.functions.invoke('lembretes-agenda', { body: { modo, apenas: p.id } });
-        if (error) throw error;
-        if (data && data.ok) {
-          const n = (data.enviados || []).reduce((s, x) => s + (x.qtd || 0), 0);
-          toast(`✓ E-mail enviado para ${data.para} (${n} atividade${n === 1 ? '' : 's'}).`, 'success', 5000);
-        } else {
-          toast((data && (data.motivo || data.error)) || 'Não foi enviado.', 'warning', 6000);
-        }
-      } catch (e) {
-        toast('Falha ao enviar: ' + (e.message || e), 'error', 6000);
-      }
-      btn.disabled = false; btn.textContent = original;
-    };
-    const bAmanha = el('button', { type: 'button', class: 'btn btn-secondary btn-sm' }, '📅 Agenda de amanhã');
-    const bSemana = el('button', { type: 'button', class: 'btn btn-secondary btn-sm' }, '🗓️ Agenda da semana');
-    bAmanha.addEventListener('click', () => enviarLembrete('diario', bAmanha));
-    bSemana.addEventListener('click', () => enviarLembrete('semanal', bSemana));
-    fields.form.appendChild(el('div', { class: 'border-t border-border pt-3 mt-1 flex flex-col gap-2' },
-      el('div', { class: 'text-sm font-semibold' }, '✉️ Enviar lembrete por e-mail agora'),
-      el('div', { class: 'text-xs text-fg-muted' },
-        ['gestor_regional', 'superintendente'].includes(p.role)
-          ? 'Envia o resumo da agenda dos gerentes desta pessoa. Não envia se nenhum tiver atividade no período.'
-          : 'Envia a agenda desta pessoa para o e-mail dela. Não envia se ela não tiver atividade no período.'),
-      el('div', { class: 'flex gap-2 flex-wrap' }, bAmanha, bSemana),
-    ));
   }
 
   const submitBtn = el('button', { class: 'btn btn-primary' }, 'Salvar');

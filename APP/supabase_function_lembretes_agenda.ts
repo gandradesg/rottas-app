@@ -592,9 +592,11 @@ async function perfisDosDonos(ags: any[]) {
   return new Map((data || []).map((p: any) => [p.id, p]));
 }
 
-// ☀️ Começo do dia (7h30): "Hoje: X atividades" para cada dono de agenda.
+// ☀️ Começo do dia (8h): "Hoje: X atividades" para cada dono de agenda.
+// Na SEGUNDA não envia: às 8h já sai o lembrete da semana (evita 2 avisos no mesmo minuto).
 async function executarManha(o: { dryRun?: boolean; refData?: string | null }) {
   const h = hojeBRT(o.refData);
+  if (h.dow === 1) return { modo: "manha", pulado: "segunda-feira: o lembrete da semana das 8h já cobre o dia", resultado: [] };
   const ini = inicioDiaBRT(h.y, h.m, h.d), fim = inicioDiaBRT(h.y, h.m, h.d + 1);
   const dataRef = chaveDia(ini);
   const { data: ags, error } = await admin.from('agendamentos').select(CAMPOS)
@@ -655,7 +657,7 @@ async function exemploParaUsuario(userId: string, variante: string) {
       .lt('data_prevista', inicioDiaBRT(h.y, h.m, h.d + 1).toISOString()).order('data_prevista');
     const pl = (ags && ags.length) ? payloadManha(nome, ags) : {
       title: `☀️ Bom dia, ${primeiroNome(nome)}!`,
-      body: 'Exemplo: hoje você não tem atividades agendadas. Nos dias com agenda, a lista aparece aqui às 7h30.',
+      body: 'Exemplo: hoje você não tem atividades agendadas. Nos dias com agenda, a lista aparece aqui às 8h.',
       url: `${URL_APP}/#/`, tag: 'teste-manha',
     };
     return enviarPush(userId, { ...pl, title: '[TESTE] ' + pl.title });
@@ -691,7 +693,7 @@ Deno.serve(async (req) => {
       if (body.variante === 'manha' || body.variante === 'antes15') return json(await exemploParaUsuario(chamador.id, body.variante));
       const r = await enviarPush(chamador.id, {
         title: '🔔 Notificações ativadas!',
-        body: 'Você vai receber aqui: às 7h30 as atividades do dia, 15 min antes de cada uma, às 18h a agenda de amanhã e na segunda às 8h a semana.',
+        body: 'Você vai receber aqui: às 8h as atividades do dia (na segunda, a semana), 15 min antes de cada uma, e às 18h a agenda de amanhã.',
         url: `${URL_APP}/#/`, tag: 'teste',
       });
       return json(r);

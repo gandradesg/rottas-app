@@ -149,7 +149,7 @@ export function cartaoNotificacoes({ modo = 'perfil' } = {}) {
     }
     const titulo = el('div', { class: 'font-bold text-sm' }, '🔔 Lembretes da sua agenda');
     const desc = el('div', { class: 'text-xs text-fg-muted' },
-      'No celular: às 7h30, quantas atividades você tem no dia, e 15 minutos antes de cada uma. ' +
+      'No celular: às 8h, quantas atividades você tem no dia, e 15 minutos antes de cada uma. ' +
       'Às 18h, a agenda de amanhã, e na segunda às 8h, a da semana (também por e-mail).');
     const corpo = [];
     const botoes = [];

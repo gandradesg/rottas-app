@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.63';
+export const APP_VERSION = '1.9.64';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -8,10 +8,18 @@ export const APP_BUILD_DATE = '2026-07-10';
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
   {
+    version: '1.9.64',
+    date: '07/10/2026',
+    changes: [
+      'Notificação de bom dia passou para as 8h. Na segunda ela não é enviada, porque às 8h já chega o lembrete da semana (evita dois avisos no mesmo minuto)',
+      'Usuários (master): os botões "✉️ Amanhã" e "✉️ Semana" agora ficam na linha de cada pessoa, ao lado do editar. Para superintendentes e gestores regionais, enviam a agenda da equipe deles',
+    ],
+  },
+  {
     version: '1.9.63',
     date: '07/10/2026',
     changes: [
-      'NOTIFICAÇÃO DE BOM DIA (7h30): "Bom dia! Hoje: X atividades", com a lista do dia. Só para quem tem atividade',
+      'NOTIFICAÇÃO DE BOM DIA: "Bom dia! Hoje: X atividades", com a lista do dia. Só para quem tem atividade',
       'NOTIFICAÇÃO 15 MINUTOS ANTES de cada atividade: "Em 15 min: Check-in · IMOBILIÁRIA". Se a atividade for remarcada, avisa de novo no novo horário; se for agendada em cima da hora, avisa na hora',
       'O servidor confere a agenda a cada minuto, mas só aciona o envio quando há o que avisar (sem chamadas à toa)',
       'Perfil → Notificações: botões para testar como chegam o "bom dia" e o "15 min antes", usando a sua agenda real',
