@@ -316,7 +316,7 @@ function faixaPendencias(a: number) {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 4px 0;"><tr>
     <td bgcolor="#FEF2F2" style="background:#FEF2F2;border:1px solid #FECACA;border-left:5px solid #DC2626;border-radius:12px;padding:14px 16px;">
       <div style="font:800 15px/1.3 Arial,Helvetica,sans-serif;color:#991B1B;">⚠️ ${plural(a, 'atividade aguardando registro', 'atividades aguardando registro')}</div>
-      <div style="margin-top:4px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#7F1D1D;">Já passaram do horário e ainda não foram registradas. Elas estão no final deste e-mail, com o botão para registrar agora.</div>
+      <div style="margin-top:4px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#7F1D1D;">Existem atividades não registradas. Elas estão no final deste e-mail, com o botão para registrar agora.</div>
     </td></tr></table>`;
 }
 
@@ -385,12 +385,12 @@ async function montarGerente(modo: string, p: any, ags: any[], rotulo: string, a
       : `🗓️ Sua semana · ${plural(n, 'atividade', 'atividades')}`;
   const html = emailHtml({
     preheader: soPendencias
-      ? `${plural(a, 'atividade já passou', 'atividades já passaram')} do horário e ainda não foi registrada. Registre agora.`
+      ? `Existem atividades não registradas na sua agenda. Registre agora.`
       : diario ? `Amanhã você tem ${plural(n, 'atividade', 'atividades')}${a > 0 ? ` e ${a} aguardando registro` : ''}.` : `${plural(n, 'atividade', 'atividades')} nesta semana.`,
     etiqueta: soPendencias ? 'Pendências da agenda' : diario ? 'Agenda de amanhã' : 'Agenda da semana',
     titulo: soPendencias ? `Olá, ${nome}! Você tem atividades sem registro` : `Olá, ${nome}! ${diario ? 'Sua agenda de amanhã' : 'Sua semana'}`,
     subtitulo: soPendencias
-      ? `${plural(a, 'atividade já passou', 'atividades já passaram')} do horário e ainda não ${a === 1 ? 'foi registrada' : 'foram registradas'}`
+      ? `Existem atividades não registradas na sua agenda`
       : `${rotulo} · ${plural(n, 'atividade agendada', 'atividades agendadas')}`,
     resumo: resumoPorTipo(ags) + seloPend,
     corpo,
