@@ -6,6 +6,7 @@ import { isAdmin, activeViewRole } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { exportAtividadesExcel } from '../exports.js';
+import { periodoFiltro, aplicarPeriodo } from '../components/periodo.js';
 
 export async function historicoView(_params, app) {
   // Visão de EQUIPE para todos os papéis admin (gestor, master, superintendente,
@@ -35,6 +36,8 @@ export async function historicoView(_params, app) {
       // Períodos da home (dia/semana/mes/geral) → períodos do histórico
       const mapPeriodo = { dia: 'hoje', semana: 'semana', mes: 'mes', geral: 'tudo' };
       if (preset.periodo) filters.periodo = mapPeriodo[preset.periodo] || preset.periodo;
+      // Vindo do Painel: período completo (semana/mês navegado ou De → Até)
+      if (preset.periodoV && preset.periodoV.modo) { filters.periodoV = preset.periodoV; filters.periodo = preset.periodoV.modo; }
     }
   } catch (e) { /* ignora preset inválido */ }
 
@@ -58,12 +61,9 @@ export async function historicoView(_params, app) {
     el('option', { value: 'orulo' }, 'Órulos'),
     el('option', { value: 'outro' }, 'Outros'),
   );
-  const periodoSel = el('select', { class: 'select' },
-    el('option', { value: 'hoje' }, 'Hoje'),
-    el('option', { value: 'semana' }, 'Últimos 7 dias'),
-    el('option', { value: 'mes', selected: true }, 'Últimos 30 dias'),
-    el('option', { value: 'tudo' }, 'Tudo'),
-  );
+  // Período: atalhos + Semana/Mês navegáveis (‹ ›) + De → Até (componente compartilhado)
+  const per = periodoFiltro({ inicial: filters.periodoV || { modo: filters.periodo }, aoMudar: () => reload() });
+  const periodoSel = per.select;
 
   let gerenteSel = null;
   if (isTeamView) {
@@ -103,6 +103,7 @@ export async function historicoView(_params, app) {
 
   const filterItems = [
     el('div', { class: 'grid grid-cols-2 gap-2' }, tipoSel, periodoSel),
+    per.extra,   // setas ‹ › da semana/mês ou os campos De/Até
     subFilterWrap,
   ];
   if (gerenteSel) filterItems.push(gerenteSel);
@@ -158,17 +159,7 @@ export async function historicoView(_params, app) {
     if (filters.tipo === 'atendimento' && filters.termometro !== 'todos') q = q.eq('termometro', filters.termometro);
     if (filters.tipo === 'checkin' && filters.motivo !== 'todos') q = q.eq('motivo_visita', filters.motivo);
 
-    const now = new Date();
-    if (filters.periodo === 'hoje') {
-      const d = new Date(); d.setHours(0,0,0,0);
-      q = q.gte('created_at', d.toISOString());
-    } else if (filters.periodo === 'semana') {
-      const d = new Date(now.getTime() - 7*24*60*60*1000);
-      q = q.gte('created_at', d.toISOString());
-    } else if (filters.periodo === 'mes') {
-      const d = new Date(now.getTime() - 30*24*60*60*1000);
-      q = q.gte('created_at', d.toISOString());
-    }
+    q = aplicarPeriodo(q, per.intervalo());   // início E fim (semana, mês, De → Até)
 
     const qFinal = q.limit(500);
     const { data, error } = await runQuery(() => qFinal, { ms: 8000, label: 'histórico' });
@@ -196,7 +187,7 @@ export async function historicoView(_params, app) {
     summary.innerHTML = '';
     summary.append(
       el('span', {}, `${filtered.length} atividade${filtered.length !== 1 ? 's' : ''}`),
-      el('span', {}, periodoSel.options[periodoSel.selectedIndex].textContent),
+      el('span', {}, per.intervalo().rotulo),
     );
 
     if (!filtered.length) {
@@ -225,7 +216,6 @@ export async function historicoView(_params, app) {
     renderSubFilter();
     reload();
   });
-  periodoSel.addEventListener('change', () => { filters.periodo = periodoSel.value; reload(); });
   if (gerenteSel) gerenteSel.addEventListener('change', () => { filters.gerente = gerenteSel.value; reload(); });
   let searchTimer;
   buscaInput.addEventListener('input', () => {
@@ -235,7 +225,6 @@ export async function historicoView(_params, app) {
 
   // Reflete os filtros iniciais (inclui preset vindo da home) nos selects
   tipoSel.value = filters.tipo;
-  periodoSel.value = filters.periodo;
   renderSubFilter();
 
   reload();

@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.64';
+export const APP_VERSION = '1.9.65';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,15 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.65',
+    date: '08/10/2026',
+    changes: [
+      'DASHBOARD → nova seção AGENDA: agendamentos da equipe em Dia, Semana (domingo a sábado) ou Mês, com ‹ › e "Hoje". Mostra o que foi realizado, o que está por vir e o que ATRASOU; taxa de realização; filtros por status e tipo; tabela de cumprimento por gerente; toque num agendamento para ver os detalhes. Respeita o escopo de cada perfil e os filtros do topo',
+      'PAINEL e HISTÓRICO: novo filtro de período com Semana e Mês navegáveis (‹ › para a semana/mês anterior e o seguinte, igual à agenda) e "De → Até" para escolher qualquer intervalo',
+      'Ao abrir o Histórico a partir do Painel, ele já vem no mesmo período (inclusive a semana/mês navegado ou o De → Até)',
+    ],
+  },
   {
     version: '1.9.64',
     date: '07/10/2026',

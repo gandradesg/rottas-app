@@ -6,6 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { renderLineChart, renderFunnel } from './charts.js?v=104';
 import { initAiChat, updateAiContext } from './ai-chat.js?v=104';
+import { initAgenda, recarregarAgenda } from './agenda.js?v=105';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
@@ -1007,6 +1008,8 @@ async function reload() {
     renderPropostasPage(curr);
     renderRanking();
     renderDrillPills();
+    // Filtros do topo mudaram com a Agenda aberta: recarrega ela também
+    if (state.currentSection === 'agenda') recarregarAgenda();
 
     // Badges
     $('badge-checkins').textContent     = fmt.num(curr.filter(r => r.tipo === 'checkin').length);
@@ -1064,19 +1067,21 @@ function updateLastUpdateChip() {
 function switchSection(section) {
   state.currentSection = section;
   sessionStorage.setItem('dash-section', section);
-  const all = ['overview', 'checkins', 'atendimentos', 'propostas', 'visitas', 'charts', 'rankings'];
+  const all = ['overview', 'agenda', 'checkins', 'atendimentos', 'propostas', 'visitas', 'charts', 'rankings'];
   all.forEach(s => { const el = $(`sec-${s}`); if (el) el.style.display = (s === section) ? 'block' : 'none'; });
   $$('.sb-link[data-section]').forEach(l => l.classList.toggle('active', l.dataset.section === section));
   const titlesByRole = {
     recepcao_rottas: { visitas: 'Minhas Visitas Registradas' },
     master:          { visitas: 'Visitas (todas — Recepção Rottas)' },
   };
-  const titles = { overview:'Visão Geral', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', visitas:'Visitas (Recepção)', charts:'Curvas & Funil', rankings:'Rankings' };
+  const titles = { overview:'Visão Geral', agenda:'Agenda', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', visitas:'Visitas (Recepção)', charts:'Curvas & Funil', rankings:'Rankings' };
   const roleTitles = titlesByRole[state.profile?.role] || {};
   Object.assign(titles, roleTitles);
   $('section-title').textContent = titles[section] || section;
   // Ticker só na overview
   $('ticker-wrap').style.display = (section === 'overview') ? 'block' : 'none';
+  // Agenda carrega sob demanda (só quando a seção é aberta)
+  if (section === 'agenda' && state.profile) recarregarAgenda();
   $('sidebar').classList.remove('open');
 }
 
@@ -1190,6 +1195,7 @@ async function boot() {
 
   renderUserChip();
   wireTheme(); wireLogout(); wireFilters(); wireRankTabs(); wirePropostasTabs(); wireSidebar(); wireHistoryModal(); wireChatToggle();
+  initAgenda({ sb, state, toast });
 
   // Sidebar de Visitas: APARECE para Master E para Recepção Rottas
   const role = state.profile.role;

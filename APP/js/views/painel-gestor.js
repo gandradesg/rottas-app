@@ -7,6 +7,7 @@ import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, ESTADOS_BR } from '../config.js';
 import { exportAtividadesExcel, exportElementPNG } from '../exports.js';
 import { aplicarEdicao, rejeitarEdicao, excluirAtividade, FIELD_LABELS } from '../activity-actions.js';
+import { periodoFiltro, aplicarPeriodo } from '../components/periodo.js';
 
 export async function painelGestorView(_params, app) {
   const filters = {
@@ -62,12 +63,11 @@ export async function painelGestorView(_params, app) {
 
   // Filter bar (collapsable)
   const filterBar = el('div', { class: 'card p-3 grid grid-cols-2 gap-2' });
-  const periodoSel = el('select', { class: 'select', 'aria-label': 'Período' },
-    el('option', { value: 'hoje' }, 'Hoje'),
-    el('option', { value: 'semana' }, 'Últimos 7 dias'),
-    el('option', { value: 'mes', selected: true }, 'Últimos 30 dias'),
-    el('option', { value: 'tudo' }, 'Tudo'),
-  );
+  // Período: atalhos + Semana/Mês navegáveis (‹ ›) + De → Até (componente compartilhado)
+  const per = periodoFiltro({ inicial: { modo: filters.periodo }, aoMudar: () => reload() });
+  const periodoSel = per.select;
+  periodoSel.classList.add('col-span-2');
+  per.extra.className = 'col-span-2 empty:hidden';   // setas ‹ › ou De/Até, linha inteira
   const empSel = el('select', { class: 'select', 'aria-label': 'Empreendimento' }, el('option', { value: 'todos' }, 'Todos empreendimentos'));
   state.empreendimentos.forEach(e => empSel.appendChild(el('option', { value: e.nome }, e.nome)));
   const imobSel = el('select', { class: 'select', 'aria-label': 'Imobiliária' }, el('option', { value: 'todas' }, 'Todas imobiliárias'));
@@ -76,7 +76,7 @@ export async function painelGestorView(_params, app) {
   const estSel = el('select', { class: 'select', 'aria-label': 'Estado' }, el('option', { value: 'todos' }, 'Todos estados'));
   ESTADOS_BR.forEach(uf => estSel.appendChild(el('option', { value: uf }, uf)));
 
-  filterBar.append(periodoSel, empSel, imobSel, gerSel, estSel);
+  filterBar.append(periodoSel, per.extra, empSel, imobSel, gerSel, estSel);
   content.appendChild(filterBar);
 
   // Busca dinâmica (filtra o conteúdo de todas as abas)
@@ -99,15 +99,9 @@ export async function painelGestorView(_params, app) {
   let baseAtividades = [];
 
   async function reload() {
-    const now = new Date();
-    let from = null;
-    if (filters.periodo === 'hoje') { from = new Date(); from.setHours(0,0,0,0); }
-    else if (filters.periodo === 'semana') from = new Date(now.getTime() - 7*86400000);
-    else if (filters.periodo === 'mes') from = new Date(now.getTime() - 30*86400000);
-
     // Exclui tipo='visita' (exclusiva da Recepção Rottas — não aparece no painel)
     let q = supabase.from('atividades').select('*, profiles!atividades_gerente_id_fkey(nome, email, cidade, estado)').eq('cancelada', false).neq('tipo', 'visita').or('teste.is.null,teste.eq.false').order('created_at', { ascending: false });
-    if (from) q = q.gte('created_at', from.toISOString());
+    q = aplicarPeriodo(q, per.intervalo());   // início E fim (semana, mês, De → Até)
     if (filters.empreendimento !== 'todos') q = q.or(`empreendimento.eq.${filters.empreendimento},produto.eq.${filters.empreendimento}`);
     if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
 
@@ -380,7 +374,8 @@ export async function painelGestorView(_params, app) {
 
   // Abre o Histórico da equipe já filtrado por tipo (mesmo período do painel)
   function goHist(tipo) {
-    try { localStorage.setItem('historico-preset', JSON.stringify({ tipo, periodo: filters.periodo })); } catch (e) {}
+    // Leva o período COMPLETO (inclui a semana/mês navegado ou o De → Até)
+    try { localStorage.setItem('historico-preset', JSON.stringify({ tipo, periodoV: per.valor() })); } catch (e) {}
     navigate('/historico');
   }
 
@@ -826,7 +821,6 @@ export async function painelGestorView(_params, app) {
   }
 
   // Listeners
-  periodoSel.addEventListener('change', () => { filters.periodo = periodoSel.value; reload(); });
   empSel.addEventListener('change', () => { filters.empreendimento = empSel.value; reload(); });
   imobSel.addEventListener('change', () => { filters.imobiliaria = imobSel.value; reload(); });
   gerSel.addEventListener('change', () => { filters.gerente = gerSel.value; reload(); });
