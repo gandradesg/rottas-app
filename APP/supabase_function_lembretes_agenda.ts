@@ -505,6 +505,16 @@ async function concluir(chave: string, ok: boolean, erro?: string) {
 
 async function executar(modo: string, o: { teste?: { email: string } | null; dryRun?: boolean; refData?: string | null }) {
   const { ini, fim, dataRef, rotulo } = janela(modo, o.refData);
+
+  // FIM DE SEMANA (só o lembrete automático das 18h; o envio manual vale sempre):
+  //   domingo 18h → não envia (segunda 8h já sai o resumo da semana);
+  //   sexta e sábado 18h → só para quem TEM atividade no dia seguinte.
+  const diaSemana = hojeBRT(o.refData).dow;   // 0 = domingo … 5 = sexta, 6 = sábado
+  const manual = !!(o as any).apenas;
+  if (modo === 'diario' && !manual && diaSemana === 0) {
+    return { modo, pulado: 'domingo: o resumo da semana sai na segunda às 8h', resultado: [] };
+  }
+  const soQuemTemAmanha = modo === 'diario' && !manual && (diaSemana === 5 || diaSemana === 6);
   const { data: ags, error } = await admin.from('agendamentos').select(CAMPOS)
     .eq('status', 'pendente').gte('data_prevista', ini.toISOString()).lt('data_prevista', fim.toISOString())
     .order('data_prevista');
@@ -551,8 +561,9 @@ async function executar(modo: string, o: { teste?: { email: string } | null; dry
   }
 
   // Recebe quem tem agenda amanhã OU pendências (o objetivo é fazer registrar).
+  // Sexta e sábado: só quem tem atividade amanhã (pendências vão junto, se houver).
   const envios: any[] = [];
-  const donos = new Set([...porDono.keys(), ...pendPorDono.keys()]);
+  const donos = new Set(soQuemTemAmanha ? [...porDono.keys()] : [...porDono.keys(), ...pendPorDono.keys()]);
   for (const uid of donos) {
     const p = porId.get(uid);
     envios.push({ papel: 'gerente', perfil: p, ...(await montarGerente(modo, p, porDono.get(uid) || [], rotulo, pendPorDono.get(uid) || [], antigasPorDono.get(uid) || 0)) });
