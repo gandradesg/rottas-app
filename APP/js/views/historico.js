@@ -6,7 +6,7 @@ import { isAdmin, activeViewRole } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { exportAtividadesExcel } from '../exports.js';
-import { periodoFiltro, aplicarPeriodo } from '../components/periodo.js';
+import { periodoFiltro, aplicarPeriodo, isoDia } from '../components/periodo.js';
 
 export async function historicoView(_params, app) {
   // Visão de EQUIPE para todos os papéis admin (gestor, master, superintendente,
@@ -34,8 +34,14 @@ export async function historicoView(_params, app) {
       localStorage.removeItem('historico-preset');
       if (preset.tipo) filters.tipo = preset.tipo;
       // Períodos da home (dia/semana/mes/geral) → períodos do histórico
-      const mapPeriodo = { dia: 'hoje', semana: 'semana', mes: 'mes', geral: 'tudo' };
-      if (preset.periodo) filters.periodo = mapPeriodo[preset.periodo] || preset.periodo;
+      // O Início conta "Semana" = últimos 7 dias e "Mês" = últimos 30 dias. Para o
+      // número do card bater com a lista, abre como Período com essas mesmas datas.
+      const diasAtras = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return isoDia(d); };
+      const hojeIso = isoDia(new Date());
+      if (preset.periodo === 'dia') filters.periodoV = { modo: 'dia' };
+      else if (preset.periodo === 'semana') filters.periodoV = { modo: 'intervalo', de: diasAtras(7), ate: hojeIso };
+      else if (preset.periodo === 'mes') filters.periodoV = { modo: 'intervalo', de: diasAtras(30), ate: hojeIso };
+      else if (preset.periodo === 'geral') filters.periodoV = { modo: 'tudo' };
       // Vindo do Painel: período completo (semana/mês navegado ou De → Até)
       if (preset.periodoV && preset.periodoV.modo) { filters.periodoV = preset.periodoV; filters.periodo = preset.periodoV.modo; }
     }
@@ -63,7 +69,6 @@ export async function historicoView(_params, app) {
   );
   // Período: atalhos + Semana/Mês navegáveis (‹ ›) + De → Até (componente compartilhado)
   const per = periodoFiltro({ inicial: filters.periodoV || { modo: filters.periodo }, aoMudar: () => reload() });
-  const periodoSel = per.select;
 
   let gerenteSel = null;
   if (isTeamView) {
@@ -102,14 +107,14 @@ export async function historicoView(_params, app) {
   }
 
   const filterItems = [
-    el('div', { class: 'grid grid-cols-2 gap-2' }, tipoSel, periodoSel),
-    per.extra,   // setas ‹ › da semana/mês ou os campos De/Até
+    tipoSel,
     subFilterWrap,
   ];
   if (gerenteSel) filterItems.push(gerenteSel);
   filterItems.push(buscaInput);
   filterBar.append(...filterItems);
   content.appendChild(filterBar);
+  content.appendChild(per.bloco);   // Dia | Semana | Mês | Período | Tudo + ‹ › (igual à Agenda)
 
   // Botão exportar
   const exportBtn = el('button', {

@@ -65,9 +65,6 @@ export async function painelGestorView(_params, app) {
   const filterBar = el('div', { class: 'card p-3 grid grid-cols-2 gap-2' });
   // Período: atalhos + Semana/Mês navegáveis (‹ ›) + De → Até (componente compartilhado)
   const per = periodoFiltro({ inicial: { modo: filters.periodo }, aoMudar: () => reload() });
-  const periodoSel = per.select;
-  periodoSel.classList.add('col-span-2');
-  per.extra.className = 'col-span-2 empty:hidden';   // setas ‹ › ou De/Até, linha inteira
   const empSel = el('select', { class: 'select', 'aria-label': 'Empreendimento' }, el('option', { value: 'todos' }, 'Todos empreendimentos'));
   state.empreendimentos.forEach(e => empSel.appendChild(el('option', { value: e.nome }, e.nome)));
   const imobSel = el('select', { class: 'select', 'aria-label': 'Imobiliária' }, el('option', { value: 'todas' }, 'Todas imobiliárias'));
@@ -76,8 +73,9 @@ export async function painelGestorView(_params, app) {
   const estSel = el('select', { class: 'select', 'aria-label': 'Estado' }, el('option', { value: 'todos' }, 'Todos estados'));
   ESTADOS_BR.forEach(uf => estSel.appendChild(el('option', { value: uf }, uf)));
 
-  filterBar.append(periodoSel, per.extra, empSel, imobSel, gerSel, estSel);
+  filterBar.append(empSel, imobSel, gerSel, estSel);
   content.appendChild(filterBar);
+  content.appendChild(per.bloco);   // Dia | Semana | Mês | Período | Tudo + ‹ › (igual à Agenda)
 
   // Busca dinâmica (filtra o conteúdo de todas as abas)
   const buscaInput = el('input', { class: 'input', type: 'search', placeholder: 'Buscar (gerente, imobiliária, empreendimento, cliente...)' });
