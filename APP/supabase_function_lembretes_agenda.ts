@@ -204,7 +204,19 @@ function botaoPequeno(href: string, texto: string) {
 
 // Um card = uma linha. Faixa colorida do tipo à esquerda, hora em destaque,
 // título, detalhes e (opcional) o botão do Outlook.
-function card(ag: any, o: { mostrarData?: boolean; mostrarTipo?: boolean; ics?: string | null }) {
+// Quanto tempo a atividade está atrasada, em dias de calendário (Brasília).
+function rotuloAtraso(d: Date) {
+  const dias = Math.round((Date.parse(chaveDia(new Date())) - Date.parse(chaveDia(d))) / 86400000);
+  return dias <= 0 ? 'atrasada · hoje' : dias === 1 ? 'atrasada · ontem' : `atrasada há ${dias} dias`;
+}
+function botaoRegistrar(href: string) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;"><tr>
+    <td bgcolor="${LARANJA}" style="border-radius:8px;background:${LARANJA};">
+      <a href="${href}" target="_blank" style="display:inline-block;padding:9px 16px;font:800 13px/1 Arial,Helvetica,sans-serif;color:#FFFFFF;text-decoration:none;">✅ Registrar agora</a>
+    </td></tr></table>`;
+}
+
+function card(ag: any, o: { mostrarData?: boolean; mostrarTipo?: boolean; ics?: string | null; realizar?: string | null; atraso?: string | null }) {
   const t = TIPOS[ag.tipo] || TIPOS.outro;
   const d = new Date(ag.data_prevista);
   const metas: [string, string][] = [];
@@ -217,6 +229,7 @@ function card(ag: any, o: { mostrarData?: boolean; mostrarTipo?: boolean; ics?: 
   const etiquetas = [
     o.mostrarTipo !== false ? `<span style="display:inline-block;padding:4px 9px;border-radius:999px;background:${t.claro};color:${t.cor};font:700 11px/1 Arial,Helvetica,sans-serif;">${t.emoji} ${t.label}</span>` : '',
     ag.recorrencia_freq && REC[ag.recorrencia_freq] ? `<span style="display:inline-block;margin-left:4px;padding:4px 9px;border-radius:999px;background:#FFF4EC;color:${LARANJA};font:700 11px/1 Arial,Helvetica,sans-serif;">🔁 ${REC[ag.recorrencia_freq]}</span>` : '',
+    o.atraso ? `<span style="display:inline-block;margin-left:4px;padding:4px 9px;border-radius:999px;background:#FEE2E2;color:#B91C1C;font:700 11px/1 Arial,Helvetica,sans-serif;">⏳ ${esc(o.atraso)}</span>` : '',
   ].join('');
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px 0;border-collapse:separate;">
@@ -234,6 +247,7 @@ function card(ag: any, o: { mostrarData?: boolean; mostrarTipo?: boolean; ics?: 
             ${ag.tipo !== 'outro' && ag.titulo && ag.titulo !== tituloDe(ag) ? `<div style="font:14px/1.4 Arial,Helvetica,sans-serif;color:${CINZA};margin-top:2px;">${esc(ag.titulo)}</div>` : ''}
             ${metas.length ? `<div style="margin-top:8px;font:13px/1.7 Arial,Helvetica,sans-serif;color:#4B5563;">${metas.map(([i, v]) => `<span style="white-space:nowrap;">${i} ${esc(v)}</span>`).join('&nbsp;&nbsp;·&nbsp;&nbsp;')}</div>` : ''}
             ${ag.observacoes ? `<div style="margin-top:10px;padding:10px 12px;background:${FUNDO};border-radius:8px;font:italic 13px/1.5 Arial,Helvetica,sans-serif;color:#57534E;">“${esc(ag.observacoes)}”</div>` : ''}
+            ${o.realizar ? botaoRegistrar(o.realizar) : ''}
             ${o.ics ? botaoPequeno(o.ics, '📅 Adicionar ao Outlook') : ''}
           </td>
         </tr></table>
@@ -297,11 +311,43 @@ function botaoGrande(href: string, texto: string) {
 }
 
 // ─── Montagem: e-mail do GERENTE ────────────────────────────────────────────
-async function montarGerente(modo: string, p: any, ags: any[], rotulo: string) {
+// Faixa curta no TOPO: avisa das pendências sem empurrar a agenda de amanhã pra baixo.
+function faixaPendencias(a: number) {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 4px 0;"><tr>
+    <td bgcolor="#FEF2F2" style="background:#FEF2F2;border:1px solid #FECACA;border-left:5px solid #DC2626;border-radius:12px;padding:14px 16px;">
+      <div style="font:800 15px/1.3 Arial,Helvetica,sans-serif;color:#991B1B;">⚠️ ${plural(a, 'atividade aguardando registro', 'atividades aguardando registro')}</div>
+      <div style="margin-top:4px;font:13px/1.5 Arial,Helvetica,sans-serif;color:#7F1D1D;">Já passaram do horário e ainda não foram registradas. Elas estão no final deste e-mail, com o botão para registrar agora.</div>
+    </td></tr></table>`;
+}
+
+// Seção do FINAL: lista completa das pendências, cada uma com "Registrar agora".
+function secaoPendencias(atrasados: any[], antigas: number) {
+  let s = tituloSecao('⏳ Aguardando registro', '#DC2626', `(${atrasados.length})`);
+  s += `<div style="margin:-4px 0 12px 0;font:13px/1.5 Arial,Helvetica,sans-serif;color:${CINZA};">Registre o que foi feito. Se não aconteceu, remarque ou cancele no app — assim sua agenda fica em dia.</div>`;
+  s += atrasados.map((ag) => card(ag, {
+    mostrarData: true,
+    atraso: rotuloAtraso(new Date(ag.data_prevista)),
+    realizar: `${URL_APP}/#/agenda/${ag.id}/realizar`,
+  })).join('');
+  if (antigas > 0) {
+    s += `<div style="margin:4px 0 0 0;font:12px/1.5 Arial,Helvetica,sans-serif;color:${CINZA};">+ ${plural(antigas, 'pendência mais antiga', 'pendências mais antigas')} (mais de 30 dias) — veja na Agenda do app.</div>`;
+  }
+  return s;
+}
+
+async function montarGerente(modo: string, p: any, ags: any[], rotulo: string, atrasados: any[] = [], antigas = 0) {
   const n = ags.length;
+  const a = atrasados.length;
   const icsPorId = new Map<string, string>();
   for (const ag of ags) icsPorId.set(ag.id, await linkIcs([ag.id]));
   let corpo = '';
+  // Pendências: faixa curta no topo (o número aparece logo de cara)…
+  if (a > 0 && n > 0) corpo += faixaPendencias(a);
+  if (modo === 'diario' && n === 0 && a > 0) {
+    corpo += `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 0 0;"><tr>
+      <td bgcolor="#FFFFFF" style="background:#FFFFFF;border:1px solid ${BORDA};border-radius:12px;padding:14px 16px;font:14px/1.5 Arial,Helvetica,sans-serif;color:${CINZA};">
+        📅 Você não tem atividades agendadas para amanhã (${esc(rotulo)}).</td></tr></table>`;
+  }
   if (modo === 'diario') {
     // Segmentado por TIPO de atividade
     for (const k of ORDEM_TIPOS) {
@@ -325,28 +371,45 @@ async function montarGerente(modo: string, p: any, ags: any[], rotulo: string) {
       corpo += doDia.map((ag) => card(ag, { ics: icsPorId.get(ag.id) })).join('');
     }
   }
+  // …e a lista completa no FINAL, depois da agenda de amanhã.
+  if (a > 0) corpo += secaoPendencias(atrasados, antigas);
+
   const nome = primeiroNome(p.nome);
   const diario = modo === 'diario';
-  const assunto = diario ? `📅 Sua agenda de amanhã · ${plural(n, 'atividade', 'atividades')}` : `🗓️ Sua semana · ${plural(n, 'atividade', 'atividades')}`;
+  const soPendencias = diario && n === 0 && a > 0;
+  const seloPend = a > 0 ? pilula(`⚠️ ${a} sem registro`, '#B91C1C', '#FEE2E2') : '';
+  const assunto = soPendencias
+    ? `⚠️ ${plural(a, 'atividade aguardando registro', 'atividades aguardando registro')}`
+    : diario
+      ? `📅 Sua agenda de amanhã · ${plural(n, 'atividade', 'atividades')}${a > 0 ? ` · ⚠️ ${a} sem registro` : ''}`
+      : `🗓️ Sua semana · ${plural(n, 'atividade', 'atividades')}`;
   const html = emailHtml({
-    preheader: diario ? `Amanhã você tem ${plural(n, 'atividade', 'atividades')}. Adicione ao Outlook com um clique.` : `${plural(n, 'atividade', 'atividades')} nesta semana.`,
-    etiqueta: diario ? 'Agenda de amanhã' : 'Agenda da semana',
-    titulo: `Olá, ${nome}! ${diario ? 'Sua agenda de amanhã' : 'Sua semana'}`,
-    subtitulo: diario ? `${rotulo} · ${plural(n, 'atividade agendada', 'atividades agendadas')}` : `${rotulo} · ${plural(n, 'atividade agendada', 'atividades agendadas')}`,
-    resumo: resumoPorTipo(ags),
+    preheader: soPendencias
+      ? `${plural(a, 'atividade já passou', 'atividades já passaram')} do horário e ainda não foi registrada. Registre agora.`
+      : diario ? `Amanhã você tem ${plural(n, 'atividade', 'atividades')}${a > 0 ? ` e ${a} aguardando registro` : ''}.` : `${plural(n, 'atividade', 'atividades')} nesta semana.`,
+    etiqueta: soPendencias ? 'Pendências da agenda' : diario ? 'Agenda de amanhã' : 'Agenda da semana',
+    titulo: soPendencias ? `Olá, ${nome}! Você tem atividades sem registro` : `Olá, ${nome}! ${diario ? 'Sua agenda de amanhã' : 'Sua semana'}`,
+    subtitulo: soPendencias
+      ? `${plural(a, 'atividade já passou', 'atividades já passaram')} do horário e ainda não ${a === 1 ? 'foi registrada' : 'foram registradas'}`
+      : `${rotulo} · ${plural(n, 'atividade agendada', 'atividades agendadas')}`,
+    resumo: resumoPorTipo(ags) + seloPend,
     corpo,
-    cta: botaoGrande(await linkIcs(ags.map((a) => a.id)), n === 1 ? '📅 Adicionar ao Outlook' : `📅 Adicionar todas ao Outlook (${n})`),
+    cta: n > 0 ? botaoGrande(await linkIcs(ags.map((x) => x.id)), n === 1 ? '📅 Adicionar ao Outlook' : `📅 Adicionar todas ao Outlook (${n})`) : undefined,
     nota: 'Você recebe este lembrete porque tem atividades agendadas no Imob Rottas.',
   });
-  const linhas = ags.slice(0, 4).map((a) => `${diario ? '' : maiuscula(fmtDiaSemanaCurto(new Date(a.data_prevista))) + ' '}${fmtHora(new Date(a.data_prevista))} ${(TIPOS[a.tipo] || TIPOS.outro).label} · ${tituloDe(a)}`);
+  const linhas = ags.slice(0, 4).map((x) => `${diario ? '' : maiuscula(fmtDiaSemanaCurto(new Date(x.data_prevista))) + ' '}${fmtHora(new Date(x.data_prevista))} ${(TIPOS[x.tipo] || TIPOS.outro).label} · ${tituloDe(x)}`);
   if (n > 4) linhas.push(`+${n - 4} mais`);
+  if (a > 0 && n > 0) linhas.push(`⚠️ ${plural(a, 'atividade aguardando registro', 'atividades aguardando registro')}`);
+  if (soPendencias) linhas.push('Toque para abrir a agenda e registrar.');
   const push = {
-    title: diario ? `📅 Amanhã: ${plural(n, 'atividade', 'atividades')}` : `🗓️ Sua semana: ${plural(n, 'atividade', 'atividades')}`,
+    title: soPendencias
+      ? `⚠️ ${plural(a, 'atividade sem registro', 'atividades sem registro')}`
+      : diario ? `📅 Amanhã: ${plural(n, 'atividade', 'atividades')}` : `🗓️ Sua semana: ${plural(n, 'atividade', 'atividades')}`,
     body: linhas.join('\n'),
     url: `${URL_APP}/#/`,
     tag: `lembrete-${modo}`,
   };
-  return { assunto, html, push, qtd: n };
+  return { assunto, html, push, qtd: n + a };
 }
 
 // ─── Montagem: e-mail do LÍDER (só os gerentes dele) ───────────────────────
@@ -462,10 +525,37 @@ async function executar(modo: string, o: { teste?: { email: string } | null; dry
     porDono.get(dono.id)!.push(ag);
   }
 
+  // PENDÊNCIAS (só no lembrete das 18h): agendamentos ainda "pendente" cujo horário
+  // já passou — nem registrados, nem cancelados. Lista os dos últimos 30 dias;
+  // os mais antigos entram só na contagem (senão uma pendência esquecida ficaria
+  // no e-mail pra sempre).
+  const pendPorDono = new Map<string, any[]>();
+  const antigasPorDono = new Map<string, number>();
+  let totalPend = 0;
+  if (modo === 'diario') {
+    const agora = new Date();
+    const limite = new Date(agora.getTime() - 30 * 86400000);
+    const { data: atr, error: e3 } = await admin.from('agendamentos').select(CAMPOS)
+      .eq('status', 'pendente').lt('data_prevista', agora.toISOString())
+      .order('data_prevista', { ascending: false }).limit(3000);
+    if (e3) throw e3;
+    for (const ag of atr || []) {
+      const dono: any = porId.get(ag.gerente_id);
+      if (!dono || !['gerente', 'supervisor'].includes(dono.role)) continue;
+      if (!!ag.teste !== !!dono.conta_teste) continue;
+      totalPend++;
+      if (new Date(ag.data_prevista) < limite) { antigasPorDono.set(dono.id, (antigasPorDono.get(dono.id) || 0) + 1); continue; }
+      if (!pendPorDono.has(dono.id)) pendPorDono.set(dono.id, []);
+      pendPorDono.get(dono.id)!.push(ag);
+    }
+  }
+
+  // Recebe quem tem agenda amanhã OU pendências (o objetivo é fazer registrar).
   const envios: any[] = [];
-  for (const [uid, lista] of porDono) {
+  const donos = new Set([...porDono.keys(), ...pendPorDono.keys()]);
+  for (const uid of donos) {
     const p = porId.get(uid);
-    envios.push({ papel: 'gerente', perfil: p, ...(await montarGerente(modo, p, lista, rotulo)) });
+    envios.push({ papel: 'gerente', perfil: p, ...(await montarGerente(modo, p, porDono.get(uid) || [], rotulo, pendPorDono.get(uid) || [], antigasPorDono.get(uid) || 0)) });
   }
   for (const lider of (perfis || []).filter((p: any) => ['gestor_regional', 'superintendente'].includes(p.role))) {
     const equipe = [...porDono.keys()].map((id) => porId.get(id)).filter((g: any) => !g.conta_teste && naEquipe(lider, g))
@@ -474,7 +564,7 @@ async function executar(modo: string, o: { teste?: { email: string } | null; dry
     envios.push({ papel: 'lider', perfil: lider, ...montarLider(modo, lider, equipe, rotulo) });
   }
 
-  const base = { modo, janela: { de: ini.toISOString(), ate: fim.toISOString(), rotulo }, atividades: (ags || []).length };
+  const base = { modo, janela: { de: ini.toISOString(), ate: fim.toISOString(), rotulo }, atividades: (ags || []).length, pendencias: totalPend };
 
   // MANUAL (botão do master no cadastro da pessoa): só aquela pessoa, só e-mail,
   // sem trava anti-duplicidade (é um reenvio pedido explicitamente).

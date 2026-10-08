@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.66';
+export const APP_VERSION = '1.9.67';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,15 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.67',
+    date: '08/10/2026',
+    changes: [
+      'LEMBRETE DAS 18H AGORA COBRA AS PENDÊNCIAS: além da agenda de amanhã, o e-mail lista os agendamentos que já passaram do horário e não foram registrados (últimos 30 dias), cada um com o botão "✅ Registrar agora" que abre direto o registro no app',
+      'Ordem do e-mail: faixa curta "⚠️ X aguardando registro" no topo, a agenda de amanhã no meio e a lista completa de pendências no final — o aviso aparece logo de cara sem esconder a agenda',
+      'Quem não tem atividade amanhã mas tem pendências também recebe ("⚠️ X atividades aguardando registro"). A notificação das 18h ganhou a mesma linha',
+    ],
+  },
   {
     version: '1.9.66',
     date: '08/10/2026',
