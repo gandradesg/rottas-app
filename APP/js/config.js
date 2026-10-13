@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.67';
+export const APP_VERSION = '1.9.68';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,16 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.68',
+    date: '13/10/2026',
+    changes: [
+      'ROTA ALTERNATIVA CONTRA "CONEXÃO MORTA": o diagnóstico mostrou que os registros que falhavam ficavam parados com internet e login ok, sem chegar ao banco — o navegador reaproveitava uma conexão que a rede tinha derrubado. Agora, se uma requisição fica 4s sem resposta, as próximas tentativas vão por outro caminho (o próprio site repassa ao banco), desviando da conexão morta',
+      'Conexão mantida viva a cada 20s enquanto o app está aberto (antes 60s), inclusive a rota alternativa',
+      'LOGS: cada registro que falhou é conferido no banco. "↑ Falhou, mas subiu" quando a falha foi só na hora; "✕ Não subiu" quando realmente não entrou. O filtro agora mostra só o que não subiu',
+      'LOGS: hora real do aparelho em cada etapa (antes aparecia a hora em que o log chegou ao servidor)',
+    ],
+  },
   {
     version: '1.9.67',
     date: '08/10/2026',

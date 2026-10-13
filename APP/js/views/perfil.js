@@ -258,7 +258,8 @@ export async function perfilView(_params, app) {
         linha('Deu certo?', l.ok === null || l.ok === undefined ? '—' : (l.ok ? 'sim' : 'NÃO')),
         linha('Tentativa', l.tentativa),
         linha('Duração', l.duracao_ms != null ? `${l.duracao_ms} ms` : null),
-        linha('Quando', fmt.dateTime(l.criado_em)),
+        linha('Quando (no aparelho)', fmt.dateTime(quando(l))),
+        linha('Chegou no servidor', l.contexto && l.contexto.quando_aparelho && !l._soNoAparelho ? fmt.dateTime(l.criado_em) : null),
         linha('Usuário', l.user_nome),
         linha('Estava online?', l.online === null || l.online === undefined ? '—' : (l.online ? 'sim' : 'NÃO (sem internet)')),
         linha('Versão do app', l.app_version),
@@ -277,6 +278,9 @@ export async function perfilView(_params, app) {
           linha('Recusas 401 (token)', l.contexto.http_falhas_401),
           linha('Rede do aparelho', l.contexto.rede_tipo ? `${l.contexto.rede_tipo}` + (l.contexto.rede_rtt_ms != null ? ` · ${l.contexto.rede_rtt_ms} ms` : '') : null),
           linha('Tela visível?', l.contexto.visivel),
+          linha('Rota usada', l.contexto.http_ultima_rota ? (l.contexto.http_ultima_rota === 'proxy' ? 'alternativa (via site)' : 'direta') : null),
+          linha('Desvios de rota na sessão', l.contexto.rota_trocas),
+          linha('Registro no banco', l.contexto.alvo_ids ? `${l.contexto.alvo_tabela}: ${l.contexto.alvo_ids.join(', ')}` : null),
         ] : []),
         linha('ID do registro (liga as etapas)', l.registro_id),
         linha('ID do log', l.id),
@@ -297,6 +301,10 @@ export async function perfilView(_params, app) {
     });
   }
 
+  // Hora REAL do evento (do aparelho). O banco carimba a hora do ENVIO, que
+  // pode ser bem depois quando o log ficou guardado esperando conexão.
+  const quando = (l) => (l && l.contexto && l.contexto.quando_aparelho) || (l && l.criado_em);
+
   function logRow(l) {
     const info = ETAPA_INFO[l.etapa] || { txt: l.etapa || '?', cor: 'text-fg-muted' };
     const dur = l.duracao_ms != null ? `${(l.duracao_ms / 1000).toFixed(1)}s` : '';
@@ -310,7 +318,7 @@ export async function perfilView(_params, app) {
         el('span', { class: 'text-fg-muted' }, l.tipo || '—'),
         l.tentativa ? el('span', { class: 'chip text-[10px]' }, `tentativa ${l.tentativa}`) : null,
         dur ? el('span', { class: 'text-xs text-fg-subtle' }, dur) : null,
-        el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(l.criado_em)),
+        el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(quando(l))),
       ),
       el('div', { class: 'text-xs text-fg-muted' },
         (l.user_nome || 'eu') + (l.online === false ? ' · 📵 sem internet' : '') + (l.app_version ? ` · v${l.app_version}` : '')),
@@ -322,20 +330,17 @@ export async function perfilView(_params, app) {
 
   // Agrupa as etapas de UM registro e mostra a história dele em ordem, dizendo
   // onde parou. É assim que se enxerga "em que ponto travou".
-  function grupoRow(grupo) {
-    const etapas = grupo.slice().sort((a, b) => String(a.criado_em).localeCompare(String(b.criado_em)));
+  function grupoRow(grupo, sit) {
+    const etapas = grupo.slice().sort((a, b) => String(quando(a)).localeCompare(String(quando(b))));
     const ultima = etapas[etapas.length - 1];
     const falhou = etapas.some(e => e.ok === false) || ultima.etapa === 'falha';
-    const concluiu = etapas.some(e => e.etapa === 'sucesso');
     const totalMs = etapas.reduce((mx, e) => Math.max(mx, e.duracao_ms || 0), 0);
     const trilha = etapas.map(e => {
       const inf = ETAPA_INFO[e.etapa] || { txt: e.etapa, cor: '' };
       const marca = e.ok === false ? '✕' : (e.ok === true ? '✓' : '·');
       return `${marca} ${inf.txt.replace(/^[✓✕]\s*/, '')}`;
     }).join('  →  ');
-    const status = concluiu ? { txt: '✓ Concluído', cls: 'text-success' }
-      : falhou ? { txt: '✕ Parou aqui', cls: 'text-danger' }
-      : { txt: '… Sem conclusão', cls: 'text-warning' };
+    const status = sit || { txt: '… Sem conclusão', cls: 'text-warning' };
     const corpo = el('div', { class: 'flex flex-col gap-1.5 mt-2 hidden' },
       ...etapas.map(e => logRow(e)));
     const cab = el('button', { class: 'w-full text-left flex flex-col gap-0.5' },
@@ -345,13 +350,14 @@ export async function perfilView(_params, app) {
         el('span', { class: 'chip text-[10px]' }, `${etapas.length} etapa(s)`),
         etapas.some(e => e._soNoAparelho) ? el('span', { class: 'chip chip-yellow text-[10px]' }, '📵 só no aparelho') : null,
         totalMs ? el('span', { class: 'text-xs text-fg-subtle' }, `${(totalMs / 1000).toFixed(1)}s`) : null,
-        el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(ultima.criado_em)),
+        el('span', { class: 'text-xs text-fg-subtle ml-auto' }, fmt.dateTime(quando(ultima))),
       ),
       el('div', { class: 'text-xs text-fg-muted' },
         (ultima.user_nome || 'eu') + (ultima.online === false ? ' · 📵 sem internet' : '')),
       el('div', { class: 'text-[11px] text-fg-subtle font-mono break-words' }, trilha),
-      falhou && ultima.erro ? el('div', { class: 'text-xs text-danger break-words' },
+      falhou && ultima.erro ? el('div', { class: 'text-xs break-words ' + (status.k === 'falha' ? 'text-danger' : 'text-fg-muted') },
         '⚠ ' + ultima.erro + (ultima.erro_codigo ? ` (código ${ultima.erro_codigo})` : '')) : null,
+      status.nota ? el('div', { class: 'text-xs font-semibold ' + status.cls }, status.nota) : null,
       el('div', { class: 'text-[10px] text-rottas-500' }, 'toque para ver as etapas →'),
     );
     cab.addEventListener('click', () => corpo.classList.toggle('hidden'));
@@ -376,7 +382,7 @@ export async function perfilView(_params, app) {
     // Barra de ações (atualizar + só falhas)
     let apenasFalhas = false;
     const btnAtualizar = el('button', { class: 'btn btn-secondary btn-sm', onclick: () => loadLogs() }, '↻ Atualizar');
-    const btnFalhas = el('button', { class: 'btn btn-ghost btn-sm' }, 'Mostrar só as falhas');
+    const btnFalhas = el('button', { class: 'btn btn-ghost btn-sm' }, 'Mostrar só o que não subiu');
 
     // Teste de conexão ao vivo: mostra em qual etapa está a demora, com números.
     const btnTeste = el('button', { class: 'btn btn-secondary btn-sm' }, '🔌 Testar conexão');
@@ -438,33 +444,91 @@ export async function perfilView(_params, app) {
         `📵 ${locais.length} log(s) deste aparelho ainda não subiram — sobem sozinhos quando a conexão responder.`), lista);
     }
     const todos = [...locais, ...(data || [])];
+
+    // Agrupa por registro: cada grupo é a HISTÓRIA de um registro (início →
+    // fotos → gravação → confirmação). Etapas antigas (sem registro_id) ficam
+    // cada uma no seu grupo, pra não sumir.
+    const mapa = new Map();
+    todos.forEach(l => {
+      const chave = l.registro_id || ('solto:' + l.id);
+      if (!mapa.has(chave)) mapa.set(chave, []);
+      mapa.get(chave).push(l);
+    });
+    const todosGrupos = [...mapa.values()];
+    const fimDe = (g) => g.reduce((mx, l) => (String(quando(l)) > mx ? String(quando(l)) : mx), '');
+    const temSucesso = (g) => g.some(l => l.etapa === 'sucesso');
+    const temFalha = (g) => g.some(l => l.ok === false || l.etapa === 'falha');
+
+    // CONFERE NO BANCO se o registro que falhou na hora SUBIU depois (pelo id que
+    // o log guarda, a partir da v1.9.68). Ex.: a gravação "estourou o tempo" mas
+    // entrou, ou ficou salva no aparelho e a fila enviou mais tarde.
+    const existe = new Set();
+    const pedir = { atividades: new Set(), agendamentos: new Set() };
+    todosGrupos.filter(g => temFalha(g) && !temSucesso(g)).forEach(g => g.forEach(l => {
+      const c = l.contexto;
+      if (c && pedir[c.alvo_tabela] && Array.isArray(c.alvo_ids)) c.alvo_ids.forEach(id => pedir[c.alvo_tabela].add(id));
+    }));
+    for (const [tabela, ids] of Object.entries(pedir)) {
+      if (!ids.size) continue;
+      const { data: achados } = await runQuery(
+        () => supabase.from(tabela).select('id').in('id', [...ids]), { ms: 6000, label: 'conferir registros' });
+      (achados || []).forEach(r => existe.add(r.id));
+    }
+    // Logs antigos não guardam o id: procura o mesmo tipo REFEITO com sucesso
+    // pela mesma pessoa até 60 min depois (provável — sinalizado como tal).
+    const sucessos = todosGrupos.filter(temSucesso).map(g => ({ user: g[0].user_id || g[0].user_nome, tipo: g[0].tipo, t: fimDe(g) }));
+    const hm = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    function situacao(g) {
+      if (temSucesso(g)) return { k: 'ok', txt: '✓ Concluído', cls: 'text-success' };
+      if (!temFalha(g)) return { k: 'aberto', txt: '… Sem conclusão', cls: 'text-warning' };
+      if (g[0].tipo === 'carregamento') return { k: 'falha', txt: '✕ Não carregou', cls: 'text-danger' };
+      if (g[0].tipo === 'teste-conexao') return { k: 'falha', txt: '✕ Falhou no teste', cls: 'text-danger' };
+      const alvo = g.map(l => l.contexto).find(c => c && Array.isArray(c.alvo_ids));
+      if (alvo) {
+        if (alvo.alvo_ids.some(id => existe.has(id))) {
+          return { k: 'subiu', txt: '↑ Falhou, mas subiu', cls: 'text-success', nota: 'Conferido no banco: a falha foi só na hora — o registro está salvo.' };
+        }
+        return { k: 'falha', txt: '✕ Não subiu', cls: 'text-danger', nota: 'Conferido no banco: este registro NÃO está salvo.' };
+      }
+      const fim = fimDe(g);
+      const dono = g[0].user_id || g[0].user_nome;
+      const limite = new Date(new Date(fim).getTime() + 60 * 60000).toISOString();
+      const refeito = sucessos
+        .filter(s => s.user === dono && s.tipo === g[0].tipo && s.t > fim && s.t <= limite)
+        .sort((a, b) => a.t.localeCompare(b.t))[0];
+      if (refeito) {
+        return { k: 'refeito', txt: '↻ Refeito com sucesso', cls: 'text-warning',
+          nota: `Um ${g[0].tipo} da mesma pessoa entrou às ${hm(refeito.t)} (provável que seja este — logs antigos não guardam qual registro era).` };
+      }
+      return { k: 'falha', txt: '✕ Não subiu', cls: 'text-danger' };
+    }
+    const sitPorGrupo = new Map(todosGrupos.map(g => [g, situacao(g)]));
+
     function pintar() {
       lista.innerHTML = '';
-      // Agrupa por registro: cada grupo é a HISTÓRIA de um registro (início →
-      // fotos → gravação → confirmação). Etapas antigas (sem registro_id) ficam
-      // cada uma no seu grupo, pra não sumir.
-      const mapa = new Map();
-      todos.forEach(l => {
-        const chave = l.registro_id || ('solto:' + l.id);
-        if (!mapa.has(chave)) mapa.set(chave, []);
-        mapa.get(chave).push(l);
-      });
-      let grupos = [...mapa.values()];
-      if (apenasFalhas) grupos = grupos.filter(g => g.some(l => l.ok === false || l.etapa === 'falha'));
-      // mais recentes primeiro
-      grupos.sort((a, b) => String(b[b.length - 1].criado_em).localeCompare(String(a[a.length - 1].criado_em)));
+      let grupos = todosGrupos.slice();
+      // "Só o que não subiu": o que falhou mas subiu depois (ou foi refeito) sai da lista
+      if (apenasFalhas) grupos = grupos.filter(g => sitPorGrupo.get(g).k === 'falha');
+      grupos.sort((a, b) => fimDe(b).localeCompare(fimDe(a)));   // mais recentes primeiro
       if (!grupos.length) {
         lista.appendChild(el('div', { class: 'text-sm text-fg-muted' },
-          apenasFalhas ? 'Nenhuma falha registrada. 🎉' : 'Nenhum log ainda. Assim que a equipe registrar algo, aparece aqui.'));
+          apenasFalhas ? 'Nenhuma falha pendente: tudo o que falhou acabou subindo. 🎉' : 'Nenhum log ainda. Assim que a equipe registrar algo, aparece aqui.'));
         return;
       }
+      const conta = (k) => todosGrupos.filter(g => sitPorGrupo.get(g).k === k).length;
+      lista.appendChild(el('div', { class: 'flex gap-1.5 flex-wrap text-[11px]' },
+        el('span', { class: 'chip chip-green' }, `✓ ${conta('ok')} concluídos`),
+        conta('subiu') ? el('span', { class: 'chip chip-green' }, `↑ ${conta('subiu')} falharam mas subiram`) : null,
+        conta('refeito') ? el('span', { class: 'chip chip-yellow' }, `↻ ${conta('refeito')} refeitos`) : null,
+        el('span', { class: 'chip chip-red' }, `✕ ${conta('falha')} não subiram`),
+      ));
       lista.appendChild(el('div', { class: 'text-xs text-fg-muted' },
         `${grupos.length} registro(s) · toque num para ver as etapas e o detalhe técnico`));
-      grupos.forEach(g => lista.appendChild(grupoRow(g)));
+      grupos.forEach(g => lista.appendChild(grupoRow(g, sitPorGrupo.get(g))));
     }
     btnFalhas.addEventListener('click', () => {
       apenasFalhas = !apenasFalhas;
-      btnFalhas.textContent = apenasFalhas ? 'Mostrar todos' : 'Mostrar só as falhas';
+      btnFalhas.textContent = apenasFalhas ? 'Mostrar todos' : 'Mostrar só o que não subiu';
       pintar();
     });
     pintar();

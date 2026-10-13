@@ -4,7 +4,7 @@ import { shell } from './shell.js';
 import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, addOutroTipo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
-import { logRegistro, cronometro, novoRegistroId } from '../diag.js';
+import { logRegistro, cronometro, novoRegistroId, vincularAlvo } from '../diag.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { audioField } from '../components/audio-field.js';
@@ -138,6 +138,7 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
   const tipoLog = payload?.tipo || 'atividade';
   // Liga todas as etapas deste registro numa história só (ver Logs no Perfil)
   const regId = novoRegistroId();
+  vincularAlvo(regId, 'atividades', newId);   // permite conferir depois se subiu
   const tTotal = cronometro();
   logRegistro({ tipo: tipoLog, registroId: regId, etapa: 'inicio' });
 

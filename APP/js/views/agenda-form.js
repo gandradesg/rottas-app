@@ -5,7 +5,7 @@ import { state, supabase, getScopedImobiliarias, avisarConexaoLenta, avisarConex
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
-import { logRegistro, cronometro, novoRegistroId } from '../diag.js';
+import { logRegistro, cronometro, novoRegistroId, vincularAlvo } from '../diag.js';
 
 // Apenas tipos que fazem sentido planejar com antecedência
 const TIPOS = [
@@ -23,6 +23,7 @@ async function salvarAgendamentosResiliente(rows, tentativas = 3, onProgresso = 
   const ids = rows.map(r => r.id).filter(Boolean);
   // Liga todas as etapas deste agendamento numa história só (ver Logs no Perfil)
   const regId = novoRegistroId();
+  vincularAlvo(regId, 'agendamentos', ids);   // permite conferir depois se subiu
   const tTotal = cronometro();
   logRegistro({ tipo: 'agendamento', registroId: regId, etapa: 'inicio' });
   let lastErr = null;

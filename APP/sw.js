@@ -8,7 +8,7 @@
 // Mudar esta string faz o navegador detectar um SW novo, ativar na hora, PURGAR o
 // cache antigo (no 'activate') e recarregar — garantindo que nunca fique um mix de
 // versoes de JS em cache (causa raiz de "app nao abre / versao velha").
-const SW_VERSION = '1.9.67';
+const SW_VERSION = '1.9.68';
 const CACHE_NAME = 'imob-rottas-' + SW_VERSION;
 
 self.addEventListener('install', (event) => {
@@ -38,6 +38,10 @@ self.addEventListener('fetch', (event) => {
   // Pula chamadas externas (CDNs, fontes etc)
   const reqUrl = new URL(req.url);
   if (reqUrl.origin !== self.location.origin) return;
+
+  // ROTA ALTERNATIVA do banco (/sb → Supabase via Vercel): são DADOS ao vivo,
+  // nunca podem vir de cache. Deixa passar direto pela rede.
+  if (reqUrl.pathname.startsWith('/sb/')) return;
 
   // CÓDIGO DO APP (HTML/JS/CSS): SOMENTE REDE, sem cache.
   // Motivo: cache do SW podia servir um arquivo velho enquanto outro vinha novo,
@@ -73,6 +77,10 @@ self.addEventListener('fetch', (event) => {
 // Permite que a pagina mande "SKIP_WAITING" para forcar update imediato
 self.addEventListener('message', (event) => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  // O app pergunta se este SW já ignora /sb (pra liberar a rota alternativa).
+  if (event.data && event.data.tipo === 'PROXY_SEGURO?' && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({ proxySeguro: true, versao: SW_VERSION });
+  }
 });
 
 // ===== NOTIFICAÇÕES (lembretes da agenda, enviados pelo servidor) =====

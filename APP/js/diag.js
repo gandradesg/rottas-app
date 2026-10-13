@@ -80,9 +80,23 @@ function contextoAgora() {
       ctx.http_falhas_rede = redeInfo.falhasRede;
       ctx.http_falhas_401 = redeInfo.falhas401;
       ctx.http_ultimo_alvo = redeInfo.ultimoAlvo;
+      ctx.http_ultima_rota = redeInfo.ultimaRota;        // direta | proxy
+      ctx.rota_trocas = redeInfo.trocasDeRota;           // quantas vezes desviou
+      ctx.rota_suspeita = redeInfo.rotaSuspeita;         // rota evitada no momento
+      ctx.rota_alternativa_ativa = redeInfo.proxyLiberado;
     }
   } catch (e) {}
   return ctx;
+}
+
+// Liga uma "história" de log ao(s) registro(s) que ela tenta gravar no banco
+// (id da atividade / ids dos agendamentos). Com isso a tela de Logs consegue
+// conferir depois se, mesmo com a falha na hora, o registro SUBIU para o banco.
+const _alvos = new Map();
+export function vincularAlvo(registroId, tabela, ids) {
+  if (!registroId || !tabela) return;
+  const lista = (Array.isArray(ids) ? ids : [ids]).filter(Boolean).slice(0, 20);
+  if (lista.length) _alvos.set(registroId, { tabela, ids: lista });
 }
 
 // Registra uma etapa. Nunca lança, nunca espera — é "dispare e esqueça".
@@ -110,6 +124,11 @@ export function logRegistro({ tipo, etapa, ok = null, duracao_ms = null, erro = 
     contexto: contextoAgora(),
     criado_em: new Date().toISOString(),
   };
+  // Hora REAL do aparelho: quando o log fica guardado e sobe depois, o banco
+  // carimba a hora do ENVIO — por isso todas as etapas apareciam com a mesma hora.
+  ev.contexto.quando_aparelho = ev.criado_em;
+  const alvo = registroId && _alvos.get(registroId);
+  if (alvo) { ev.contexto.alvo_tabela = alvo.tabela; ev.contexto.alvo_ids = alvo.ids; }
   gravarLocal(ev);                 // 1) SEMPRE fica no aparelho, aconteça o que acontecer
   enviarPendentes();               // 2) tenta subir; se falhar, continua na fila
 }

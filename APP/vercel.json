@@ -13,6 +13,12 @@
       ]
     },
     {
+      "source": "/sb/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
       "source": "/(css|js)/(.*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
@@ -59,6 +65,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/sb/:path*",     "destination": "https://lmzjlirzexyopnjxohez.supabase.co/:path*" },
     { "source": "/dashboard",     "destination": "/dashboard/index.html" },
     { "source": "/dashboard/(.*)", "destination": "/dashboard/index.html" },
     { "source": "/(.*)",          "destination": "/index.html" }

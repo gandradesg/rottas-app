@@ -9,7 +9,7 @@
 // aparelho, então reenviar NUNCA duplica.
 import { supabase, state } from './supabase.js';
 import { uploadPhotos } from './storage.js';
-import { logRegistro } from './diag.js';
+import { logRegistro, vincularAlvo, novoRegistroId } from './diag.js';
 
 const DB_NAME = 'rottas-outbox';
 const STORE = 'pendentes';
@@ -105,7 +105,8 @@ export async function sincronizar() {
         }
         await remover(item.id);
         enviados++;
-        logRegistro({ tipo: item.tipo, etapa: 'sucesso', ok: true, erro: 'enviado pela fila offline' });
+        { const rid = novoRegistroId(); vincularAlvo(rid, item.tabela, row.id);
+          logRegistro({ tipo: item.tipo, registroId: rid, etapa: 'sucesso', ok: true, erro: 'enviado pela fila offline' }); }
       } catch (e) {
         item.tentativas = (item.tentativas || 0) + 1;
         item.ultimoErro = String((e && e.message) || e).slice(0, 300);

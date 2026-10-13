@@ -45,6 +45,47 @@ export function simularTravamento(ligar) {
   try { ligar ? localStorage.setItem(SIM_KEY, '1') : localStorage.removeItem(SIM_KEY); } catch (e) {}
 }
 
+// ─── ROTA ALTERNATIVA (anti "conexão morta") ───────────────────────────────
+// DIAGNÓSTICO (13/10/2026): as gravações que dão certo levam 0,2–1,3s; as que
+// falham ficam PARADAS até o limite, com login válido, internet ok e sem erro —
+// e nunca chegam ao banco. É o navegador reaproveitando uma conexão que a rede
+// derrubou em silêncio: as 3 tentativas saem pela MESMA conexão morta.
+//
+// O app não consegue mandar o navegador abrir conexão nova, mas consegue usar
+// OUTRO ENDEREÇO: o próprio site (Vercel, rewrite /sb → Supabase) repassa a
+// requisição. Endereço diferente = conexão diferente. Regra:
+//   • uma requisição sem resposta em 4s marca a rota atual como SUSPEITA por 2 min;
+//   • enquanto isso, as próximas (inclusive as repetições) vão pela OUTRA rota;
+//   • se a outra também travar, volta para a primeira (alterna).
+// Upload de foto não desvia (arquivo grande; o repasse tem limite de tamanho).
+const PROXY_PATH = '/sb';
+const rota = { suspeita: null, ate: 0, trocas: 0, ultima: 'direta' };
+// Só liga quando o service worker em uso já é a versão que NÃO guarda /sb em
+// cache (um SW antigo serviria dados velhos). Sem SW controlando = liberado.
+let _proxyLiberado = false;
+function liberarProxySeSwNovo() {
+  try {
+    if (typeof location === 'undefined' || ['localhost', '127.0.0.1'].includes(location.hostname)) return;
+    const ctl = navigator.serviceWorker && navigator.serviceWorker.controller;
+    if (!ctl) { _proxyLiberado = true; return; }
+    const canal = new MessageChannel();
+    canal.port1.onmessage = (ev) => { if (ev.data && ev.data.proxySeguro) _proxyLiberado = true; };
+    ctl.postMessage({ tipo: 'PROXY_SEGURO?' }, [canal.port2]);
+  } catch (e) { /* sem SW/MessageChannel: fica só na rota direta */ }
+}
+if (typeof window !== 'undefined') {
+  setTimeout(liberarProxySeSwNovo, 1500);
+  try { navigator.serviceWorker && navigator.serviceWorker.addEventListener('controllerchange', liberarProxySeSwNovo); } catch (e) {}
+}
+function rotaParaUsar() {
+  if (Date.now() > rota.ate) rota.suspeita = null;
+  return rota.suspeita === 'direta' ? 'proxy' : 'direta';
+}
+function marcarRotaSuspeita(qual) {
+  if (rota.suspeita !== qual) rota.trocas++;
+  rota.suspeita = qual; rota.ate = Date.now() + 2 * 60 * 1000;
+}
+
 function fetchWithTimeout(input, init = {}) {
   const ctrl = new AbortController();
   // Consultas normais: 12s. Foi o tempo-limite LONGO (30-45s) que fazia a tela
@@ -74,21 +115,34 @@ function fetchWithTimeout(input, init = {}) {
   // diagnóstico: separa "sem internet" de "token recusado (401)" de "servidor".
   const t0 = Date.now();
   const alvo = url.includes('/auth/v1/') ? 'auth' : url.includes('/storage/v1/') ? 'storage' : url.includes('/rest/v1/') ? 'rest' : 'outro';
-  return fetch(input, { ...init, signal: ctrl.signal })
+  // Escolhe a rota (direta ou alternativa) — ver "ROTA ALTERNATIVA" acima.
+  const podeDesviar = _proxyLiberado && typeof input === 'string' && url.startsWith(SUPABASE_URL) && !ehUpload;
+  const via = podeDesviar ? rotaParaUsar() : 'direta';
+  const destino = via === 'proxy' ? location.origin + PROXY_PATH + url.slice(SUPABASE_URL.length) : input;
+  // Vigia: 4s sem resposta = conexão suspeita → as próximas vão pela outra rota.
+  const vigia = podeDesviar ? setTimeout(() => marcarRotaSuspeita(via), 4000) : null;
+  rota.ultima = via;
+  return fetch(destino, { ...init, signal: ctrl.signal })
     .then((res) => {
-      redeInfo.ultimoStatus = res.status; redeInfo.ultimoMs = Date.now() - t0; redeInfo.ultimoAlvo = alvo;
+      redeInfo.ultimoStatus = res.status; redeInfo.ultimoMs = Date.now() - t0; redeInfo.ultimoAlvo = alvo; redeInfo.ultimaRota = via;
       if (res.status === 401) redeInfo.falhas401++;
       return res;
     }, (err) => {
       redeInfo.ultimoStatus = (err && err.name === 'AbortError') ? 'abortado' : 'falha-rede';
-      redeInfo.ultimoMs = Date.now() - t0; redeInfo.ultimoAlvo = alvo;
+      redeInfo.ultimoMs = Date.now() - t0; redeInfo.ultimoAlvo = alvo; redeInfo.ultimaRota = via;
       redeInfo.falhasRede++;
+      if (podeDesviar) marcarRotaSuspeita(via);   // falha de rede também desvia
       throw err;
     })
-    .finally(() => clearTimeout(timer));
+    .finally(() => { clearTimeout(timer); if (vigia) clearTimeout(vigia); });
 }
 // Contadores de rede lidos pelo diag.js (sem rede, só memória).
-export const redeInfo = { ultimoStatus: null, ultimoMs: null, ultimoAlvo: null, falhasRede: 0, falhas401: 0 };
+export const redeInfo = {
+  ultimoStatus: null, ultimoMs: null, ultimoAlvo: null, ultimaRota: null, falhasRede: 0, falhas401: 0,
+  get trocasDeRota() { return rota.trocas; },
+  get rotaSuspeita() { return Date.now() > rota.ate ? null : rota.suspeita; },
+  get proxyLiberado() { return _proxyLiberado; },
+};
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
@@ -272,9 +326,24 @@ function pingServidor() {
     new Promise((_, rej) => setTimeout(() => rej(new Error('sem resposta')), 8000)),
   ]).catch(() => {});
 }
+// A cada 20s (antes 60s): roteadores e operadoras costumam esquecer conexões
+// paradas em ~30s; com 60s o "cutucão" chegava tarde. A cada 3º toque (60s),
+// também mantém viva a rota alternativa (/sb), pra ela estar pronta se precisar.
+let _toques = 0;
+function pingRotaAlternativa() {
+  if (!_proxyLiberado || typeof location === 'undefined') return;
+  try {
+    const c = new AbortController(); setTimeout(() => c.abort(), 8000);
+    fetch(location.origin + PROXY_PATH + '/rest/v1/outros_tipos?select=id&limit=1',
+      { headers: { apikey: SUPABASE_ANON }, cache: 'no-store', signal: c.signal }).catch(() => {});
+  } catch (e) {}
+}
 export function iniciarKeepAlive() {
   if (_keepAliveTimer) return;
-  _keepAliveTimer = setInterval(pingServidor, 60000);
+  _keepAliveTimer = setInterval(() => {
+    pingServidor();
+    if (++_toques % 3 === 0 && document.visibilityState === 'visible' && state.user) pingRotaAlternativa();
+  }, 20000);
 }
 // Liga sozinho logo após o boot (o setTimeout garante que `state` já existe).
 if (typeof window !== 'undefined') setTimeout(iniciarKeepAlive, 5000);
