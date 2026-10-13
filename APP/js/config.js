@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.68';
+export const APP_VERSION = '1.9.69';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,15 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.69',
+    date: '13/10/2026',
+    changes: [
+      'ATUALIZAÇÃO AO VOLTAR PRO APP: antes o app só conferia a versão ao abrir do zero; quem só voltava para o app (que ficou em segundo plano) podia passar dias na versão antiga. Agora confere toda vez que a pessoa volta (no máximo a cada 2 min)',
+      'Se a pessoa estiver numa tela comum, atualiza sozinho na hora. Se estiver no meio de um registro, agendamento, janela aberta ou com algo digitado, NÃO recarrega (nada é perdido): mostra um aviso e atualiza sozinho quando ela sair da tela',
+      'LOGS: filtros por categoria — Agendamentos, Atividades e Carregamento de tela (com a contagem de cada um), combináveis com "só o que não subiu"',
+    ],
+  },
   {
     version: '1.9.68',
     date: '13/10/2026',

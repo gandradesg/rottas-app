@@ -504,18 +504,50 @@ export async function perfilView(_params, app) {
     }
     const sitPorGrupo = new Map(todosGrupos.map(g => [g, situacao(g)]));
 
+    // Filtro por CATEGORIA: agendamentos · atividades (check-in, atendimento,
+    // proposta…) · carregamento de tela. Combina com "só o que não subiu".
+    const CATEGORIAS = [
+      { v: 'todos', l: 'Todos' },
+      { v: 'agendamento', l: '📅 Agendamentos' },
+      { v: 'atividade', l: '📍 Atividades' },
+      { v: 'carregamento', l: '🖥️ Carregamento de tela' },
+    ];
+    const categoriaDe = (g) => {
+      const t = g[0].tipo;
+      if (t === 'agendamento') return 'agendamento';
+      if (t === 'carregamento') return 'carregamento';
+      if (t === 'teste-conexao') return 'outro';
+      return 'atividade';
+    };
+    let filtroCat = 'todos';
+    const barraCat = el('div', { class: 'flex gap-1 flex-wrap mt-1' });
+    function pintarBarraCat() {
+      barraCat.innerHTML = '';
+      CATEGORIAS.forEach(c => {
+        const n = c.v === 'todos' ? todosGrupos.length : todosGrupos.filter(g => categoriaDe(g) === c.v).length;
+        barraCat.appendChild(el('button', {
+          type: 'button',
+          class: 'btn btn-sm ' + (filtroCat === c.v ? 'btn-primary' : 'btn-ghost'),
+          onclick: () => { filtroCat = c.v; pintarBarraCat(); pintar(); },
+        }, `${c.l} (${n})`));
+      });
+    }
+    pintarBarraCat();
+    logsWrap.insertBefore(barraCat, lista);
+
     function pintar() {
       lista.innerHTML = '';
-      let grupos = todosGrupos.slice();
+      const daCategoria = filtroCat === 'todos' ? todosGrupos.slice() : todosGrupos.filter(g => categoriaDe(g) === filtroCat);
+      let grupos = daCategoria.slice();
       // "Só o que não subiu": o que falhou mas subiu depois (ou foi refeito) sai da lista
       if (apenasFalhas) grupos = grupos.filter(g => sitPorGrupo.get(g).k === 'falha');
       grupos.sort((a, b) => fimDe(b).localeCompare(fimDe(a)));   // mais recentes primeiro
       if (!grupos.length) {
         lista.appendChild(el('div', { class: 'text-sm text-fg-muted' },
-          apenasFalhas ? 'Nenhuma falha pendente: tudo o que falhou acabou subindo. 🎉' : 'Nenhum log ainda. Assim que a equipe registrar algo, aparece aqui.'));
+          apenasFalhas ? 'Nenhuma falha pendente aqui: tudo o que falhou acabou subindo. 🎉' : 'Nenhum log nesta categoria.'));
         return;
       }
-      const conta = (k) => todosGrupos.filter(g => sitPorGrupo.get(g).k === k).length;
+      const conta = (k) => daCategoria.filter(g => sitPorGrupo.get(g).k === k).length;
       lista.appendChild(el('div', { class: 'flex gap-1.5 flex-wrap text-[11px]' },
         el('span', { class: 'chip chip-green' }, `✓ ${conta('ok')} concluídos`),
         conta('subiu') ? el('span', { class: 'chip chip-green' }, `↑ ${conta('subiu')} falharam mas subiram`) : null,

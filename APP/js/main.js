@@ -11,7 +11,63 @@ if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
 // ===== DETECTOR DE VERSAO DESATUALIZADA (banner, sem reload automatico) =====
 // PWA Android cacheia em nivel de OS (WebAPK) - reload nao resolve, precisa reinstalar.
 // Mostra um banner discreto pedindo pro usuario reinstalar o app.
+// ─── QUANDO É SEGURO RECARREGAR ────────────────────────────────────────────
+// No celular, "entrar no app" quase sempre é VOLTAR a um app que estava em 2º
+// plano — sem recarregar, ele não conferia a versão e ficava dias na antiga.
+// Agora confere ao voltar, mas NUNCA recarrega com a pessoa no meio de algo:
+//   • telas de formulário (registrar/editar/realizar, agendar, visita, login, senha);
+//   • janela (modal) aberta;
+//   • qualquer coisa digitada nesta tela (vale pra Perfil, Listas, busca etc.).
+// Nesses casos mostra a faixa e atualiza sozinho assim que a pessoa sair.
+const ROTAS_FORMULARIO = [
+  /^\/atividade\/novo\//, /^\/atividade\/[^/]+\/editar\//, /^\/agenda\/nova$/, /^\/agenda\/[^/]+\/editar$/,
+  /^\/agenda\/[^/]+\/realizar$/, /^\/visitas\/nova$/, /^\/login$/, /^\/setup-password$/,
+];
+let _digitouNestaTela = false;
+document.addEventListener('input', () => { _digitouNestaTela = true; }, true);
+function rotaAtual() { return (location.hash || '#/').slice(1).split('?')[0] || '/'; }
+function appOcupado() {
+  if (ROTAS_FORMULARIO.some((r) => r.test(rotaAtual()))) return true;
+  const modais = document.getElementById('modal-root');
+  if (modais && modais.children.length) return true;
+  if (_digitouNestaTela) return true;
+  return false;
+}
+
+let _versaoPendente = null;      // versão nova esperando a pessoa sair do formulário
+let _ultimaConferencia = 0;
+
+async function aplicarAtualizacao(versao) {
+  // Trava anti-loop: 1 recarga automática por versão e por sessão.
+  const flagKey = 'auto-upd-' + versao;
+  if (sessionStorage.getItem(flagKey)) return false;
+  sessionStorage.setItem(flagKey, '1');
+  console.warn('[update] recarregando para', versao);
+  try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
+  // update() em vez de unregister(): preserva a inscrição das notificações.
+  try {
+    const regs = await navigator.serviceWorker?.getRegistrations?.();
+    if (regs) await Promise.all(regs.map(x => x.update().catch(() => {})));
+  } catch (e) {}
+  location.reload();
+  return true;
+}
+
+// Ao sair do formulário (troca de tela), aplica a versão que estava esperando.
+window.addEventListener('hashchange', () => {
+  _digitouNestaTela = false;   // tela nova = nada digitado nela ainda
+  if (_versaoPendente) setTimeout(() => { if (_versaoPendente && !appOcupado()) aplicarAtualizacao(_versaoPendente); }, 300);
+});
+
+// Ao VOLTAR pro app (estava em 2º plano): confere a versão (no máximo a cada 2 min).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (Date.now() - _ultimaConferencia < 2 * 60 * 1000) return;
+  checkForUpdate();
+});
+
 async function checkForUpdate() {
+  _ultimaConferencia = Date.now();
   try {
     const { APP_VERSION: localVersion } = await import('./config.js');
     const r = await fetch('/js/config.js?nocache=' + Date.now(), { cache: 'no-store' });
@@ -19,40 +75,35 @@ async function checkForUpdate() {
     const m = txt.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
     if (m && m[1] && m[1] !== localVersion) {
       console.warn('[update] versao local:', localVersion, '- servidor:', m[1]);
-      // Converge SOZINHO pra versão nova (limpa cache + desregistra SW + reload
-      // uma vez) — INCLUSIVE no PWA instalado (standalone). Antes o app instalado
-      // NÃO se atualizava sozinho e ficava preso numa versão antiga (era por isso
-      // que correções não chegavam aos gerentes). O SW é network-only pra código,
-      // então após limpar cache + reload o app pega o código novo. Trava anti-loop
-      // por versão do servidor (sessionStorage): tenta 1x por sessão; se mesmo
-      // assim não convergir, cai no banner manual.
-      const flagKey = 'auto-upd-' + m[1];
-      if (!sessionStorage.getItem(flagKey)) {
-        sessionStorage.setItem(flagKey, '1');
-        console.warn('[update] limpando cache + SW e recarregando para', m[1]);
-        try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
-        // NÃO desregistra o service worker: a inscrição das NOTIFICAÇÕES fica presa
-        // a ele e morreria a cada versão nova. update() já traz o sw.js novo, e o SW
-        // é só-rede para código, então limpar cache + recarregar basta.
-        try {
-          const regs = await navigator.serviceWorker?.getRegistrations?.();
-          if (regs) await Promise.all(regs.map(x => x.update().catch(() => {})));
-        } catch (e) {}
-        location.reload();
+      // Pessoa no meio de um registro: NÃO recarrega (perderia o que digitou e as
+      // fotos). Avisa e atualiza sozinho quando ela sair do formulário.
+      if (appOcupado()) {
+        _versaoPendente = m[1];
+        showUpdateBanner(localVersion, m[1], true);
         return;
       }
+      if (await aplicarAtualizacao(m[1])) return;
       // Já tentou o reload automático nesta sessão e ainda está desatualizado:
       // mostra banner manual (raro — ex.: WebAPK Android muito preso).
       showUpdateBanner(localVersion, m[1]);
     }
   } catch (e) { /* sem internet ou off - silencia */ }
 }
-function showUpdateBanner(local, server) {
+// emFormulario = true: a pessoa está registrando algo → a faixa explica que nada
+// será perdido e que a atualização acontece sozinha ao sair da tela.
+function showUpdateBanner(local, server, emFormulario = false) {
   if (document.getElementById('update-banner')) return; // ja existe
   const banner = document.createElement('div');
   banner.id = 'update-banner';
   banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#F26B22;color:#fff;padding:10px 14px;font:14px/1.4 sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.2);display:flex;gap:10px;align-items:center;justify-content:space-between;';
-  banner.innerHTML = `<div><b>Nova versao disponivel</b> (v${server}). Voce esta na v${local}. Toque em Atualizar.</div><button style="background:#fff;color:#F26B22;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">Atualizar agora</button>`;
+  banner.innerHTML = emFormulario
+    ? `<div><b>Nova versão disponível</b> (v${server}). Termine o que está fazendo — nada será perdido. O app atualiza sozinho quando você sair desta tela.</div><button style="background:#fff;color:#F26B22;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">Ok</button>`
+    : `<div><b>Nova versão disponível</b> (v${server}). Você está na v${local}. Toque em Atualizar.</div><button style="background:#fff;color:#F26B22;border:none;padding:6px 12px;border-radius:4px;font-weight:bold;cursor:pointer">Atualizar agora</button>`;
+  if (emFormulario) {
+    banner.querySelector('button').onclick = () => banner.remove();   // só fecha; atualiza ao sair da tela
+    document.body.appendChild(banner);
+    return;
+  }
   banner.querySelector('button').onclick = async () => {
     // Limpa cache + desregistra SW + reload (funciona no navegador E no PWA instalado).
     try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
