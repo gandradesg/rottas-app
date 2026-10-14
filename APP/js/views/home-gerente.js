@@ -169,6 +169,41 @@ export async function homeGerenteView(_params, app) {
     const summary = el('div', { class: 'text-xs text-fg-muted mt-0.5' });
     const fullList = el('div', { class: 'mt-2 flex flex-col gap-1' });
 
+    // Ordenação da lista (assiduidade). A escolha fica lembrada no aparelho.
+    const ORDENS = [
+      { k: 'nunca',    label: 'Nunca visitou primeiro' },
+      { k: 'recentes', label: 'Visitadas mais recentes' },
+      { k: 'antigas',  label: 'Visitadas há mais tempo' },
+      { k: 'az',       label: 'A–Z' },
+    ];
+    let ordem = 'az';
+    try { const s = localStorage.getItem('rottas-ordem-sem-visita'); if (ORDENS.some(o => o.k === s)) ordem = s; } catch (e) {}
+    const nuncaQtd = stale.filter(im => !lastByImob[im.nome]).length;
+    const ordenada = () => {
+      const t = im => (lastByImob[im.nome] ? lastByImob[im.nome].getTime() : null);
+      const az = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
+      const arr = [...stale];
+      if (ordem === 'az') return arr.sort(az);
+      if (ordem === 'nunca') {
+        // Nunca visitadas (A–Z) e depois as visitadas há mais tempo
+        return arr.sort((a, b) => {
+          const ta = t(a), tb = t(b);
+          if (ta === null && tb === null) return az(a, b);
+          if (ta === null) return -1;
+          if (tb === null) return 1;
+          return ta - tb;
+        });
+      }
+      // recentes / antigas: só as visitadas entram na ordem; nunca visitadas vão pro fim
+      return arr.sort((a, b) => {
+        const ta = t(a), tb = t(b);
+        if (ta === null && tb === null) return az(a, b);
+        if (ta === null) return 1;
+        if (tb === null) return -1;
+        return ordem === 'recentes' ? tb - ta : ta - tb;
+      });
+    };
+
     function paint() {
       summary.innerHTML = '';
       fullList.innerHTML = '';
@@ -179,7 +214,24 @@ export async function homeGerenteView(_params, app) {
       } else {
         summary.appendChild(el('span', { class: 'text-rottas-500 font-bold cursor-pointer hover:underline' },
           '▴ Recolher'));
-        stale.forEach(im => {
+        summary.appendChild(el('div', { class: 'mt-1' },
+          `${nuncaQtd} nunca visitada${nuncaQtd === 1 ? '' : 's'} · ${stale.length - nuncaQtd} visitada${stale.length - nuncaQtd === 1 ? '' : 's'} há 7+ dias`));
+        // Botões de ordenação — clicar neles NÃO recolhe a lista
+        fullList.appendChild(el('div', {
+          class: 'flex flex-wrap gap-1.5 mb-1',
+          onclick: (e) => e.stopPropagation(),
+        }, ...ORDENS.map(o => el('button', {
+          type: 'button',
+          class: 'px-2.5 py-1 rounded-full text-xs font-semibold border transition ' +
+            (o.k === ordem ? 'bg-rottas-500 text-white border-rottas-500' : 'bg-bg-elev text-fg-muted border-border'),
+          onclick: (e) => {
+            e.stopPropagation();
+            ordem = o.k;
+            try { localStorage.setItem('rottas-ordem-sem-visita', ordem); } catch (err) {}
+            paint();
+          },
+        }, o.label))));
+        ordenada().forEach(im => {
           const last = lastByImob[im.nome];
           const dayLabel = last
             ? `${Math.floor((Date.now() - last.getTime()) / 86400000)} dias atrás`
