@@ -24,15 +24,24 @@ export async function perfilView(_params, app) {
 
   const saveBtn = el('button', { class: 'btn btn-primary w-full mt-2' }, 'Salvar dados');
   saveBtn.addEventListener('click', async () => {
+    if (saveBtn.disabled) return;
     loadingBtn(saveBtn, true);
     try {
-      const { error } = await supabase.from('profiles').update({
+      // Tempo-limite + repetição (atualizar o mesmo id não duplica) e confirmação
+      // de que o banco gravou — antes, conexão travada = "salvou" sem salvar.
+      const { data, error } = await runQuery(() => supabase.from('profiles').update({
         nome: nome.value.trim(),
         telefone: tel.value.trim() || null,
         cidade: cidade.value.trim() || null,
         estado: estado.value || null,
-      }).eq('id', p.id);
-      if (error) throw error;
+      }).eq('id', p.id).select('id'), { ms: 6000, label: 'salvar meu perfil', tentativas: 3 });
+      if (error) {
+        if (/tempo esgotado|failed to fetch|network|load failed/i.test(error.message || '')) {
+          throw new Error('Não foi possível salvar (conexão travou). Nada foi perdido — toque em Salvar de novo.');
+        }
+        throw error;
+      }
+      if (!data || !data.length) throw new Error('O servidor não confirmou a alteração. Tente de novo.');
       Object.assign(p, { nome: nome.value, telefone: tel.value, cidade: cidade.value, estado: estado.value });
       toast('Dados atualizados', 'success');
     } catch (e) { toast(e.message, 'error'); }

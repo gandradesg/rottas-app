@@ -1,7 +1,7 @@
 // Master: gerenciamento de usuários (gestores e gerentes)
 import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
-import { supabase, loadAllProfiles, state } from '../supabase.js';
+import { supabase, loadAllProfiles, state, q } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES, ROLES, SUPABASE_URL } from '../config.js';
 import { phoneInput, emailInput, cidadeEstadoField } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
@@ -372,13 +372,19 @@ function openEditModal(p) {
   const footer = resetBtn ? [resetBtn, cancelBtn, submitBtn] : [cancelBtn, submitBtn];
   const m = modal({ title: 'Editar usuário', size: 'md', content: fields.form, footer });
 
-  submitBtn.addEventListener('click', () => {
+  // ANTES: fechava a janela, mostrava "Salvando..." por 1,5s e disparava a
+  // gravação SEM tempo-limite e SEM tratar falha de rede. Se a conexão estava
+  // morta (o mesmo travamento dos registros), a gravação nunca terminava, o
+  // aviso sumia e nada era salvo — sem nenhum erro na tela. Agora a janela só
+  // fecha depois que o banco CONFIRMA; se falhar, ela continua aberta com tudo
+  // que foi digitado. Repetir é seguro: atualizar o mesmo id não duplica.
+  submitBtn.addEventListener('click', async () => {
+    if (submitBtn.disabled) return;
     const v = fields.values();
     const ativo = ativoToggle.querySelector('input[name=ativo]').checked;
-    m.close();
-    toast('Salvando...', 'info', 1500);
     const contaTeste = testeToggle ? testeToggle.querySelector('input[name=conta_teste]').checked : (p.conta_teste || false);
-    supabase.from('profiles').update({
+    loadingBtn(submitBtn, true);
+    const { data, error } = await q(() => supabase.from('profiles').update({
       nome: v.nome,
       telefone: v.telefone,
       cidade: v.cidade,
@@ -390,20 +396,24 @@ function openEditModal(p) {
       gerente_supervisor_id: v.gerente_supervisor_id || null,
       ativo,
       conta_teste: contaTeste,
-    }).eq('id', p.id).select().then(({ data, error }) => {
-      if (error) {
-        console.error('[user update] erro:', error);
-        toast('Erro: ' + error.message, 'error', 6000);
-        return;
-      }
-      if (!data || !data.length) {
-        toast('❌ Sem permissão para editar este usuário (RLS rejeitou)', 'error', 6000);
-        return;
-      }
-      console.log('[user update] ok:', data);
-      toast('✓ Atualizado', 'success', 2500);
-      reload();
-    });
+    }).eq('id', p.id).select(), { ms: 6000, label: 'salvar usuário', tentativas: 3 });
+    loadingBtn(submitBtn, false);
+    if (error) {
+      console.error('[user update] erro:', error);
+      const rede = /tempo esgotado|failed to fetch|network|load failed/i.test(error.message || '');
+      toast(rede
+        ? '❌ Não foi possível salvar (conexão travou). Nada foi perdido — toque em Salvar de novo.'
+        : 'Erro: ' + error.message, 'error', 7000);
+      return;                          // janela continua aberta com os dados
+    }
+    if (!data || !data.length) {
+      toast('❌ Sem permissão para editar este usuário (RLS rejeitou)', 'error', 6000);
+      return;
+    }
+    Object.assign(p, data[0]);         // reabrir já mostra o que foi salvo
+    m.close();
+    toast('✓ Atualizado', 'success', 2500);
+    reload();
   });
 }
 
