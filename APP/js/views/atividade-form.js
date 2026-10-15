@@ -469,9 +469,11 @@ export async function atividadeFormView(params, app) {
     const initialImobsExtras = Array.isArray(initial?.imobiliarias_participantes)
       ? initial.imobiliarias_participantes : [];
     const imobsCheck = {};
-    // SCOPED: só mostra imobiliárias relevantes pra hierarquia do usuário
-    const scopedImobs = getScopedImobiliarias();
-    scopedImobs.forEach(im => { imobsCheck[im.nome] = initialImobsExtras.includes(im.nome); });
+    // SCOPED: só mostra imobiliárias relevantes pra hierarquia do usuário.
+    // Relida a CADA desenho da lista: antes era uma cópia feita ao abrir o
+    // formulário, e uma imobiliária cadastrada no meio do registro (ex.: HRR)
+    // não aparecia aqui — "Nenhuma encontrada" até sair e entrar de novo.
+    initialImobsExtras.forEach(n => { imobsCheck[n] = true; });
 
     const imobsSearchInput = el('input', {
       type: 'text',
@@ -480,18 +482,43 @@ export async function atividadeFormView(params, app) {
       autocomplete: 'off',
     });
     const imobsListEl = el('div', { class: 'max-h-48 overflow-y-auto flex flex-col gap-1 mt-2' });
+    // Botão "+ Cadastrar" quando a busca não encontra: cadastra a imobiliária
+    // ali mesmo (mesma janela de cidade/UF do campo de cima) e já marca.
+    function botaoCadastrar(nomeDigitado) {
+      const nome = (nomeDigitado || '').trim();
+      if (!nome) return null;
+      return el('button', {
+        type: 'button',
+        class: 'btn btn-secondary btn-sm mt-1 self-start',
+        onclick: async () => {
+          try {
+            await addImobiliaria(nome);
+            imobsCheck[nome.toUpperCase()] = true;
+            imobsSearchInput.value = '';
+            renderImobsList();
+            toast(`${nome.toUpperCase()} cadastrada e marcada`, 'success');
+          } catch (e) {
+            if (e && e.message !== 'Cancelado') toast(e.message || 'Erro ao cadastrar', 'error');
+          }
+        },
+      }, `+ Cadastrar "${nome.toUpperCase()}"`);
+    }
     function renderImobsList() {
-      const f = (imobsSearchInput.value || '').trim().toLowerCase();
+      const scopedImobs = getScopedImobiliarias();
+      const fRaw = (imobsSearchInput.value || '').trim();
+      const f = fRaw.toLowerCase();
       imobsListEl.innerHTML = '';
       const filtered = scopedImobs.filter(im =>
         !f || im.nome.toLowerCase().includes(f)
       );
       if (scopedImobs.length === 0) {
         imobsListEl.appendChild(el('span', { class: 'text-sm text-fg-muted px-2 py-1' }, 'Nenhuma imobiliária cadastrada.'));
+        const b = botaoCadastrar(fRaw); if (b) imobsListEl.appendChild(b);
         return;
       }
       if (filtered.length === 0) {
         imobsListEl.appendChild(el('span', { class: 'text-sm text-fg-muted px-2 py-1' }, 'Nenhuma encontrada.'));
+        const b = botaoCadastrar(fRaw); if (b) imobsListEl.appendChild(b);
         return;
       }
       // Marcadas primeiro (já selecionadas), depois alfabético
@@ -513,8 +540,20 @@ export async function atividadeFormView(params, app) {
       });
     }
     imobsSearchInput.addEventListener('input', renderImobsList);
+    imobsSearchInput.addEventListener('focus', renderImobsList);
     const imobsMulti = el('div', { class: 'card p-2' }, imobsSearchInput, imobsListEl);
     renderImobsList();
+    // Imobiliária cadastrada em QUALQUER campo deste formulário (ex.: o campo
+    // Imobiliária lá em cima) entra na lista na hora. Sai sozinho quando o
+    // formulário deixa a tela.
+    const aoCriarImob = () => {
+      if (!imobsMulti.isConnected) {          // formulário já saiu da tela
+        window.removeEventListener('rottas:imobiliaria-criada', aoCriarImob);
+        return;
+      }
+      renderImobsList();
+    };
+    window.addEventListener('rottas:imobiliaria-criada', aoCriarImob);
 
     const treinamentoBox = el('div', {
       class: 'flex flex-col gap-3 hidden',
@@ -560,9 +599,7 @@ export async function atividadeFormView(params, app) {
       return {
         local_treinamento: ltHidden?.value || null,
         qtd_pessoas: qtdPessoasInput.value ? parseInt(qtdPessoasInput.value, 10) : null,
-        imobiliarias_participantes: scopedImobs
-          .filter(im => imobsCheck[im.nome])
-          .map(im => im.nome),
+        imobiliarias_participantes: Object.keys(imobsCheck).filter(n => imobsCheck[n]),
       };
     };
   }

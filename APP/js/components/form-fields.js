@@ -264,6 +264,9 @@ export async function addImobiliaria(nome) {
           }
         } catch (e) { /* não bloqueia o cadastro da imob */ }
         await loadLists();
+        // Avisa as listas já abertas na tela (ex.: Imobiliárias participantes do
+        // treinamento) para incluírem a nova na hora, sem sair do registro.
+        try { window.dispatchEvent(new CustomEvent('rottas:imobiliaria-criada', { detail: { nome: nomeUpper } })); } catch (e) {}
         m.close();
         resolve(data);
       } catch (err) {
