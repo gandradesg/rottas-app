@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.72';
+export const APP_VERSION = '1.9.73';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,24 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.73',
+    date: '22/10/2026',
+    changes: [
+      'CONEXÃO — CAUSA RAIZ CORRIGIDA: toda consulta/gravação esperava na mesma fila da renovação do login. Ao voltar pro app (token vencido ou rede "acordando"), tudo ficava parado até 15–30s ANTES de sair do aparelho → "Tempo esgotado" e "Conexão travada" com internet boa. Agora as consultas pegam o token direto do aparelho e nunca esperam mais que 3s',
+      'CONEXÃO — 2ª causa: a cada retorno ao app o login avisava "entrou" e o app recarregava perfil + listas DENTRO da própria fila — esperava por ele mesmo (~15s travado). Agora não recarrega se é o mesmo usuário e nada espera dentro da fila',
+      'Abrir o app não espera mais a renovação do login (máx. 5s) e não manda mais pro login quando o perfil demora (usa a cópia salva no aparelho)',
+      'Realizar agenda / abrir atividade / abrir visita: demora de rede não diz mais "não encontrado" nem expulsa da tela — mostra "Tentar de novo"',
+      'UM botão só: os cartões de erro agora têm apenas "Tentar de novo". O "Reconectar" (faixa vermelha) tenta reconectar SEM recarregar e nunca recarrega com um registro preenchido na tela',
+      'Atualização do app nunca mais recarrega no meio de um registro (o service worker passava por cima da proteção)',
+      'Fila offline: um item recusado pelo banco não trava mais os outros; fotos não sobem em dobro; "Enviar agora" espera o envio em andamento',
+      'Agenda marcada como realizada com confirmação: se falhar, vai pra fila (antes ficava "pendente" e o gerente registrava de novo = duplicado)',
+      'Token vencido nas gravações agora renova e repete (antes falhava na hora)',
+      'Cadastro rápido de imobiliária/corretor não duplica ao tocar de novo; Visita (recepção) não duplica e tem tempo-limite; editar agendamento, cancelar e reagendar com tempo-limite e conferência de erro',
+      'Telas lentas não aparecem mais por cima da tela nova quando o usuário já navegou',
+      'Dashboard: mesmas correções de conexão (antes uma consulta podia ficar parada pra sempre)',
+    ],
+  },
   {
     version: '1.9.72',
     date: '15/10/2026',

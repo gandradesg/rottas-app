@@ -54,9 +54,11 @@ async function aplicarAtualizacao(versao) {
 }
 
 // Ao sair do formulário (troca de tela), aplica a versão que estava esperando.
+let _recarregarAoSair = false;  // service worker novo assumiu durante um formulário
 window.addEventListener('hashchange', () => {
   _digitouNestaTela = false;   // tela nova = nada digitado nela ainda
   if (_versaoPendente) setTimeout(() => { if (_versaoPendente && !appOcupado()) aplicarAtualizacao(_versaoPendente); }, 300);
+  else if (_recarregarAoSair) setTimeout(() => { if (_recarregarAoSair && !appOcupado()) location.reload(); }, 300);
 });
 
 // Ao VOLTAR pro app (estava em 2º plano): confere a versão (no máximo a cada 2 min).
@@ -144,8 +146,12 @@ if ('serviceWorker' in navigator) {
 
     // Recarrega quando o SW novo assume controle
     let refreshing = false;
+    // AUDITORIA: antes recarregava NA HORA, mesmo com o gerente no meio de um
+    // registro (passava por cima da proteção de formulário). Agora, se estiver
+    // ocupado, espera ele sair da tela.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
+      if (appOcupado()) { _recarregarAoSair = true; console.log('[sw] controllerchange - aguardando sair do formulário'); return; }
       refreshing = true;
       console.log('[sw] controllerchange - reload');
       location.reload();

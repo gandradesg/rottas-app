@@ -144,16 +144,75 @@ export const redeInfo = {
   get proxyLiberado() { return _proxyLiberado; },
 };
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
+// ─── CAUSA RAIZ DOS TRAVAMENTOS (auditoria 22/10/2026) ─────────────────────
+// No supabase-js, TODA consulta/gravação primeiro pede o token ao módulo de
+// login (auth.getSession), e esse pedido entra na MESMA FILA (lock) da
+// renovação do token. Quando o celular volta do segundo plano, o token quase
+// sempre já venceu (dura 1h) e a biblioteca começa a renovar — com repetições
+// automáticas por até 30s se a rede ainda está "acordando". Enquanto isso,
+// TODAS as consultas ficam paradas na fila, ANTES de sair do aparelho: a tela
+// estoura "Tempo esgotado (agenda)", aparece "Conexão travada", e nenhuma
+// troca de rota resolve (a requisição nem chegou a ser enviada). Era isso que
+// os logs mostravam como "internet ok, token ok, e mesmo assim parado".
+//
+// CORREÇÃO: dois clientes.
+//   • authClient — cuida SÓ do login (entrar, sair, renovar, senha).
+//   • dataClient — faz as consultas/gravações e pega o token DIRETO do
+//     aparelho (localStorage), sem fila. Se o token venceu, pede a renovação
+//     mas espera no MÁXIMO 3s; depois segue com o que tiver (no pior caso o
+//     servidor responde 401 na hora e a repetição já sai com o token novo).
+// `supabase.auth` continua funcionando igual (aponta pro authClient), então o
+// resto do app não muda.
+const AUTH_STORAGE_KEY = 'rottas-app-auth';
+const authClient = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storage: window.localStorage,
-    storageKey: 'rottas-app-auth',
+    storageKey: AUTH_STORAGE_KEY,
     lock: serialLock,
   },
   global: { fetch: fetchWithTimeout },
+});
+
+export function lerSessaoLocal() {
+  try { return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY) || 'null'); } catch (e) { return null; }
+}
+const msRestantes = (s) => (s && s.expires_at ? s.expires_at * 1000 - Date.now() : -1);
+let _renovando = null;
+function renovarTokenSemTravar(limiteMs) {
+  if (!_renovando) {
+    // getSession renova sozinho se o token venceu (dentro da fila do login —
+    // tudo bem: quem espera aqui é só esta função, e por no máximo limiteMs).
+    _renovando = authClient.auth.getSession().catch(() => null)
+      .finally(() => { setTimeout(() => { _renovando = null; }, 500); });
+  }
+  return Promise.race([_renovando, new Promise((r) => setTimeout(r, limiteMs))]);
+}
+// Para gravações que recebem "token vencido": renova (no máx. limiteMs) e repete.
+export function renovarToken(limiteMs = 4000) { return renovarTokenSemTravar(limiteMs); }
+async function tokenParaDados() {
+  const s = lerSessaoLocal();
+  if (!s || !s.access_token) return null;                 // sem login: chave pública
+  if (msRestantes(s) > 60 * 1000) return s.access_token;  // válido: zero espera
+  await renovarTokenSemTravar(3000);
+  const s2 = lerSessaoLocal();
+  return (s2 && s2.access_token) || s.access_token;
+}
+const dataClient = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  accessToken: tokenParaDados,
+  global: { fetch: fetchWithTimeout },
+});
+
+// Fachada única: `supabase.auth.*` → authClient; todo o resto
+// (from, rpc, storage, functions) → dataClient.
+export const supabase = new Proxy(dataClient, {
+  get(alvo, prop) {
+    if (prop === 'auth') return authClient.auth;
+    const v = Reflect.get(alvo, prop, alvo);
+    return typeof v === 'function' ? v.bind(alvo) : v;
+  },
 });
 
 // ─── SAÚDE DA CONEXÃO / AUTO-RECUPERAÇÃO ───────────────────────────────────
@@ -213,11 +272,40 @@ function avisarConexao(estado) {
       : '');
   const btn = b.querySelector('button');
   if (btn) btn.onclick = async () => {
-    btn.textContent = 'Reconectando...';
+    // AUDITORIA: antes recarregava o app NA HORA — quem estava com um registro
+    // preenchido perdia tudo (inclusive fotos). Agora:
+    //   1) tenta reconectar SEM recarregar (renova o login + testa o servidor);
+    //   2) só recarrega se não houver formulário/janela aberta;
+    //   3) com formulário aberto, NÃO recarrega: avisa pra salvar no aparelho.
+    btn.disabled = true; btn.textContent = 'Reconectando...';
+    try {
+      await renovarTokenSemTravar(4000);
+      const r = await Promise.race([
+        supabase.from('outros_tipos').select('id').limit(1),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('sem resposta')), 6000)),
+      ]);
+      if (r && !r.error) { limparAvisoConexao(); return; }
+    } catch (e) {}
+    if (temFormularioAberto()) {
+      btn.disabled = false; btn.textContent = 'Reconectar';
+      const txt = b.querySelector('div');
+      if (txt) txt.innerHTML = '<b>Ainda sem conexão.</b> Seu registro continua na tela — use "Salvar no aparelho" para não perder.';
+      return;
+    }
     try { if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } } catch (e) {}
     location.reload();
   };
   if (estado === 'travado') iniciarSonda(); else pararSonda();
+}
+
+// Há algo que recarregar faria perder? (formulário de registro ou janela aberta)
+function temFormularioAberto() {
+  try {
+    const rota = (location.hash || '#/').slice(1).split('?')[0];
+    if (/^\/(atividade\/novo\/|atividade\/[^/]+\/editar|agenda\/nova$|agenda\/[^/]+\/(editar|realizar)$|visitas\/nova$)/.test(rota)) return true;
+    const m = document.getElementById('modal-root');
+    return !!(m && m.children.length);
+  } catch (e) { return false; }
 }
 
 // Versões públicas: as GRAVAÇÕES (registro/agendamento) não passam por q(),
@@ -284,6 +372,11 @@ function logCarregamento(label, ok, erro, tentativa, limite) {
 //
 // Passe uma FÁBRICA pra permitir a repetição:  q(() => supabase.from('x').select())
 // Passe o builder direto pra NÃO repetir (use em gravações, que não podem duplicar).
+export function ehErroDeToken(err) {
+  if (!err) return false;
+  const cod = String(err.code || err.status || '');
+  return cod === 'PGRST301' || cod === '401' || /jwt (expired|is expired)|invalid jwt|token is expired/i.test(err.message || '');
+}
 export async function q(fonte, { ms = 5000, label = 'consulta', tentativas = 2 } = {}) {
   const ehFabrica = typeof fonte === 'function';
   const max = ehFabrica ? tentativas : 1;   // sem fábrica, não dá pra repetir com segurança
@@ -296,6 +389,12 @@ export async function q(fonte, { ms = 5000, label = 'consulta', tentativas = 2 }
         new Promise((_, rej) => setTimeout(() => rej(new Error(`Tempo esgotado (${label})`)), limite)),
       ]);
       limparAvisoConexao();                 // respondeu: a conexão está viva
+      // Token vencido (o servidor respondeu 401/JWT expired): não é erro "de
+      // verdade" — renova e repete, em vez de mostrar erro na tela.
+      if (r && r.error && ehErroDeToken(r.error) && i < max - 1) {
+        await renovarTokenSemTravar(4000);
+        throw r.error;
+      }
       // Se a 1ª travou e a 2ª respondeu, isso é a "assinatura" de conexão morta
       // reaproveitada — registra para o diagnóstico.
       if (i > 0) logCarregamento(label, true, `recuperou na tentativa ${i + 1}`, i + 1, limite);
@@ -303,9 +402,8 @@ export async function q(fonte, { ms = 5000, label = 'consulta', tentativas = 2 }
     } catch (e) {
       ultimo = e;
       logCarregamento(label, false, e, i + 1, limite);
-      if (i < max - 1) {
+      if (i < max - 1 && !ehErroDeToken(e)) {
         avisarConexao('lenta');             // ~5s: o usuário JÁ sabe que está tentando
-        repararSessao();                    // sem await: não bloqueia a repetição
       }
     }
   }
@@ -348,16 +446,12 @@ export function iniciarKeepAlive() {
 // Liga sozinho logo após o boot (o setTimeout garante que `state` já existe).
 if (typeof window !== 'undefined') setTimeout(iniciarKeepAlive, 5000);
 
-// Ao VOLTAR pro app (aba/PWA que estava em 2º plano), valida a sessão antes das
-// próximas queries. Sem isso, a primeira ação depois de voltar costumava ficar
-// pendurada esperando um refresh de token que nunca completava.
+// Ao VOLTAR pro app: se o token venceu, já começa a renovar por baixo — sem
+// ninguém esperando (as consultas não dependem mais disso, ver authClient).
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
-    Promise.race([
-      supabase.auth.getSession(),
-      new Promise((r) => setTimeout(r, 6000)),
-    ]).catch(() => {});
+    if (msRestantes(lerSessaoLocal()) < 5 * 60 * 1000) renovarTokenSemTravar(0);
   });
 }
 
@@ -393,15 +487,26 @@ export function emitStateChange() {
 // Helper: pega profile do user atual
 export async function loadProfile() {
   if (!state.user) return null;
-  const { data, error } = await supabase
+  // Tempo-limite + repetição: sem isso, uma conexão travada no boot deixava o
+  // app aberto SEM perfil (menus errados/tela vazia) até fechar e abrir de novo.
+  const { data, error } = await q(() => supabase
     .from('profiles')
     .select('*')
     .eq('id', state.user.id)
-    .single();
+    .single(), { ms: 6000, label: 'perfil', tentativas: 3 });
+  const CACHE_PERFIL = 'rottas-perfil-cache';
   if (error) {
     console.error('Erro ao carregar profile:', error);
+    if (state.profile) return state.profile;          // mantém o que já tinha
+    // Sem perfil o app manda pro LOGIN, mesmo com a sessão válida. Usa a última
+    // cópia salva neste aparelho (do mesmo usuário) até a conexão voltar.
+    try {
+      const c = JSON.parse(localStorage.getItem(CACHE_PERFIL) || 'null');
+      if (c && c.id === state.user.id) { state.profile = c; emitStateChange(); return c; }
+    } catch (e) {}
     return null;
   }
+  try { localStorage.setItem(CACHE_PERFIL, JSON.stringify(data)); } catch (e) {}
   state.profile = data;
   emitStateChange();
   return data;

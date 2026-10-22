@@ -1,6 +1,6 @@
 // Agenda - calendário dia/semana/mês com itens vinculados a atividades
 import { el, icon, fmt, toast, confirmModal, modal, dictationButton } from '../ui.js';
-import { shell } from './shell.js';
+import { shell, cartaoErroCarga } from './shell.js';
 import { state, supabase, q as runQuery } from '../supabase.js';
 import { activeViewRole, isAdmin } from '../auth.js';
 import { navigate } from '../router.js';
@@ -324,19 +324,7 @@ async function agendaGerenteView(app) {
     } catch (e) { error = e; }
     if (error) {
       cal.innerHTML = '';
-      cal.appendChild(el('div', { class: 'card p-4 text-sm text-fg-muted flex flex-col gap-2' },
-        el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar a agenda.'),
-        el('div', {}, (error.message || 'Falha de rede') + '.'),
-        el('div', { class: 'text-xs text-fg-subtle' },
-          'Se "Tentar de novo" não resolver, use "Recarregar app" (reinicia a conexão — comum após deixar o app parado no iPhone).'),
-        el('div', { class: 'flex gap-2 flex-wrap' },
-          el('button', { class: 'btn btn-secondary btn-sm', onclick: () => loadItems() }, '↻ Tentar de novo'),
-          el('button', { class: 'btn btn-primary btn-sm', onclick: () => {
-            try { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
-            location.reload();
-          } }, '⟳ Recarregar app'),
-        ),
-      ));
+      cal.appendChild(cartaoErroCarga('Não foi possível carregar a agenda.', error, () => loadItems()));
       return;
     }
     allItems = data || [];
@@ -630,8 +618,9 @@ async function agendaGerenteView(app) {
     okBtn.addEventListener('click', async () => {
       okBtn.disabled = true;
       const motivo = (ta.value || '').trim() || null;
-      const { error } = await supabase.from('agendamentos')
-        .update({ status: 'cancelado', motivo_cancelamento: motivo }).eq('id', item.id);
+      const { error } = await runQuery(() => supabase.from('agendamentos')
+        .update({ status: 'cancelado', motivo_cancelamento: motivo }).eq('id', item.id),
+        { ms: 6000, label: 'cancelar agendamento', tentativas: 3 });
       if (error) { toast(error.message, 'error', 5000); okBtn.disabled = false; return; }
       m.close();
       toast('Cancelado', 'info');
@@ -729,8 +718,12 @@ async function agendaGerenteView(app) {
     } else if (item.status === 'cancelado' || item.status === 'adiado') {
       actions.appendChild(el('button', {
         class: 'btn btn-secondary btn-sm',
-        onclick: async () => {
-          await supabase.from('agendamentos').update({ status: 'pendente' }).eq('id', item.id);
+        onclick: async (ev) => {
+          // Antes: não conferia erro e sempre dizia "Reagendado".
+          const bt = ev.currentTarget; bt.disabled = true; bt.textContent = 'Reagendando...';
+          const { error } = await runQuery(() => supabase.from('agendamentos').update({ status: 'pendente' }).eq('id', item.id),
+            { ms: 6000, label: 'reagendar', tentativas: 3 });
+          if (error) { toast('Não foi possível reagendar: ' + (error.message || 'conexão'), 'error', 6000); bt.disabled = false; bt.textContent = '↻ Reagendar'; return; }
           toast('Reagendado', 'success');
           location.reload();
         }
@@ -834,17 +827,7 @@ async function agendaGestorView(app) {
     } catch (e) { error = e; }
     if (error) {
       cal.innerHTML = '';
-      cal.appendChild(el('div', { class: 'card p-4 text-sm text-fg-muted flex flex-col gap-2' },
-        el('div', { class: 'text-danger font-semibold' }, 'Não foi possível carregar a agenda.'),
-        el('div', {}, (error.message || 'Falha de rede') + '.'),
-        el('div', { class: 'flex gap-2 flex-wrap' },
-          el('button', { class: 'btn btn-secondary btn-sm', onclick: () => reload() }, '↻ Tentar de novo'),
-          el('button', { class: 'btn btn-primary btn-sm', onclick: () => {
-            try { if ('caches' in window) caches.keys().then(ks => ks.forEach(k => caches.delete(k))); } catch (e) {}
-            location.reload();
-          } }, '⟳ Recarregar app'),
-        ),
-      ));
+      cal.appendChild(cartaoErroCarga('Não foi possível carregar a agenda.', error, () => reload()));
       return;
     }
     allItems = (data || []).map(i => ({ ...i, gerente_nome: i.profiles?.nome }));

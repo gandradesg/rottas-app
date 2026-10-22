@@ -1,7 +1,7 @@
 // Home do Gerente - KPIs e feed com filtro de período
 import { el, icon, fmt } from '../ui.js';
-import { state, supabase, getScopedImobiliarias, getScopedGerenteIds } from '../supabase.js';
-import { shell } from './shell.js';
+import { state, supabase, q as runQuery, getScopedImobiliarias, getScopedGerenteIds } from '../supabase.js';
+import { shell, cartaoErroCarga } from './shell.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 
@@ -296,20 +296,19 @@ export async function homeGerenteView(_params, app) {
     }
     // 'geral' = sem filtro de data
 
-    const tPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout')), 8000));
+    // Tempo-limite + REPETIÇÃO (antes: 8s, sem repetir, e o único botão
+    // recarregava o app inteiro). É a 1ª tela depois de voltar pro app.
     let atividades = [], error = null;
     try {
-      const result = await Promise.race([q, tPromise]);
+      const qFeed = q;
+      const result = await runQuery(() => qFeed, { ms: 6000, label: 'início' });
       atividades = result.data || [];
       error = result.error;
     } catch (err) { error = err; }
 
     if (error) {
       feedList.innerHTML = '';
-      feedList.appendChild(el('div', { class: 'card p-4 text-sm text-danger' },
-        '⚠️ Erro: ' + (error.message || 'rede') + '. ',
-        el('button', { class: 'underline text-rottas-500 ml-1', onclick: () => location.reload() }, 'Recarregar'),
-      ));
+      feedList.appendChild(cartaoErroCarga('Não foi possível carregar suas atividades.', error, () => load()));
       return;
     }
 

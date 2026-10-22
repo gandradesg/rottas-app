@@ -165,3 +165,27 @@ export function shell(content, opts = {}) {
   const wrapper = el('div', { class: 'min-h-screen' }, header, main, bottom);
   return wrapper;
 }
+
+// ─── ERRO DE CARREGAMENTO (padrão único do app) ────────────────────────────
+// Antes cada tela tinha o seu: "Tentar de novo", "Recarregar app",
+// "Recarregar"… e ainda o "Reconectar" da faixa de baixo — o gerente não sabia
+// qual apertar. Agora: UM botão, "Tentar de novo", que repete só o que falhou.
+// Reiniciar o app inteiro fica só na faixa vermelha de baixo ("Reconectar").
+export function cartaoErroCarga(titulo, erro, aoTentar) {
+  const btn = el('button', { class: 'btn btn-primary btn-sm self-start' }, '↻ Tentar de novo');
+  btn.addEventListener('click', () => { btn.disabled = true; btn.textContent = 'Tentando...'; aoTentar(); });
+  return el('div', { class: 'card p-4 text-sm text-fg-muted flex flex-col gap-2' },
+    el('div', { class: 'text-danger font-semibold' }, titulo),
+    el('div', { class: 'text-xs text-fg-subtle' },
+      /tempo esgotado|failed to fetch|network|load failed/i.test((erro && erro.message) || '')
+        ? 'A conexão demorou para responder. Nada foi perdido.'
+        : ((erro && erro.message) || 'Falha ao carregar.')),
+    btn,
+  );
+}
+// Tela inteira de erro (para formulários que precisam de um dado antes de abrir).
+export function telaErroCarga(app, titulo, erro, aoTentar) {
+  app.innerHTML = '';
+  app.appendChild(shell(el('div', { class: 'flex flex-col gap-4' },
+    cartaoErroCarga(titulo, erro, () => { app.innerHTML = ''; aoTentar(); }))));
+}

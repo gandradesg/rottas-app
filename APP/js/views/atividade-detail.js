@@ -1,7 +1,7 @@
 // Detalhe de uma atividade (com edição se for da gerente, ou só leitura para master ver)
 import { el, icon, fmt, toast, confirmModal, modal } from '../ui.js';
-import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { shell, telaErroCarga } from './shell.js';
+import { state, supabase, q } from '../supabase.js';
 import { isMaster, isGestor, isAdmin, can, canApproveLevel, roleLevel } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, PROPOSTA_STATUS, NEXT_APPROVER, ROLES, TERMOMETRO_OPTIONS } from '../config.js';
@@ -9,12 +9,14 @@ import { gmapsLink } from '../geo.js';
 import { aplicarEdicao, rejeitarEdicao, excluirAtividade, FIELD_LABELS } from '../activity-actions.js';
 
 export async function atividadeDetailView(params, app) {
-  const { data: a, error } = await supabase
+  const { data: a, error } = await q(() => supabase
     .from('atividades')
     .select('*, profiles!atividades_gerente_id_fkey(nome, email, telefone)')
     .eq('id', params.id)
-    .single();
-  if (error || !a) {
+    .maybeSingle(), { ms: 6000, label: 'abrir atividade', tentativas: 3 });
+  // Demora de rede NÃO é "não encontrada" (antes expulsava pro Histórico).
+  if (error) { telaErroCarga(app, 'Não foi possível abrir a atividade.', error, () => atividadeDetailView(params, app)); return; }
+  if (!a) {
     toast('Atividade não encontrada', 'error');
     navigate('/historico', true);
     return;

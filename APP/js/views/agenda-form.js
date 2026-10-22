@@ -1,7 +1,7 @@
 // Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
 import { el, icon, toast, loadingBtn, modal, painelSalvando } from '../ui.js';
-import { shell } from './shell.js';
-import { state, supabase, getScopedImobiliarias, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
+import { shell, telaErroCarga } from './shell.js';
+import { state, supabase, q, getScopedImobiliarias, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
@@ -77,7 +77,9 @@ export async function agendaFormView(params, app) {
   const id = params.id;
   let initial = null;
   if (id) {
-    const { data } = await supabase.from('agendamentos').select('*').eq('id', id).single();
+    const { data, error } = await q(() => supabase.from('agendamentos').select('*').eq('id', id).maybeSingle(),
+      { ms: 6000, label: 'abrir agendamento', tentativas: 3 });
+    if (error) { telaErroCarga(app, 'Não foi possível abrir o agendamento.', error, () => agendaFormView(params, app)); return; }
     if (!data) { toast('Agendamento não encontrado', 'error'); navigate('/', true); return; }
     initial = data;
   }
@@ -91,7 +93,7 @@ export async function agendaFormView(params, app) {
   if (myRole === 'gerente' || myRole === 'supervisor') {
     // Gerente e supervisor podem marcar a si e a gerentes/supervisores da MESMA
     // cidade (agenda compartilhada), além do gerente superior do supervisor.
-    const { data: pessoas } = await supabase.rpc('pessoas_agenda_mesma_praca');
+    const { data: pessoas } = await q(() => supabase.rpc('pessoas_agenda_mesma_praca'), { ms: 6000, label: 'pessoas da agenda', tentativas: 2 });
     (pessoas || []).forEach(p => {
       const isSelf = p.id === meuId;
       const rl = p.role === 'gerente' ? 'Gerente' : 'Supervisor';
@@ -103,8 +105,9 @@ export async function agendaFormView(params, app) {
     // Eu sempre no topo
     responsaveis.sort((a, b) => (a.id === meuId ? -1 : b.id === meuId ? 1 : 0));
   } else if (['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole)) {
-    const { data: gers } = await supabase
-      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome');
+    const { data: gers } = await q(() => supabase
+      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome'),
+      { ms: 6000, label: 'gerentes da agenda', tentativas: 2 });
     let list = gers || [];
     if (myRole === 'superintendente') {
       const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
@@ -386,8 +389,13 @@ export async function agendaFormView(params, app) {
     loadingBtn(submitBtn, true);
     try {
       if (id) {
-        const { data, error } = await supabase.from('agendamentos').update(payload).eq('id', id).select();
-        if (error) throw error;
+        // Edição: idempotente (mesmo id, mesmos valores) → pode repetir à vontade.
+        const { data, error } = await q(() => supabase.from('agendamentos').update(payload).eq('id', id).select(),
+          { ms: 6000, label: 'editar agendamento', tentativas: 3 });
+        if (error) {
+          if (/tempo esgotado/i.test(error.message || '')) throw new Error('A conexão travou e a alteração não foi confirmada. Nada foi perdido — toque em Salvar de novo.');
+          throw error;
+        }
         if (!data || !data.length) throw new Error('Sem permissão (RLS rejeitou)');
         toast('✓ Atualizado', 'success');
         navigate('/', true);

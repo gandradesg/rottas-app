@@ -7,7 +7,7 @@
 // Usamos IndexedDB (e não localStorage) porque ele guarda as FOTOS (Blob) e tem
 // espaço de sobra. Tudo é idempotente: cada registro leva um id gerado no
 // aparelho, então reenviar NUNCA duplica.
-import { supabase, state } from './supabase.js';
+import { supabase, state, ehErroDeToken, renovarToken } from './supabase.js';
 import { uploadPhotos } from './storage.js';
 import { logRegistro, vincularAlvo, novoRegistroId } from './diag.js';
 
@@ -60,10 +60,32 @@ function notificar() {
   contar().then(n => { _ouvintes.forEach(f => { try { f(n); } catch (e) {} }); atualizarSelo(n); }).catch(() => {});
 }
 
+// ── Marcar agenda como realizada (idempotente; CONFERE o erro) ────────────
+async function marcarAgenda(posSync, atividadeId) {
+  const corrida = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 8000))]);
+  const res = posSync.grupoId
+    ? await corrida(supabase.rpc('realizar_agendamento_grupo', { p_grupo_id: posSync.grupoId, p_atividade_id: atividadeId }))
+    : await corrida(supabase.from('agendamentos').update({
+        status: 'realizado', atividade_id: atividadeId, realizado_em: new Date().toISOString(),
+      }).eq('id', posSync.agendamentoId));
+  if (res && res.error) throw res.error;
+}
+// Guarda na fila uma marcação de agenda que não deu certo na hora.
+export async function guardarMarcacaoAgenda(posSync, atividadeId) {
+  return guardar({
+    id: 'marcar-' + posSync.agendamentoId,          // 1 por agenda: nunca duplica
+    tipo: 'marcar-agenda',
+    tabela: 'agendamentos',
+    row: { titulo: 'Marcar agenda como realizada' },
+    posSync: { ...posSync, atividadeId },
+    criadoEm: new Date().toISOString(),
+  });
+}
+
 // ── Envio ─────────────────────────────────────────────────────────────────
 let _enviando = false;
 export async function sincronizar() {
-  if (_enviando) return { enviados: 0 };
+  if (_enviando) return { enviados: 0, emAndamento: true };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return { enviados: 0 };
   if (!state.user?.id) return { enviados: 0 };
   _enviando = true;
@@ -72,11 +94,23 @@ export async function sincronizar() {
     const itens = await listar();
     for (const item of itens) {
       try {
+        // Item que só precisa marcar a agenda como realizada (a atividade já
+        // entrou, mas a marcação falhou na hora — ver atividade-form.js).
+        if (item.tipo === 'marcar-agenda') {
+          await marcarAgenda(item.posSync, item.posSync.atividadeId);
+          await remover(item.id);
+          enviados++;
+          continue;
+        }
         const row = { ...item.row };
-        // 1) sobe as fotos que ficaram guardadas no aparelho
+        // 1) sobe as fotos que ficaram guardadas no aparelho — e já guarda as
+        //    URLs no item, pra uma nova tentativa NÃO subir as fotos de novo.
         if (Array.isArray(item.fotos) && item.fotos.length) {
           const urls = await uploadPhotos(item.fotos);
           row.fotos = [...(Array.isArray(row.fotos) ? row.fotos : []), ...urls];
+          item.row = { ...item.row, fotos: row.fotos };
+          item.fotos = [];
+          await guardar(item);
         }
         // 2) grava (mesmo id → reenviar não duplica)
         const res = await Promise.race([
@@ -91,17 +125,12 @@ export async function sincronizar() {
         ]);
         if (chk.error) throw chk.error;
         if (!chk.data) throw new Error('não confirmado no servidor');
-        // 4) vínculos que dependiam do registro (marcar agenda como realizada)
+        // 4) vínculos que dependiam do registro (marcar agenda como realizada).
+        //    Se falhar, vira um item próprio na fila — antes o erro era ignorado
+        //    e a agenda ficava "pendente" (o gerente registrava de novo = duplicado).
         if (item.posSync && item.posSync.agendamentoId) {
-          try {
-            if (item.posSync.grupoId) {
-              await supabase.rpc('realizar_agendamento_grupo', { p_grupo_id: item.posSync.grupoId, p_atividade_id: row.id });
-            } else {
-              await supabase.from('agendamentos').update({
-                status: 'realizado', atividade_id: row.id, realizado_em: new Date().toISOString(),
-              }).eq('id', item.posSync.agendamentoId);
-            }
-          } catch (e) { /* o registro já entrou; o vínculo não bloqueia */ }
+          try { await marcarAgenda(item.posSync, row.id); }
+          catch (e) { await guardarMarcacaoAgenda(item.posSync, row.id); }
         }
         await remover(item.id);
         enviados++;
@@ -112,6 +141,11 @@ export async function sincronizar() {
         item.ultimoErro = String((e && e.message) || e).slice(0, 300);
         await guardar(item);
         logRegistro({ tipo: item.tipo, etapa: 'falha', ok: false, erro: e, tentativa: item.tentativas });
+        if (ehErroDeToken(e)) { await renovarToken(4000); break; }   // tenta de novo daqui a pouco
+        // Recusa REAL do banco (permissão, dado inválido): esse item fica
+        // guardado e visível, mas NÃO pode segurar a fila — segue para os
+        // próximos. Antes, um único item recusado travava todos atrás dele.
+        if (e && e.code && !/^(PGRST301|401)$/.test(String(e.code))) continue;
         break; // conexão ainda ruim: para e tenta de novo mais tarde
       }
     }
@@ -161,7 +195,9 @@ export async function abrirPainelFila() {
   btnFechar.addEventListener('click', () => m.close());
   btnEnviar.addEventListener('click', async () => {
     btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando...';
-    const { enviados } = await sincronizar();
+    let { enviados, emAndamento } = await sincronizar();
+    // Já havia um envio rodando: espera ele terminar em vez de dizer 'sem conexão'.
+    for (let i = 0; emAndamento && i < 30; i++) { await new Promise(r => setTimeout(r, 1000)); ({ enviados, emAndamento } = await sincronizar()); }
     m.close();
     const { toast } = await import('./ui.js');
     const restam = await contar();

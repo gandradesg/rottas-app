@@ -5,8 +5,8 @@
 // ═════════════════════════════════════════════════════════════════════════
 
 import { el, icon, toast, fmt, confirmModal } from '../ui.js';
-import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { shell, cartaoErroCarga } from './shell.js';
+import { state, supabase, q } from '../supabase.js';
 import { navigate } from '../router.js';
 import { ROLES } from '../config.js';
 
@@ -16,12 +16,16 @@ export async function visitaDetailView({ id }, app) {
 
   content.appendChild(el('div', { class: 'card p-8 text-center' }, '⏳ Carregando...'));
 
-  const { data: v, error } = await supabase.from('atividades')
+  const { data: v, error } = await q(() => supabase.from('atividades')
     .select(`*, profiles!atividades_gerente_id_fkey(nome, email),
              gerentes_house:visita_gerente_house_id(nome)`)
-    .eq('id', id).eq('tipo', 'visita').maybeSingle();
+    .eq('id', id).eq('tipo', 'visita').maybeSingle(), { ms: 6000, label: 'abrir visita', tentativas: 3 });
 
   content.innerHTML = '';
+  if (error && /tempo esgotado|failed to fetch|network|load failed/i.test(error.message || '')) {
+    content.appendChild(cartaoErroCarga('Não foi possível abrir a visita.', error, () => { app.innerHTML = ''; visitaDetailView({ id }, app); }));
+    return;
+  }
 
   if (error || !v) {
     content.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' },

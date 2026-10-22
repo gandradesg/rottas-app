@@ -5,8 +5,8 @@
 // ═════════════════════════════════════════════════════════════════════════
 
 import { el, icon, toast, loadingBtn, fmt, modal, confirmModal } from '../ui.js';
-import { shell } from './shell.js';
-import { state, supabase } from '../supabase.js';
+import { shell, cartaoErroCarga } from './shell.js';
+import { state, supabase, q as runQuery } from '../supabase.js';
 import { navigate } from '../router.js';
 import { audioField } from '../components/audio-field.js';
 import { field, locationField, creatableSelect } from '../components/form-fields.js';
@@ -155,8 +155,14 @@ export async function visitasView(_params, app) {
       .order('data_visita', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(500);
-    const { data, error } = await q;
-    if (error) { toast(error.message, 'error'); return; }
+    const qLista = q;
+    const { data, error } = await runQuery(() => qLista, { ms: 6000, label: 'visitas' });
+    if (error) {
+      // Antes: só um aviso e a tela ficava no "carregando" pra sempre.
+      listEl.innerHTML = '';
+      listEl.appendChild(cartaoErroCarga('Não foi possível carregar as visitas.', error, () => reload()));
+      return;
+    }
     const visitas = data || [];
 
     const now = new Date();
@@ -406,8 +412,10 @@ export async function visitaFormView(_params, app) {
     return (hidden?.value ?? selEl.value ?? '').trim();
   };
 
+  const idVisita = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : undefined;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (submitBtn.disabled) return;
     loadingBtn(submitBtn, true);
     try {
       const nome  = sanitizeText(nomeInp.value);
@@ -455,8 +463,15 @@ export async function visitaFormView(_params, app) {
         longitude: lng,
       };
 
-      const { error } = await supabase.from('atividades').insert(payload);
-      if (error) throw error;
+      // id FIXO desta tela + upsert: repetir (automático ou o usuário tocando
+      // de novo) NUNCA cria uma segunda visita. Com tempo-limite e repetição.
+      payload.id = idVisita;
+      const { error } = await runQuery(() => supabase.from('atividades').upsert(payload, { onConflict: 'id', ignoreDuplicates: true }),
+        { ms: 6000, label: 'registrar visita', tentativas: 3 });
+      if (error) {
+        if (/tempo esgotado/i.test(error.message || '')) throw new Error('A conexão travou e a visita não foi confirmada. Nada foi perdido — toque em Registrar de novo (não duplica).');
+        throw error;
+      }
       toast('Visita registrada!', 'success');
       navigate('/visitas');
     } catch (err) {

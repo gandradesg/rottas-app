@@ -1,7 +1,7 @@
 // Formulário unificado de atividade - discriminado por tipo
 import { el, icon, toast, loadingBtn, fmt, confirmModal, modal, painelSalvando } from '../ui.js';
-import { shell } from './shell.js';
-import { state, supabase, getScopedImobiliarias, getScopedEmpreendimentos, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
+import { shell, telaErroCarga } from './shell.js';
+import { state, supabase, q, ehErroDeToken, renovarToken, getScopedImobiliarias, getScopedEmpreendimentos, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addMotivoOrulo, addOutroTipo, photoPicker, locationField, termometroField, corretorField, clienteField, gerenteImobField, ensureCorretorCadastro } from '../components/form-fields.js';
 import { uploadPhotos } from '../storage.js';
 import { logRegistro, cronometro, novoRegistroId, vincularAlvo } from '../diag.js';
@@ -32,15 +32,24 @@ function passo(txt, oferecerFila = false) {
 // presentes), realiza TODAS as agendas do grupo de uma vez via RPC (SECURITY
 // DEFINER) — assim a linha dos colegas também vira "realizado / ver atividade"
 // e ninguém precisa registrar o mesmo check-in de novo.
-function marcarAgendamentoRealizado(agendamento, atividadeId) {
-  if (agendamento.grupo_id) {
-    supabase.rpc('realizar_agendamento_grupo', {
-      p_grupo_id: agendamento.grupo_id, p_atividade_id: atividadeId,
-    }).then(() => {}).catch(() => {});
-  } else {
-    supabase.from('agendamentos').update({
-      status: 'realizado', atividade_id: atividadeId, realizado_em: new Date().toISOString(),
-    }).eq('id', agendamento.id).then(() => {});
+// AUDITORIA: antes era "dispare e esqueça" sem conferir erro. Se falhasse, a
+// agenda ficava "pendente" com a atividade JÁ registrada — e o gerente, ao
+// tocar em "Realizar" de novo, criava uma atividade DUPLICADA. Agora tem
+// tempo-limite + repetição (é idempotente: mesmo agendamento, mesmo valor).
+async function marcarAgendamentoRealizado(agendamento, atividadeId) {
+  const fabrica = agendamento.grupo_id
+    ? () => supabase.rpc('realizar_agendamento_grupo', { p_grupo_id: agendamento.grupo_id, p_atividade_id: atividadeId })
+    : () => supabase.from('agendamentos').update({
+        status: 'realizado', atividade_id: atividadeId, realizado_em: new Date().toISOString(),
+      }).eq('id', agendamento.id);
+  const { error } = await q(fabrica, { ms: 6000, label: 'marcar agenda realizada', tentativas: 3 });
+  if (error) {
+    console.warn('[agenda] não marcou como realizada — vai pela fila:', error);
+    // Vai pra fila do aparelho e é marcada sozinha quando a conexão firmar.
+    try {
+      const { guardarMarcacaoAgenda } = await import('../outbox.js');
+      await guardarMarcacaoAgenda({ agendamentoId: agendamento.id, grupoId: agendamento.grupo_id || null }, atividadeId);
+    } catch (e) {}
   }
 }
 
@@ -182,6 +191,8 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
       }
       lastErr = res.error;
       logRegistro({ tipo: tipoLog, registroId: regId, etapa: 'gravacao', ok: false, duracao_ms: tGrav(), erro: res.error, tentativa: i + 1 });
+      // Token vencido NÃO é rejeição do banco: renova e repete (mesmo id).
+      if (ehErroDeToken(res.error) && i < tentativas - 1) { await renovarToken(4000); continue; }
       break; // rejeição real do banco (RLS/constraint): não repete
     } catch (e) {
       lastErr = e; // timeout/rede: tenta de novo (mesmo id, não duplica)
@@ -199,10 +210,14 @@ async function registrarAtividadeConfirmado(payload, files, opts = {}) {
     const tConf = cronometro();
     passo('Confirmando no banco...');
     try {
-      const chk = await Promise.race([
+      const ler = () => Promise.race([
         supabase.from('atividades').select('id, fotos').eq('id', newId).maybeSingle(),
         new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao confirmar no banco')), 5000)),
       ]);
+      let chk;
+      try { chk = await ler(); }
+      catch (e1) { chk = await ler(); }                 // 2ª chance: a 1ª pode ter pego conexão morta
+      if (chk.error && ehErroDeToken(chk.error)) { await renovarToken(4000); chk = await ler(); }
       if (chk.error) {
         logRegistro({ tipo: tipoLog, registroId: regId, etapa: 'confirmacao', ok: false, duracao_ms: tConf(), erro: chk.error });
         logRegistro({ tipo: tipoLog, registroId: regId, etapa: 'falha', ok: false, duracao_ms: tTotal(), erro: chk.error });
@@ -328,7 +343,11 @@ export async function atividadeFormView(params, app) {
   const agendamentoId = params.agendamentoId || null;
   let agendamento = null;
   if (agendamentoId) {
-    const { data } = await supabase.from('agendamentos').select('*').eq('id', agendamentoId).single();
+    // Leitura com tempo-limite + repetição. Demora de rede NÃO é "não encontrado":
+    // antes o gerente era expulso pra Agenda com "Agendamento não encontrado".
+    const { data, error } = await q(() => supabase.from('agendamentos').select('*').eq('id', agendamentoId).maybeSingle(),
+      { ms: 6000, label: 'abrir agendamento', tentativas: 3 });
+    if (error) { telaErroCarga(app, 'Não foi possível abrir o agendamento.', error, () => atividadeFormView(params, app)); return; }
     if (!data) { toast('Agendamento não encontrado', 'error'); navigate('/agenda', true); return; }
     if (data.status === 'realizado' && data.atividade_id) {
       // Já foi realizado - vai direto pra atividade
@@ -347,7 +366,9 @@ export async function atividadeFormView(params, app) {
 
   let initial = null;
   if (id) {
-    const { data } = await supabase.from('atividades').select('*').eq('id', id).single();
+    const { data, error } = await q(() => supabase.from('atividades').select('*').eq('id', id).maybeSingle(),
+      { ms: 6000, label: 'abrir atividade', tentativas: 3 });
+    if (error) { telaErroCarga(app, 'Não foi possível abrir a atividade.', error, () => atividadeFormView(params, app)); return; }
     if (!data) { toast('Atividade não encontrada', 'error'); navigate('/historico', true); return; }
     initial = data;
   }
@@ -372,8 +393,9 @@ export async function atividadeFormView(params, app) {
   if (tipo === 'proposta' && !id) {
     const fromAt = localStorage.getItem('proposta-from-atendimento');
     if (fromAt) {
-      localStorage.removeItem('proposta-from-atendimento');
-      const { data: at } = await supabase.from('atividades').select('*').eq('id', fromAt).single();
+      const { data: at } = await q(() => supabase.from('atividades').select('*').eq('id', fromAt).maybeSingle(),
+        { ms: 6000, label: 'atendimento da proposta', tentativas: 3 });
+      if (at) localStorage.removeItem('proposta-from-atendimento');   // só some depois de ler
       if (at) {
         atendimentoLinkId = at.id;
         initial = {

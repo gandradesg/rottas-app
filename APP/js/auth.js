@@ -1,5 +1,5 @@
 // Auth helpers: login, primeiro acesso, logout, permissões
-import { supabase, state, loadProfile, loadLists, emitStateChange } from './supabase.js';
+import { supabase, state, loadProfile, loadLists, emitStateChange, lerSessaoLocal } from './supabase.js';
 import { MASTER_EMAIL } from './config.js';
 
 // Flag global: quando true, listener de auth ignora eventos
@@ -126,7 +126,20 @@ export async function initAuth() {
   // Detecta estado de recovery na URL ANTES de inicializar
   const recoveryStatus = detectRecoveryFromUrl();
 
-  const { data: { session } } = await supabase.auth.getSession();
+  // Abrir o app NÃO pode ficar preso na renovação do login (com rede ruim ela
+  // repete por até 30s). Espera no máximo 5s; se não vier, usa a sessão salva
+  // no aparelho — as consultas renovam o token sozinhas quando precisarem.
+  let session = null;
+  const local = lerSessaoLocal();
+  try {
+    const r = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((res) => setTimeout(() => res(null), 5000)),
+    ]);
+    session = r ? (r.data && r.data.session) || null : (local && local.user ? local : null);
+  } catch (e) {
+    session = local && local.user ? local : null;
+  }
   if (session) {
     state.user = session.user;
     // Carrega profile e listas em paralelo
@@ -155,14 +168,28 @@ export async function initAuth() {
       if (location.hash !== '#/setup-password') location.hash = '#/setup-password';
     }, 50);
   }
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  // ATENÇÃO (auditoria 22/10/2026): este aviso é disparado DE DENTRO da fila do
+  // login, e a biblioteca ESPERA ele terminar antes de liberar a fila. A versão
+  // antiga recarregava perfil + listas (10 consultas) aqui dentro — e cada
+  // consulta precisava da mesma fila pra pegar o token: o app esperava por ele
+  // mesmo. Como a biblioteca manda "SIGNED_IN" TODA VEZ que o app volta do
+  // segundo plano, cada retorno ao app travava tudo por ~15s.
+  // Agora: (1) nada é esperado aqui dentro — o trabalho roda logo depois;
+  // (2) se é o mesmo usuário já carregado, não recarrega nada.
+  supabase.auth.onAuthStateChange((event, session) => {
     if (authGuards.suppressed) return;
-    
+    setTimeout(() => { tratarEventoAuth(event, session); }, 0);
+  });
+}
+
+async function tratarEventoAuth(event, session) {
     console.log('[auth] evento:', event);
+    const anterior = state.user && state.user.id;
     state.user = session?.user || null;
-    
+
     if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
-      if (state.user) {
+      const mesmoUsuarioJaCarregado = !!(anterior && state.user && anterior === state.user.id && state.profile);
+      if (state.user && !mesmoUsuarioJaCarregado) {
         // Aguarda perfil carregar ANTES de notificar o app ou redirecionar
         await Promise.all([loadProfile(), loadLists()]);
       }
@@ -176,7 +203,6 @@ export async function initAuth() {
       // Agora o profile está carregado, o router não vai barrar!
       window.location.hash = '#/setup-password';
     }
-  });
 }
 
 // Hierarquia (do mais baixo ao mais alto). Niveis acima de gerente sao "admin"

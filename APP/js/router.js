@@ -64,12 +64,19 @@ async function render() {
     return;
   }
   currentRoute = m.pattern;
+  // Cada tela desenha num "palco" próprio. Se a tela demorou (rede lenta) e o
+  // usuário já foi pra outra, o palco antigo já saiu da página — o que ela
+  // desenhar depois fica invisível, em vez de aparecer POR CIMA da tela nova.
+  const palco = document.createElement('div');
+  palco.className = 'min-h-screen';
+  app.appendChild(palco);
   try {
-    const cleanup = await m.handler(m.params, app);
+    const cleanup = await m.handler(m.params, palco);
+    if (!palco.isConnected) { if (typeof cleanup === 'function') { try { cleanup(); } catch (e) {} } return; }
     if (typeof cleanup === 'function') currentCleanup = cleanup;
   } catch (e) {
     console.error('Erro renderizando rota', path, e);
-    app.innerHTML = `<div class="p-6 text-center text-fg-muted">Erro ao carregar a página: ${e.message}</div>`;
+    if (palco.isConnected) palco.innerHTML = `<div class="p-6 text-center text-fg-muted">Erro ao carregar a página: ${e.message}</div>`;
   }
 }
 

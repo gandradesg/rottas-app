@@ -12,9 +12,43 @@ import { initAgenda, recarregarAgenda } from './agenda.js?v=105';
 const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtempsaXJ6ZXh5b3BuanhvaGV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2NzExMjcsImV4cCI6MjA5MzI0NzEyN30.V23FCvrJKRkGhjmZQqAnaXYLbtpMw7Wc_Ae7UB0t7a8';
 
-export const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
+// Mesma correção do app (auditoria 22/10/2026 — ver js/supabase.js):
+//  • toda consulta tem tempo-limite (antes podia ficar parada pra sempre);
+//  • as consultas pegam o token direto do aparelho, SEM esperar na fila do
+//    login — a renovação do token não congela mais o painel inteiro.
+function fetchComLimite(input, init = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => { try { ctrl.abort(new DOMException('Tempo esgotado', 'AbortError')); } catch (e) { ctrl.abort(); } }, 20000);
+  if (init.signal) {
+    if (init.signal.aborted) ctrl.abort();
+    else init.signal.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
+  return fetch(input, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+const authSb = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
           storage: window.localStorage, storageKey: 'rottas-app-auth' },
+  global: { fetch: fetchComLimite },
+});
+function sessaoLocal() { try { return JSON.parse(localStorage.getItem('rottas-app-auth') || 'null'); } catch (e) { return null; } }
+async function tokenDoAparelho() {
+  const s = sessaoLocal();
+  if (!s || !s.access_token) return null;
+  if ((s.expires_at || 0) * 1000 - Date.now() > 60000) return s.access_token;
+  await Promise.race([authSb.auth.getSession().catch(() => null), new Promise(r => setTimeout(r, 3000))]);
+  const s2 = sessaoLocal();
+  return (s2 && s2.access_token) || s.access_token;
+}
+const dadosSb = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  accessToken: tokenDoAparelho,
+  global: { fetch: fetchComLimite },
+});
+export const sb = new Proxy(dadosSb, {
+  get(alvo, prop) {
+    if (prop === 'auth') return authSb.auth;
+    const v = Reflect.get(alvo, prop, alvo);
+    return typeof v === 'function' ? v.bind(alvo) : v;
+  },
 });
 
 // ─── STATE ───────────────────────────────────────────────────────────────

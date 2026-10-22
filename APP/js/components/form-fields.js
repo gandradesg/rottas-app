@@ -1,6 +1,6 @@
 // Componentes de formulário reutilizáveis
 import { el, icon, toast, modal, confirmModal } from '../ui.js';
-import { supabase, state, loadLists } from '../supabase.js';
+import { supabase, state, loadLists, ehErroDeToken, renovarToken } from '../supabase.js';
 import { MAX_PHOTOS_PER_ACTIVITY, ESTADOS_BR } from '../config.js';
 import { loadCidadesBR, mapaCidadeUf } from '../cidades-br.js';
 
@@ -50,20 +50,39 @@ export function cidadeEstadoField({ cidade, estado } = {}) {
 // + tempo-limite por tentativa + repetição. Se a rede travar (iOS suspende a
 // conexão), não fica preso em "Salvando..." pra sempre — e não duplica (mesmo id).
 // Retorna { data, error }.
+// AUDITORIA 22/10/2026 — dois furos corrigidos:
+//  1) o id era novo a CADA chamada: se a 1ª tentativa entrou mas a resposta se
+//     perdeu, o usuário tocava "Cadastrar" de novo e nascia um DUPLICADO. Agora
+//     o mesmo cadastro (mesma tabela + mesmos dados) reaproveita o mesmo id;
+//  2) a repetição usava "atualizar se já existe", que o banco RECUSA para quem
+//     não é admin — então justamente quando a 1ª tinha entrado, a 2ª dava erro.
+//     Agora é "ignorar se já existe" + leitura do registro pelo id.
+const _idsCadastro = new Map();
 export async function resilientInsert(table, row, { retries = 2, timeoutMs = 6000 } = {}) {
   const withId = { ...row };
-  if (!withId.id && self.crypto && crypto.randomUUID) withId.id = crypto.randomUUID();
+  if (!withId.id) {
+    const chave = table + '|' + JSON.stringify(row);
+    if (!_idsCadastro.has(chave) && self.crypto && crypto.randomUUID) _idsCadastro.set(chave, crypto.randomUUID());
+    if (_idsCadastro.has(chave)) withId.id = _idsCadastro.get(chave);
+  }
   const canRetry = !!withId.id;
+  const corrida = (p, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), timeoutMs))]);
   let lastErr = null;
-  for (let i = 0; i < (canRetry ? retries : 1); i++) {
+  for (let i = 0; i < (canRetry ? Math.max(retries, 3) : 1); i++) {
     try {
-      const res = await Promise.race([
-        supabase.from(table).upsert(withId, { onConflict: 'id' }).select().single(),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado — verifique a conexão')), timeoutMs)),
-      ]);
-      if (!res.error && res.data) return { data: res.data, error: null };
-      if (res.error) { lastErr = res.error; break; } // rejeição real do banco: não repete
-    } catch (e) { lastErr = e; } // timeout/rede: tenta de novo
+      const res = canRetry
+        ? await corrida(supabase.from(table).upsert(withId, { onConflict: 'id', ignoreDuplicates: true }), 'Tempo esgotado — verifique a conexão')
+        : await corrida(supabase.from(table).insert(withId).select().single(), 'Tempo esgotado — verifique a conexão');
+      if (res.error) {
+        lastErr = res.error;
+        if (ehErroDeToken(res.error)) { await renovarToken(4000); continue; }
+        break;                                     // rejeição real do banco: não repete
+      }
+      if (!canRetry) return { data: res.data, error: null };
+      const chk = await corrida(supabase.from(table).select('*').eq('id', withId.id).maybeSingle(), 'Tempo esgotado ao confirmar');
+      if (chk.data) return { data: chk.data, error: null };
+      lastErr = chk.error || new Error('não confirmado no servidor');
+    } catch (e) { lastErr = e; } // timeout/rede: tenta de novo (mesmo id)
     await new Promise(r => setTimeout(r, 900 * (i + 1)));
   }
   return { data: null, error: lastErr || new Error('Falha ao salvar') };
@@ -298,10 +317,13 @@ export async function ensureCorretorCadastro(nome, imobiliaria) {
   if (existing) return existing.id;
   const imobObj = (state.imobiliarias || []).find(i => i.nome === imob);
   try {
-    const { data, error } = await supabase.from('corretores').insert({
+    // Roda DENTRO do registro da atividade: precisa ter tempo-limite curto
+    // (antes podia segurar o "Registrar" por 12s) e não pode duplicar o
+    // corretor quando o gerente toca "Tentar novamente".
+    const { data, error } = await resilientInsert('corretores', {
       nome: n, imobiliaria_nome: imob, imobiliaria_id: imobObj?.id || null,
       created_by: state.user?.id || null,
-    }).select().single();
+    }, { retries: 2, timeoutMs: 5000 });
     if (error || !data) return null;
     (state.corretores || (state.corretores = [])).push(data);
     return data.id;
