@@ -1,7 +1,7 @@
 // Master: gerenciamento de usuários (gestores e gerentes)
 import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
-import { supabase, loadAllProfiles, state, q } from '../supabase.js';
+import { supabase, loadAllProfiles, state, q, lerSessaoLocal, renovarToken } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES, ROLES, SUPABASE_URL } from '../config.js';
 import { phoneInput, emailInput, cidadeEstadoField } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
@@ -204,22 +204,35 @@ function openCreateModal() {
   const m = modal({ title: 'Novo usuário', size: 'md', content: fields.form, footer: [cancelBtn, submitBtn] });
   setTimeout(() => fields.form.querySelector('input')?.focus(), 80);
 
-  submitBtn.addEventListener('click', () => {
+  submitBtn.addEventListener('click', async () => {
+    if (submitBtn.disabled) return;
     const v = fields.values();
     if (!v.email || !v.nome) { toast('Email e nome são obrigatórios', 'error'); return; }
     if (!v.role) { toast('Selecione o perfil de acesso', 'error'); return; }
+    // Superintendente/Gestor Regional: confere o escopo ANTES de enviar.
+    const meu = state.profile || {};
+    if (meu.role === 'superintendente') {
+      const es = Array.isArray(meu.estados_acesso) ? meu.estados_acesso : [];
+      if (!es.includes(v.estado)) { toast(`Escolha a cidade/estado do novo usuário dentro dos seus estados: ${es.join(', ') || '—'}`, 'error', 6000); return; }
+    } else if (meu.role === 'gestor_regional') {
+      const cs = Array.isArray(meu.cidades_acesso) ? meu.cidades_acesso : [];
+      if (!cs.includes(v.cidade)) { toast(`A cidade do novo usuário precisa ser uma das suas: ${cs.join(', ') || '—'}`, 'error', 6000); return; }
+    }
 
-    // UI otimista: fecha modal já, mostra "convidando..." e processa em bg
-    m.close();
-    toast(`Convidando ${v.nome}...`, 'info', 2500);
-
-    inviteUserBackground(v).then(() => {
+    // Janela só fecha quando o servidor CONFIRMA (antes fechava na hora e, em
+    // caso de erro, era preciso digitar tudo de novo).
+    loadingBtn(submitBtn, true);
+    try {
+      await inviteUserBackground(v);
+      m.close();
       toast(`✓ ${v.nome} convidado(a)! Email enviado.`, 'success', 4500);
       reload();
-    }).catch(err => {
+    } catch (err) {
       console.error('[invite] erro:', err);
-      toast('Erro ao convidar: ' + (err.message || err), 'error', 6000);
-    });
+      toast('Erro ao convidar: ' + (err.message || err), 'error', 7000);
+    } finally {
+      loadingBtn(submitBtn, false);
+    }
   });
 }
 
@@ -227,12 +240,18 @@ function openCreateModal() {
 // Usa Edge Function `invite-user` que chama auth.admin.inviteUserByEmail
 // (dispara o template INVITE - "bem-vindo, cadastre senha" - e NÃO o template recovery)
 async function inviteUserBackground(v) {
-  const { data: { session: masterSession } } = await supabase.auth.getSession();
-  if (!masterSession) throw new Error('Sessão master não encontrada');
+  // Token direto do aparelho (sem esperar a fila do login — ver supabase.js).
+  let masterSession = lerSessaoLocal();
+  if (masterSession && (masterSession.expires_at || 0) * 1000 - Date.now() < 60000) { await renovarToken(4000); masterSession = lerSessaoLocal(); }
+  if (!masterSession || !masterSession.access_token) throw new Error('Sessão não encontrada — entre de novo no app.');
 
   const fnUrl = `${SUPABASE_URL}/functions/v1/invite-user`;
+  // Tempo-limite (o envio do e-mail pode demorar, mas nunca pode ficar preso).
+  const ctrl = new AbortController();
+  const tmr = setTimeout(() => ctrl.abort(), 30000);
   const resp = await fetch(fnUrl, {
     method: 'POST',
+    signal: ctrl.signal,
     headers: {
       'Authorization': `Bearer ${masterSession.access_token}`,
       'Content-Type': 'application/json',
@@ -251,6 +270,7 @@ async function inviteUserBackground(v) {
     }),
   });
 
+  clearTimeout(tmr);
   const result = await resp.json().catch(() => ({}));
   // Exige resposta real da função (success). Evita falso "enviado" se a URL cair
   // no index.html (SPA) e voltar 200 com HTML em vez de chamar a Edge Function.
@@ -442,6 +462,9 @@ function userFormFields(p) {
   const availableRoles = allRoles.filter(r => {
     const lvl = roleLevel(r);
     if (isMaster()) return true; // master atribui qualquer um
+    // Superintendente / Gestor Regional: só Gerente e Supervisor (mesma regra do
+    // servidor — antes a tela oferecia perfis que o servidor recusava).
+    if (['superintendente', 'gestor_regional'].includes(state.profile?.role)) return ['gerente', 'supervisor'].includes(r);
     return lvl <= callerLevel;
   });
 

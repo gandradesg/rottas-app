@@ -56,11 +56,43 @@ Deno.serve(async (req) => {
       });
     }
     const { data: callerProfile } = await admin
-      .from('profiles').select('role').eq('id', caller.id).single();
-    if (!callerProfile || !['master', 'gestor'].includes(callerProfile.role)) {
-      return new Response(JSON.stringify({ error: 'Sem permissao' }), {
-        status: 403, headers: corsHeaders,
-      });
+      .from('profiles').select('role, permissoes, estados_acesso, cidades_acesso, ativo').eq('id', caller.id).single();
+    const negar = (msg: string) => new Response(JSON.stringify({ error: msg }), { status: 403, headers: corsHeaders });
+    if (!callerProfile || callerProfile.ativo === false) return negar('Sem permissão');
+
+    // Master e Gestor: sem restrição (como sempre foi).
+    // Superintendente / Gestor Regional: só com a permissão "Gerenciar usuários",
+    // e com as MESMAS regras da tela de Usuários (canManageProfile):
+    //   • só convida Gerente ou Supervisor;
+    //   • superintendente: só no(s) estado(s) dele; gestor regional: só nas cidades dele;
+    //   • não pode dar permissões que ele mesmo não tem;
+    //   • reconvite de alguém que já existe: só se essa pessoa já é gerente/supervisor
+    //     dentro do escopo dele (senão poderia rebaixar/alterar um superior).
+    const cr = callerProfile.role;
+    const irrestrito = ['master', 'gestor'].includes(cr);
+    let permsFinais = permissoes || {};
+    if (!irrestrito) {
+      const temPerm = ['superintendente', 'gestor_regional'].includes(cr)
+        && callerProfile.permissoes && callerProfile.permissoes.gerenciar_usuarios === true;
+      if (!temPerm) return negar('Sem permissão para cadastrar usuários (peça ao Master a permissão "Gerenciar usuários").');
+      if (!['gerente', 'supervisor'].includes(role)) return negar('Você só pode cadastrar Gerente de Plataforma ou Supervisor.');
+      const ests: string[] = Array.isArray(callerProfile.estados_acesso) ? callerProfile.estados_acesso : [];
+      const cids: string[] = Array.isArray(callerProfile.cidades_acesso) ? callerProfile.cidades_acesso : [];
+      const noEscopo = (p: { estado?: string | null; cidade?: string | null }) =>
+        cr === 'superintendente' ? ests.includes(p.estado || '') : cids.includes(p.cidade || '');
+      if (!noEscopo({ estado, cidade })) {
+        return negar(cr === 'superintendente'
+          ? `O estado do novo usuário precisa ser um dos seus: ${ests.join(', ') || '(nenhum estado liberado no seu perfil)'}.`
+          : `A cidade do novo usuário precisa ser uma das suas: ${cids.join(', ') || '(nenhuma cidade liberada no seu perfil)'}.`);
+      }
+      const minhas = callerProfile.permissoes || {};
+      permsFinais = Object.fromEntries(Object.entries(permissoes || {}).filter(([k, v]) => v === true && minhas[k] === true));
+      // Reconvite: a pessoa já existe? Então tem que ser gerenciável por quem chama.
+      const { data: alvoExistente } = await admin.from('profiles').select('role, estado, cidade')
+        .ilike('email', String(email).replace(/[\\%_]/g, (c) => '\\' + c)).limit(1).maybeSingle();
+      if (alvoExistente && (!['gerente', 'supervisor'].includes(alvoExistente.role) || !noEscopo(alvoExistente))) {
+        return negar('Este e-mail já pertence a um usuário fora da sua equipe. Fale com o Master.');
+      }
     }
 
     const origin = req.headers.get('origin') || 'https://rottas-app.vercel.app';
@@ -88,7 +120,7 @@ Deno.serve(async (req) => {
         cidade: cidade || null,
         estado: estado || null,
         role,
-        permissoes: permissoes || {},
+        permissoes: permsFinais,
         estados_acesso: estados_acesso || [],
         cidades_acesso: cidades_acesso || [],
         gerente_supervisor_id: gerente_supervisor_id || null,
@@ -161,7 +193,7 @@ Deno.serve(async (req) => {
         cidade: cidade || null,
         estado: estado || null,
         role,
-        permissoes: permissoes || {},
+        permissoes: permsFinais,
         estados_acesso: estados_acesso || [],
         cidades_acesso: cidades_acesso || [],
         gerente_supervisor_id: gerente_supervisor_id || null,

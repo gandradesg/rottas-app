@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.73';
+export const APP_VERSION = '1.9.74';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,14 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.74',
+    date: '29/10/2026',
+    changes: [
+      'USUÁRIOS: Superintendente e Gestor Regional com a permissão "Gerenciar usuários" agora conseguem CONVIDAR gerentes e supervisores (antes o servidor recusava com "Sem permissão"). Regras: só Gerente/Supervisor, só dentro dos seus estados/cidades, sem dar permissões que eles mesmos não têm',
+      'Novo usuário: a janela só fecha quando o convite é confirmado — em caso de erro, nada precisa ser digitado de novo; o motivo do erro aparece claro (ex.: estado fora do seu escopo)',
+    ],
+  },
   {
     version: '1.9.73',
     date: '22/10/2026',
