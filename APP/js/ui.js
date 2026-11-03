@@ -167,6 +167,52 @@ export function confirmModal({ title='Confirmar', message, confirmLabel='Confirm
   });
 }
 
+// Confirmação com campo de MOTIVO (texto livre, pode ficar em branco).
+// Resolve { ok, motivo }. Usado ao pedir exclusão, para o aprovador entender o porquê.
+export function motivoModal({ title = 'Confirmar', message = '', label = 'Motivo', placeholder = '', confirmLabel = 'Confirmar', danger = false }) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const fim = (val) => { if (!resolved) { resolved = true; resolve(val); } };
+    const ta = el('textarea', { class: 'textarea', rows: 3, placeholder });
+    const cancelBtn = el('button', { class: 'btn btn-ghost', onclick: () => { fim({ ok: false }); m.close(); } }, 'Cancelar');
+    const okBtn = el('button', {
+      class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`,
+      onclick: () => { fim({ ok: true, motivo: (ta.value || '').trim() || null }); m.close(); },
+    }, confirmLabel);
+    const m = modal({
+      title, size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-3' },
+        message ? el('p', { class: 'text-sm text-fg-muted' }, message) : null,
+        el('div', {}, el('label', { class: 'label' }, label), ta),
+      ),
+      footer: [cancelBtn, okBtn],
+      onClose: () => fim({ ok: false }),
+    });
+    setTimeout(() => ta.focus(), 60);
+  });
+}
+
+// Agenda repetida (recorrente): pergunta o alcance da alteração.
+// Resolve 'esta' | 'seguintes' | null (desistiu).
+export function escolherAlcanceSerie(title, message) {
+  return new Promise((resolve) => {
+    let feito = false;
+    const fim = (v) => { if (!feito) { feito = true; resolve(v); } };
+    const bEsta = el('button', { class: 'btn btn-secondary w-full', onclick: () => { fim('esta'); m.close(); } }, 'Somente esta');
+    const bSeg = el('button', { class: 'btn btn-primary w-full', onclick: () => { fim('seguintes'); m.close(); } }, 'Esta e todas as seguintes');
+    const bVoltar = el('button', { class: 'btn btn-ghost w-full', onclick: () => { fim(null); m.close(); } }, 'Voltar');
+    const m = modal({
+      title, size: 'sm',
+      content: el('div', { class: 'flex flex-col gap-3' },
+        el('p', { class: 'text-sm text-fg-muted' }, message),
+        el('div', { class: 'flex flex-col gap-2' }, bEsta, bSeg, bVoltar),
+        el('p', { class: 'text-xs text-fg-subtle' }, 'As já realizadas ou canceladas não são alteradas.'),
+      ),
+      onClose: () => fim(null),
+    });
+  });
+}
+
 // ----- Ícones (Lucide-style, inline SVG) -----
 const ICONS = {
   home: 'M3 12l9-9 9 9v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2v-9z',

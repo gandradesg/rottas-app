@@ -102,7 +102,7 @@ async function reload() {
   // Ordem hierárquica: master no topo, supervisor por último
   const order = {
     master: 0, gestor: 1, superintendente: 2,
-    gestor_regional: 3, gerente: 4, supervisor: 5
+    gestor_regional: 3, gerente: 4, supervisor: 5, gerente_produto: 6
   };
   profiles.sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || a.nome.localeCompare(b.nome));
   profiles.forEach(p => listEl.appendChild(userRow(p)));
@@ -666,7 +666,7 @@ function userFormFields(p) {
     // Cidades: gestor_regional
     cidadesBox.classList.toggle('hidden', chosenRole !== 'gestor_regional');
     // Cidades de responsabilidade: gerente / supervisor
-    cidadesRespBox.classList.toggle('hidden', !['gerente','supervisor'].includes(chosenRole));
+    cidadesRespBox.classList.toggle('hidden', !['gerente','supervisor','gerente_produto'].includes(chosenRole));
     // Vínculo gerente: supervisor
     supervisorBox.classList.toggle('hidden', chosenRole !== 'supervisor');
   }
@@ -726,7 +726,7 @@ function userFormFields(p) {
         v.cidades_acesso = cidadesFromEmps
           .filter(c => cidadesCheck[c.nome + '|' + c.estado])
           .map(c => c.nome);
-      } else if (['gerente','supervisor'].includes(chosenRole)) {
+      } else if (['gerente','supervisor','gerente_produto'].includes(chosenRole)) {
         v.cidades_acesso = cidadesFromImobs
           .filter(c => cidadesRespCheck[c.nome + '|' + c.estado])
           .map(c => c.nome);

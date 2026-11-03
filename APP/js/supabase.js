@@ -581,7 +581,7 @@ export function getScopedImobiliarias() {
     const cidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
     return all.filter(im => cidades.includes(im.cidade));
   }
-  if (['gerente', 'supervisor'].includes(p.role)) {
+  if (['gerente', 'supervisor', 'gerente_produto'].includes(p.role)) {
     const cidades = cidadesDoGerente(p);
     if (!cidades.length) return [];
     return all.filter(im => cidades.includes(im.cidade));
@@ -613,7 +613,7 @@ export function getScopedEmpreendimentos() {
     const cidades = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
     return all.filter(e => atendeCidades(e, cidades));
   }
-  if (['gerente', 'supervisor'].includes(p.role)) {
+  if (['gerente', 'supervisor', 'gerente_produto'].includes(p.role)) {
     const cidades = cidadesDoGerente(p);
     if (!cidades.length) return [];
     return all.filter(e => atendeCidades(e, cidades));
@@ -645,6 +645,10 @@ export async function getScopedGerenteIds() {
     allowed.add(p.id);
     profiles.forEach(x => { if (x.role === 'supervisor' && x.gerente_supervisor_id === p.id) allowed.add(x.id); });
   } else if (p.role === 'supervisor') {
+    // Igual ao gerente: ele + quem está ligado a ele (o gerente dele).
+    allowed.add(p.id);
+    if (p.gerente_supervisor_id) allowed.add(p.gerente_supervisor_id);
+  } else if (p.role === 'gerente_produto') {
     allowed.add(p.id);
   }
   return allowed;

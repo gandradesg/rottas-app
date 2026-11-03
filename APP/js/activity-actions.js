@@ -133,7 +133,7 @@ export async function excluirAtividade(a, motivo) {
     solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null,
     excluida_em: new Date().toISOString(),
     excluida_por: state.user?.id || null,
-    motivo_exclusao: motivo || null,
+    motivo_exclusao: motivo || a.motivo_exclusao || null,   // mantém o motivo de quem pediu
     updated_at: new Date().toISOString(),
   }).eq('id', a.id).select();
   if (error) return { ok: false, error: error.message };
@@ -142,7 +142,7 @@ export async function excluirAtividade(a, motivo) {
   await logHistorico({
     atividade_id: a.id, tipo_evento: 'exclusao', resumo: resumoAtividade(a),
     aprovado_por: state.user?.id, aprovado_por_nome: state.profile?.nome,
-    dados: { snapshot, motivo: motivo || null },
+    dados: { snapshot, motivo: motivo || a.motivo_exclusao || null },
   });
   return { ok: true };
 }

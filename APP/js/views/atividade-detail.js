@@ -1,5 +1,5 @@
 // Detalhe de uma atividade (com edição se for da gerente, ou só leitura para master ver)
-import { el, icon, fmt, toast, confirmModal, modal } from '../ui.js';
+import { el, icon, fmt, toast, confirmModal, modal, motivoModal } from '../ui.js';
 import { shell, telaErroCarga } from './shell.js';
 import { state, supabase, q } from '../supabase.js';
 import { isMaster, isGestor, isAdmin, can, canApproveLevel, roleLevel } from '../auth.js';
@@ -194,6 +194,7 @@ export async function atividadeDetailView(params, app) {
     el('div', { class: 'flex-1' },
       el('div', { class: 'font-bold text-warning' }, 'Exclusão solicitada'),
       el('div', { class: 'text-xs text-fg-muted' }, 'Aguardando aprovação de um Gestor.'),
+      a.motivo_exclusao ? el('div', { class: 'text-xs mt-1' }, el('b', {}, 'Motivo: '), a.motivo_exclusao) : null,
       el('div', { class: 'text-xs text-fg-subtle mt-0.5' }, fmt.relative(a.exclusao_solicitada_em)),
     ),
   ) : null;
@@ -471,16 +472,19 @@ export async function atividadeDetailView(params, app) {
     canRequestDeletion && el('button', {
       class: 'btn btn-ghost text-warning',
       onclick: async () => {
-        const ok = await confirmModal({
+        const r = await motivoModal({
           title: 'Solicitar exclusão?',
           message: 'A atividade só será removida após aprovação de um Gestor. Você pode cancelar a solicitação a qualquer momento.',
+          label: 'Motivo da exclusão',
+          placeholder: 'Ex.: registrei em duplicidade, visita não aconteceu, imobiliária errada…',
           confirmLabel: 'Solicitar exclusão',
         });
-        if (!ok) return;
+        if (!r.ok) return;
         const { error } = await supabase.from('atividades').update({
           solicita_exclusao: true,
           exclusao_solicitada_em: new Date().toISOString(),
           exclusao_solicitada_por: state.user.id,
+          motivo_exclusao: r.motivo,
         }).eq('id', a.id).select();
         if (error) { toast(error.message, 'error'); return; }
         toast('Solicitação enviada para o Gestor', 'success');

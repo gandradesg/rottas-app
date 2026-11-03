@@ -108,9 +108,16 @@ export function shell(content, opts = {}) {
         { p: '/visitas', label: 'Visitas', ic: 'mapPin' },
         { p: '/perfil',  label: 'Perfil',  ic: 'user'   },
       ];
+    } else if (view === 'gerente_produto') {
+      // Gerente de Produto: acesso pontual — a agenda em que foi marcado e o
+      // histórico do que realizou.
+      items = [
+        { p: '/',           label: 'Agenda',     ic: 'calendar'   },
+        { p: '/historico',  label: 'Histórico',  ic: 'fileText'   },
+        { p: '/perfil',     label: 'Perfil',     ic: 'user'       },
+      ];
     } else if (view === 'supervisor') {
-      // Supervisor TAMBÉM tem Agenda - vê o que o Gerente atribuiu pra ele
-      // (mas não pode CRIAR agendamentos - só o Gerente planeja)
+      // Supervisor: mesmo acesso do gerente (agenda, registrar, marcar o gerente)
       items = [
         { p: '/',           label: 'Agenda',     ic: 'calendar'   },
         { p: '/inicio',     label: 'Início',     ic: 'home'       },

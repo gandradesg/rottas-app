@@ -4,7 +4,7 @@
 // Acessível por: dono (recepcao_rottas que registrou) E Master
 // ═════════════════════════════════════════════════════════════════════════
 
-import { el, icon, toast, fmt, confirmModal } from '../ui.js';
+import { el, icon, toast, fmt, confirmModal, motivoModal } from '../ui.js';
 import { shell, cartaoErroCarga } from './shell.js';
 import { state, supabase, q } from '../supabase.js';
 import { navigate } from '../router.js';
@@ -161,16 +161,19 @@ export async function visitaDetailView({ id }, app) {
     actions.appendChild(el('button', {
       class: 'btn btn-danger',
       onclick: async () => {
-        const ok = await confirmModal({
+        const r = await motivoModal({
           title: 'Solicitar exclusão?',
           message: 'A visita só será removida após aprovação do Master. Você pode cancelar a solicitação a qualquer momento.',
+          label: 'Motivo da exclusão',
+          placeholder: 'Ex.: registrei em duplicidade, cliente errado…',
           confirmLabel: 'Solicitar exclusão', danger: true,
         });
-        if (!ok) return;
+        if (!r.ok) return;
         const { error } = await supabase.from('atividades').update({
           solicita_exclusao: true,
           exclusao_solicitada_em: new Date().toISOString(),
           exclusao_solicitada_por: state.user.id,
+          motivo_exclusao: r.motivo,
         }).eq('id', id);
         if (error) { toast(error.message, 'error'); return; }
         toast('Solicitação enviada. Aguardando aprovação do Master.', 'success');

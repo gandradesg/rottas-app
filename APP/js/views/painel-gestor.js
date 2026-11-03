@@ -347,6 +347,7 @@ export async function painelGestorView(_params, app) {
             el('div', { class: 'font-semibold' }, aprovTitulo(p)),
             el('div', { class: 'text-xs text-fg-muted' }, t.label, ' · ', fmt.dateTime(p.created_at), p.profiles?.nome ? ' · Por: ' + p.profiles.nome : ''),
             el('div', { class: 'text-xs text-warning mt-1' }, '⏳ Exclusão solicitada ' + fmt.relative(p.exclusao_solicitada_em)),
+            p.motivo_exclusao ? el('div', { class: 'text-xs mt-1 p-2 rounded-lg bg-bg-elev' }, el('b', {}, 'Motivo: '), p.motivo_exclusao) : null,
           ),
         ),
         el('div', { class: 'flex gap-2' },
@@ -359,7 +360,7 @@ export async function painelGestorView(_params, app) {
           } }, '✓ Aprovar'),
           el('button', { class: 'btn btn-ghost btn-sm', onclick: async () => {
             const { data, error } = await supabase.from('atividades').update({
-              solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null
+              solicita_exclusao: false, exclusao_solicitada_em: null, exclusao_solicitada_por: null, motivo_exclusao: null
             }).eq('id', p.id).select();
             if (error) { toast(error.message, 'error'); return; }
             if (!data || !data.length) { toast('Sem permissão (fora do seu escopo).', 'error', 6000); return; }

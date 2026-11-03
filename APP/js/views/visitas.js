@@ -4,7 +4,7 @@
 // - visitaFormView: formulário de registro individual (com lógica condicional)
 // ═════════════════════════════════════════════════════════════════════════
 
-import { el, icon, toast, loadingBtn, fmt, modal, confirmModal } from '../ui.js';
+import { el, icon, toast, loadingBtn, fmt, modal, confirmModal, motivoModal } from '../ui.js';
 import { shell, cartaoErroCarga } from './shell.js';
 import { state, supabase, q as runQuery } from '../supabase.js';
 import { navigate } from '../router.js';
@@ -211,18 +211,20 @@ function visitaRow(v, onAfterAction) {
     title: 'Solicitar exclusão',
     onclick: async (e) => {
       e.stopPropagation();
-      const ok = await confirmModal({
-        title: 'Solicitar exclusão?',
-        message: 'A visita só será removida após aprovação do Master. Você pode cancelar a solicitação a qualquer momento.',
-        confirmLabel: 'Solicitar exclusão',
-        danger: true,
-      });
-      if (!ok) return;
-      const { error } = await supabase.from('atividades').update({
-        solicita_exclusao: true,
-        exclusao_solicitada_em: new Date().toISOString(),
-        exclusao_solicitada_por: state.user.id,
-      }).eq('id', v.id);
+      const r = await motivoModal({
+          title: 'Solicitar exclusão?',
+          message: 'A visita só será removida após aprovação do Master. Você pode cancelar a solicitação a qualquer momento.',
+          label: 'Motivo da exclusão',
+          placeholder: 'Ex.: registrei em duplicidade, cliente errado…',
+          confirmLabel: 'Solicitar exclusão', danger: true,
+        });
+        if (!r.ok) return;
+        const { error } = await supabase.from('atividades').update({
+          solicita_exclusao: true,
+          exclusao_solicitada_em: new Date().toISOString(),
+          exclusao_solicitada_por: state.user.id,
+          motivo_exclusao: r.motivo,
+        }).eq('id', v.id);
       if (error) { toast(error.message, 'error'); return; }
       toast('Solicitação enviada. Aguardando aprovação do Master.', 'success');
       onAfterAction?.();

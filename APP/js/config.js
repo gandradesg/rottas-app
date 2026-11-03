@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.74';
+export const APP_VERSION = '1.9.75';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,20 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.75',
+    date: '03/11/2026',
+    changes: [
+      'AGENDA REPETIDA: ao editar ou cancelar uma agenda que se repete, o app pergunta "Somente esta" ou "Esta e todas as seguintes" (muda horário, dados ou cancela a sequência inteira de uma vez; as já realizadas/canceladas não mudam)',
+      'HORÁRIO DE TÉRMINO (opcional) ao lado do horário de início, e AVISO DE CONFLITO: se já houver agenda no mesmo horário para quem estará presente, o app avisa — dá para agendar mesmo assim',
+      'EXCLUSÃO: ao solicitar a exclusão de uma atividade/visita, o app pede o motivo, que aparece para quem aprova',
+      'NOVO PERFIL: Gerente de Produto — acesso pontual. Vê e realiza só as agendas em que um gerente/supervisor da regional dele o marcou',
+      'SUPERVISOR com o mesmo acesso do gerente: pode marcar o gerente na agenda, ver a agenda dos colegas da praça e o Dashboard mostra a agenda dele + a do gerente',
+      'AGENDA COMPARTILHADA aparece UMA vez só (com o nome de todos os presentes), no app e no Dashboard',
+      'DASHBOARD → Agenda: botão "+ Agendar" em cada dia e, ao clicar numa atividade, Realizar, Remarcar e Cancelar',
+      'CORREÇÃO: agenda compartilhada E repetida usava o mesmo grupo para todas as datas — realizar uma data marcaria todas como realizadas (nenhuma série tinha sido afetada)',
+    ],
+  },
   {
     version: '1.9.74',
     date: '29/10/2026',
@@ -1519,6 +1533,9 @@ export function getTipoCaptacao(_estado) {
 //                  (Gerentes de Produto e Recepcionistas) que SÓ registra Visitas.
 export const ROLES = {
   recepcao_rottas:  { label: 'Recepção Rottas',          icon: '🛎️', color: 'pink',   level: 1 },
+  // Acesso pontual: só vê/realiza as agendas em que um gerente/supervisor da
+  // regional dele (Cidades de responsabilidade) o marcou.
+  gerente_produto:  { label: 'Gerente de Produto',       icon: '📦', color: 'green',  level: 1 },
   supervisor:       { label: 'Supervisor de Plataforma', icon: '👁️', color: 'blue',   level: 1 },
   gerente:          { label: 'Gerente de Plataforma',    icon: '🗺️', color: 'blue',   level: 2 },
   gestor_regional:  { label: 'Gestor Regional',          icon: '🌆', color: 'purple', level: 3 },

@@ -74,7 +74,7 @@ async function buscar() {
   const { de, ate } = intervalo();
   const F = state.filters;
   let q = sb.from('agendamentos')
-    .select('id, gerente_id, tipo, data_prevista, imobiliaria, empreendimento, cliente, corretor, titulo, observacoes, status, motivo_visita, local_visita, realizado_em, cancelado_motivo, motivo_cancelamento, remarcada, recorrencia_freq, teste, created_at, registrado_em, profiles!agendamentos_gerente_id_fkey(nome, cidade, estado, role)')
+    .select('id, gerente_id, grupo_id, recorrencia_id, participantes, data_fim, remarcacoes, data_prevista_original, tipo, data_prevista, imobiliaria, empreendimento, cliente, corretor, titulo, observacoes, status, motivo_visita, local_visita, realizado_em, cancelado_motivo, motivo_cancelamento, remarcada, recorrencia_freq, teste, created_at, registrado_em, profiles!agendamentos_gerente_id_fkey(nome, cidade, estado, role)')
     .gte('data_prevista', de.toISOString()).lt('data_prevista', ate.toISOString())
     .order('data_prevista', { ascending: true }).limit(3000);
   // Contas de teste ficam fora (null-safe: .neq sozinho descarta teste=NULL)
@@ -89,8 +89,26 @@ async function buscar() {
   if (F.cidade !== 'todas') rows = rows.filter((r) => r.profiles?.cidade === F.cidade);
   const allowed = state.data.allowedGerenteIds;
   if (allowed) rows = rows.filter((r) => allowed.has(r.gerente_id));
-  return rows;
+  return juntarCompartilhadas(rows, state.profile?.id);
 }
+
+// Agenda COMPARTILHADA: cada presente tem a sua linha (mesmo grupo_id). Aqui
+// vira UM cartão só, com o nome de todos (ex.: Marjorie + Bruno). Mantém a
+// linha do próprio usuário quando ele é um dos presentes.
+function juntarCompartilhadas(rows, meuId) {
+  const porGrupo = new Map(); const saida = [];
+  for (const r of rows) {
+    const nome = r.profiles?.nome;
+    if (!r.grupo_id) { saida.push({ ...r, _nomes: nome ? [nome] : [], _ids: [r.gerente_id] }); continue; }
+    const ja = porGrupo.get(r.grupo_id);
+    if (!ja) { const c = { ...r, _nomes: nome ? [nome] : [], _ids: [r.gerente_id] }; porGrupo.set(r.grupo_id, c); saida.push(c); continue; }
+    if (nome && !ja._nomes.includes(nome)) ja._nomes.push(nome);
+    if (!ja._ids.includes(r.gerente_id)) ja._ids.push(r.gerente_id);
+    if (r.gerente_id === meuId && ja.gerente_id !== meuId) { const { _nomes, _ids } = ja; Object.assign(ja, r, { _nomes, _ids }); }
+  }
+  return saida;
+}
+const nomesDe = (ag) => (ag._nomes && ag._nomes.length ? ag._nomes : [ag.profiles?.nome || '—']);
 
 export async function recarregarAgenda() {
   if (!D || A.carregando) return;
@@ -130,7 +148,7 @@ function pintarKpis() {
   const base = realizados + atrasados;
   const taxa = base ? Math.round((realizados / base) * 100) : null;
   $('agenda-kpis').innerHTML = [
-    kpi('Agendados', t.length, `${new Set(t.map((a) => a.gerente_id)).size} gerente(s)`),
+    kpi('Agendados', t.length, `${new Set(t.flatMap((a) => a._ids || [a.gerente_id])).size} gerente(s)`),
     kpi('Realizados', realizados, 'já viraram registro', 'var(--green)'),
     kpi('A fazer', pendentes, 'ainda vão acontecer', 'var(--yellow)'),
     kpi('Atrasados', atrasados, 'passou do horário e não registrou', 'var(--red)'),
@@ -147,18 +165,20 @@ function cartao(ag, compacto) {
   return `<div class="ag-card" data-id="${ag.id}" title="Ver detalhes"
       style="border-left:3px solid ${t.cor};background:var(--bg-elev);border-radius:8px;padding:${compacto ? '6px 8px' : '9px 11px'};cursor:pointer;display:flex;flex-direction:column;gap:2px;${riscado}">
     <div style="display:flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap;">
-      <b style="font-variant-numeric:tabular-nums;">${hora(d)}</b>
+      <b style="font-variant-numeric:tabular-nums;">${hora(d)}${ag.data_fim ? '–' + hora(new Date(ag.data_fim)) : ''}</b>
       <span style="color:${t.cor};font-weight:700;" title="${t.label}">${t.emoji}${compacto ? '' : ' ' + t.label}</span>
       <span class="chip ${STATUS[st].chip}" style="margin-left:auto;font-size:9.5px;padding:1px 6px;flex-shrink:0;">${STATUS[st].label}</span>
     </div>
     <div style="font-size:12.5px;font-weight:700;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(tituloDe(ag))}</div>
-    <div style="font-size:11px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">👤 ${esc(ag.profiles?.nome || '—')}${ag.cliente ? ` · ${esc(ag.cliente)}` : ''}</div>
+    <div style="font-size:11px;color:var(--fg-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nomesDe(ag).length > 1 ? '👥' : '👤'} ${esc(nomesDe(ag).map(primeiroNome).join(', '))}${ag.cliente ? ` · ${esc(ag.cliente)}` : ''}</div>
   </div>`;
 }
 
 function vistaDia(lista) {
-  if (!lista.length) return vazio('Nenhum agendamento neste dia.');
-  return `<div style="display:flex;flex-direction:column;gap:8px;">${lista.map((a) => cartao(a, false)).join('')}</div>`;
+  const { de } = intervalo();
+  const novo = `<button class="ag-novo btn btn-secondary" data-dia="${de.toISOString()}" style="align-self:flex-start;">+ Agendar neste dia</button>`;
+  if (!lista.length) return `<div style="display:flex;flex-direction:column;gap:8px;">${novo}${vazio('Nenhum agendamento neste dia.')}</div>`;
+  return `<div style="display:flex;flex-direction:column;gap:8px;">${novo}${lista.map((a) => cartao(a, false)).join('')}</div>`;
 }
 
 function vistaSemana(lista) {
@@ -176,6 +196,8 @@ function vistaSemana(lista) {
         <span style="font-size:15px;font-weight:800;">${dia.getDate()}</span>
         <span style="margin-left:auto;font-size:10.5px;opacity:.8;">${doDia.length || ''}</span>
       </button>
+      <button class="ag-novo" data-dia="${dia.toISOString()}" title="Nova atividade neste dia"
+        style="all:unset;cursor:pointer;text-align:center;font-size:12px;font-weight:700;color:var(--accent);border:1px dashed var(--border);border-radius:8px;padding:3px 0;">+ Agendar</button>
       ${doDia.length ? doDia.map((a) => cartao(a, true)).join('') : '<div style="font-size:11px;color:var(--fg-muted);text-align:center;padding:10px 0;">—</div>'}
     </div>`);
   }
@@ -195,7 +217,7 @@ function vistaMes(lista) {
     const linhas = doDia.slice(0, 3).map((a) => {
       const t = TIPOS[a.tipo] || TIPOS.outro;
       return `<div style="font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${statusDe(a) === 'cancelado' ? 'text-decoration:line-through;opacity:.55;' : ''}">
-        <span style="color:${t.cor};">●</span> ${hora(new Date(a.data_prevista))} ${esc(primeiroNome(a.profiles?.nome))} · ${esc(tituloDe(a))}</div>`;
+        <span style="color:${t.cor};">●</span> ${hora(new Date(a.data_prevista))} ${esc(nomesDe(a).map(primeiroNome).join(', '))} · ${esc(tituloDe(a))}</div>`;
     }).join('');
     const atrasados = doDia.filter((a) => statusDe(a) === 'atrasado').length;
     celulas.push(`<button class="ag-dia" data-dia="${dia.toISOString()}" title="Abrir o dia"
@@ -254,6 +276,9 @@ function pintar() {
     ev.stopPropagation();
     const ag = A.itens.find((x) => x.id === c.dataset.id); if (ag) abrirDetalhe(ag);
   }));
+  corpo.querySelectorAll('.ag-novo').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation(); novaAtividade(new Date(b.dataset.dia));
+  }));
   corpo.querySelectorAll('.ag-dia').forEach((b) => b.addEventListener('click', () => {
     A.cursor = new Date(b.dataset.dia); A.modo = 'dia'; sessionStorage.setItem('dash-ag-modo', 'dia'); recarregarAgenda();
   }));
@@ -264,6 +289,7 @@ function pintar() {
 function abrirDetalhe(ag) {
   const t = TIPOS[ag.tipo] || TIPOS.outro;
   const st = statusDe(ag);
+  const aberto = st === 'pendente' || st === 'atrasado';
   const linha = (k, v) => (v === null || v === undefined || v === '') ? '' :
     `<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;"><span style="color:var(--fg-muted);min-width:140px;">${k}</span><span style="font-weight:600;word-break:break-word;">${esc(v)}</span></div>`;
   const dt = (v) => v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
@@ -276,7 +302,8 @@ function abrirDetalhe(ag) {
         <div style="font-size:12px;color:var(--fg-muted);">${t.label} · ${dt(ag.data_prevista)}</div></div>
       <span class="chip ${STATUS[st].chip}">${STATUS[st].label}</span>
     </div>
-    ${linha('Gerente', ag.profiles?.nome)}
+    ${linha(nomesDe(ag).length > 1 ? 'Presentes' : 'Gerente', nomesDe(ag).join(', '))}
+    ${linha('Horário', hora(new Date(ag.data_prevista)) + (ag.data_fim ? ' até ' + hora(new Date(ag.data_fim)) : ''))}
     ${linha('Imobiliária', ag.imobiliaria)}
     ${linha('Empreendimento', ag.empreendimento)}
     ${linha('Cliente', ag.cliente)}
@@ -289,17 +316,125 @@ function abrirDetalhe(ag) {
     ${linha('Realizado em', dt(ag.realizado_em))}
     ${linha('Motivo do cancelamento', ag.motivo_cancelamento || ag.cancelado_motivo)}
     ${linha('Agendado em', dt(ag.registrado_em || ag.created_at))}
-    <div style="text-align:right;margin-top:14px;"><button class="btn btn-primary" id="ag-fechar">Fechar</button></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:14px;">
+      ${aberto ? `<button class="btn btn-secondary" id="ag-cancelar" style="color:var(--red);">✕ Cancelar</button>
+      <button class="btn btn-secondary" id="ag-remarcar">🕑 Remarcar</button>
+      <button class="btn btn-primary" id="ag-realizar">✓ Realizar</button>` : ''}
+      <button class="btn btn-secondary" id="ag-fechar">Fechar</button>
+    </div>
   </div>`;
   const fechar = () => ov.remove();
   ov.addEventListener('click', (e) => { if (e.target === ov) fechar(); });
   document.body.appendChild(ov);
   ov.querySelector('#ag-fechar').addEventListener('click', fechar);
+  if (aberto) {
+    ov.querySelector('#ag-realizar').addEventListener('click', () => { fechar(); abrirNoApp(`/agenda/${ag.id}/realizar`); });
+    ov.querySelector('#ag-remarcar').addEventListener('click', () => { fechar(); remarcar(ag); });
+    ov.querySelector('#ag-cancelar').addEventListener('click', () => { fechar(); cancelar(ag); });
+  }
+}
+
+// ─── Ações ────────────────────────────────────────────────────────────────
+// Realizar e Agendar abrem o formulário do app numa ABA NOVA (com fotos,
+// localização etc.); o dashboard continua aberto e se atualiza ao voltar.
+function abrirNoApp(rota) { window.open('/#' + rota, '_blank'); }
+function novaAtividade(dia) {
+  const d = new Date(dia);
+  if (d.getHours() === 0 && d.getMinutes() === 0) d.setHours(9, 0, 0, 0);
+  try { localStorage.setItem('agenda-prefill-date', d.toISOString()); } catch (e) {}
+  abrirNoApp('/agenda/nova');
+}
+
+// Janela simples (sem depender do app)
+function janela(titulo, corpoHtml, botoes) {
+  return new Promise((resolve) => {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:210;display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML = `<div class="card" style="width:100%;max-width:440px;padding:18px;display:flex;flex-direction:column;gap:12px;">
+      <div style="font-weight:800;font-size:15px;">${titulo}</div>${corpoHtml}
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;">${botoes.map((b, i) =>
+        `<button class="btn ${b.cls || 'btn-secondary'}" data-i="${i}">${b.label}</button>`).join('')}</div></div>`;
+    const fim = (v) => { ov.remove(); resolve(v); };
+    ov.addEventListener('click', (e) => { if (e.target === ov) fim(null); });
+    ov.querySelectorAll('button[data-i]').forEach((b) => b.addEventListener('click', () => {
+      const bt = botoes[+b.dataset.i]; fim(bt.valor === undefined ? null : (typeof bt.valor === 'function' ? bt.valor(ov) : bt.valor));
+    }));
+    document.body.appendChild(ov);
+    const foco = ov.querySelector('input,textarea'); if (foco) setTimeout(() => foco.focus(), 50);
+  });
+}
+async function alcanceSerie(ag, verbo) {
+  if (!ag.recorrencia_id) return 'esta';
+  return janela(`${verbo} agendamento repetido`,
+    '<div style="font-size:13px;color:var(--fg-muted);">Este agendamento faz parte de uma sequência. As já realizadas ou canceladas não mudam.</div>',
+    [{ label: 'Voltar' }, { label: 'Somente esta', valor: 'esta' }, { label: 'Esta e as seguintes', valor: 'seguintes', cls: 'btn-primary' }]);
+}
+// Linhas que representam ESTE compromisso: todas do grupo (agenda compartilhada) ou só ela.
+const doCompromisso = (q, ag) => ag.grupo_id ? q.eq('grupo_id', ag.grupo_id).eq('status', 'pendente') : q.eq('id', ag.id);
+
+async function cancelar(ag) {
+  const motivo = await janela('Cancelar agendamento',
+    `<div style="font-size:13px;color:var(--fg-muted);">${esc(tituloDe(ag))} · ${new Date(ag.data_prevista).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+     <textarea id="ag-motivo" class="input" rows="3" placeholder="Motivo do cancelamento (ex.: cliente remarcou, imprevisto...)" style="width:100%;"></textarea>`,
+    [{ label: 'Voltar' }, { label: 'Cancelar agendamento', cls: 'btn-primary', valor: (ov) => ({ txt: ov.querySelector('#ag-motivo').value.trim() }) }]);
+  if (!motivo) return;
+  const alcance = await alcanceSerie(ag, 'Cancelar'); if (!alcance) return;
+  const { sb, toast } = D;
+  const r = alcance === 'seguintes'
+    ? await sb.rpc('agenda_serie_cancelar', { p_recorrencia_id: ag.recorrencia_id, p_desde: ag.data_prevista, p_motivo: motivo.txt || null })
+    : await doCompromisso(sb.from('agendamentos').update({ status: 'cancelado', motivo_cancelamento: motivo.txt || null }), ag).select('id');
+  if (r.error) { toast('Não foi possível cancelar: ' + r.error.message, 'error'); return; }
+  if (alcance === 'esta' && (!r.data || !r.data.length)) { toast('Sem permissão para cancelar este agendamento.', 'error'); return; }
+  toast(alcance === 'seguintes' ? `Cancelados: ${r.data || 0} da sequência` : 'Agendamento cancelado', 'success');
+  recarregarAgenda();
+}
+
+async function remarcar(ag) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const d = new Date(ag.data_prevista);
+  const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const f = ag.data_fim ? new Date(ag.data_fim) : null;
+  const res = await janela('Remarcar agendamento',
+    `<div style="font-size:13px;color:var(--fg-muted);">${esc(tituloDe(ag))}</div>
+     <div style="display:flex;gap:8px;align-items:center;">
+       <input id="ag-ini" type="datetime-local" class="input" value="${local}" style="flex:1;min-width:0;">
+       <span style="font-size:12px;color:var(--fg-muted);">até</span>
+       <input id="ag-fim" type="time" class="input" value="${f ? pad(f.getHours()) + ':' + pad(f.getMinutes()) : ''}" style="width:110px;">
+     </div>
+     <div style="font-size:11.5px;color:var(--fg-muted);">O horário de término é opcional.</div>`,
+    [{ label: 'Voltar' }, { label: 'Remarcar', cls: 'btn-primary', valor: (ov) => ({ ini: ov.querySelector('#ag-ini').value, fim: ov.querySelector('#ag-fim').value }) }]);
+  if (!res || !res.ini) return;
+  const { sb, toast } = D;
+  const ini = new Date(res.ini);
+  let fim = null;
+  if (res.fim) { const [hh, mm] = res.fim.split(':').map(Number); fim = new Date(ini); fim.setHours(hh, mm, 0, 0); if (fim <= ini) { toast('O término precisa ser depois do início.', 'error'); return; } }
+  const alcance = await alcanceSerie(ag, 'Remarcar'); if (!alcance) return;
+  let r;
+  if (alcance === 'seguintes') {
+    r = await sb.rpc('agenda_serie_editar', {
+      p_recorrencia_id: ag.recorrencia_id, p_desde: ag.data_prevista,
+      p_delta_seg: Math.round((ini - new Date(ag.data_prevista)) / 1000), p_campos: {},
+      p_duracao_seg: fim ? Math.round((fim - ini) / 1000) : null,
+    });
+  } else {
+    r = await doCompromisso(sb.from('agendamentos').update({
+      data_prevista: ini.toISOString(), data_fim: fim ? fim.toISOString() : null,
+      remarcada: true, remarcacoes: (ag.remarcacoes || 0) + 1,
+      data_prevista_original: ag.data_prevista_original || ag.data_prevista, updated_at: new Date().toISOString(),
+    }), ag).select('id');
+  }
+  if (r.error) { toast('Não foi possível remarcar: ' + r.error.message, 'error'); return; }
+  if (alcance === 'esta' && (!r.data || !r.data.length)) { toast('Sem permissão para remarcar este agendamento.', 'error'); return; }
+  toast(alcance === 'seguintes' ? `Remarcados: ${r.data || 0} da sequência` : 'Agendamento remarcado', 'success');
+  recarregarAgenda();
 }
 
 // ─── Inicialização ────────────────────────────────────────────────────────
 export function initAgenda(deps) {
   D = deps;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && document.getElementById('agenda-corpo')?.offsetParent) recarregarAgenda();
+  });
   const mover = (dir) => {
     const c = new Date(A.cursor);
     if (A.modo === 'dia') c.setDate(c.getDate() + dir);

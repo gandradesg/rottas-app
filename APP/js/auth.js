@@ -210,7 +210,7 @@ async function tratarEventoAuth(event, session) {
 //   supervisor (1) -> gerente (2) -> gestor_regional (3) -> superintendente (4) -> gestor (5) -> master (6)
 // recepcao_rottas: nivel 1 (peer com supervisor) MAS isolado — só registra/visualiza visitas
 const ROLE_LEVEL = {
-  recepcao_rottas: 1,
+  recepcao_rottas: 1, gerente_produto: 1,
   supervisor: 1, gerente: 2, gestor_regional: 3,
   superintendente: 4, gestor: 5, master: 6,
 };
@@ -237,10 +237,12 @@ export function isAdmin() {
 export function isFieldUser() {
   return ['supervisor','gerente'].includes(state.profile?.role);
 }
-// Pode planejar agenda? Supervisor NAO pode (agenda fica com gerente).
+// Pode planejar agenda? Supervisor agora PODE (igual ao gerente). O Gerente de
+// Produto não cria agenda: só é marcado pelos gerentes da regional dele.
 export function canManageAgenda() {
-  return state.profile?.role !== 'supervisor';
+  return state.profile?.role !== 'gerente_produto';
 }
+export function isGerenteProduto() { return state.profile?.role === 'gerente_produto'; }
 // Master principal: NUNCA pode ser excluido (defesa de UI + trigger no banco)
 export function isPrincipalMaster(emailOrProfile) {
   const email = typeof emailOrProfile === 'string' ? emailOrProfile : emailOrProfile?.email;

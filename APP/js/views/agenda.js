@@ -1,11 +1,36 @@
 // Agenda - calendário dia/semana/mês com itens vinculados a atividades
-import { el, icon, fmt, toast, confirmModal, modal, dictationButton } from '../ui.js';
+import { el, icon, fmt, toast, confirmModal, modal, dictationButton, escolherAlcanceSerie } from '../ui.js';
 import { shell, cartaoErroCarga } from './shell.js';
 import { state, supabase, q as runQuery } from '../supabase.js';
 import { activeViewRole, isAdmin } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
 import { calendarButton } from '../calendar-sync.js';
+
+// Agenda COMPARTILHADA: cada pessoa presente tem a sua linha (mesmo grupo_id).
+// Quem enxerga a agenda de mais de uma dessas pessoas (ex.: gerente + seu
+// supervisor) via o mesmo compromisso repetido. Aqui vira UM cartão só, com os
+// nomes de todos. Fica a linha do próprio usuário (é a que ele realiza/edita).
+export function juntarCompartilhadas(items, meuId) {
+  const porGrupo = new Map();
+  const saida = [];
+  for (const it of items) {
+    if (!it.grupo_id) { saida.push(it); continue; }
+    const ja = porGrupo.get(it.grupo_id);
+    const nome = it.profiles?.nome || it.gerente_nome;
+    if (!ja) {
+      const c = { ...it, _nomesGrupo: nome ? [nome] : [] };
+      porGrupo.set(it.grupo_id, c); saida.push(c);
+    } else {
+      if (nome && !ja._nomesGrupo.includes(nome)) ja._nomesGrupo.push(nome);
+      if (it.gerente_id === meuId && ja.gerente_id !== meuId) {
+        const nomes = ja._nomesGrupo;
+        Object.assign(ja, it, { _nomesGrupo: nomes });   // prefere a minha linha
+      }
+    }
+  }
+  return saida;
+}
 
 // Janela "Ver detalhes": mostra TODAS as informações do agendamento.
 // Disponível para Master/Gestor/Superintendente/Gestor Regional (inspeção).
@@ -205,6 +230,10 @@ async function agendaGerenteView(app) {
 
   // Helper: navega para criar agendamento prefilando a data
   function newOnDate(date) {
+    if (state.profile?.role === 'gerente_produto') {
+      toast('As agendas do Gerente de Produto são marcadas pelos gerentes da regional.', 'info', 5000);
+      return;
+    }
     if (date) {
       // Define hora padrão 9h se for só dia
       const d = new Date(date);
@@ -271,7 +300,7 @@ async function agendaGerenteView(app) {
       list = list.filter(g => es.includes(g.estado));
     }
     outrosGerentes = list;
-  } else if (role === 'gerente') {
+  } else if (role === 'gerente' || role === 'supervisor') {
     const { data: mesmos } = await raceTO(supabase.rpc('gerentes_mesma_praca'));
     outrosGerentes = mesmos || [];
   }
@@ -327,7 +356,7 @@ async function agendaGerenteView(app) {
       cal.appendChild(cartaoErroCarga('Não foi possível carregar a agenda.', error, () => loadItems()));
       return;
     }
-    allItems = data || [];
+    allItems = juntarCompartilhadas(data || [], meuId);
     render();
   }
 
@@ -618,12 +647,23 @@ async function agendaGerenteView(app) {
     okBtn.addEventListener('click', async () => {
       okBtn.disabled = true;
       const motivo = (ta.value || '').trim() || null;
-      const { error } = await runQuery(() => supabase.from('agendamentos')
-        .update({ status: 'cancelado', motivo_cancelamento: motivo }).eq('id', item.id),
-        { ms: 6000, label: 'cancelar agendamento', tentativas: 3 });
+      // Agenda repetida: só esta ou esta e as seguintes?
+      let alcance = 'esta';
+      if (item.recorrencia_id) {
+        alcance = await escolherAlcanceSerie('Cancelar agendamento repetido',
+          'Este agendamento faz parte de uma sequência. O que você quer cancelar?');
+        if (!alcance) { okBtn.disabled = false; return; }
+      }
+      const { data: n, error } = alcance === 'seguintes'
+        ? await runQuery(() => supabase.rpc('agenda_serie_cancelar', {
+            p_recorrencia_id: item.recorrencia_id, p_desde: item.data_prevista, p_motivo: motivo,
+          }), { ms: 8000, label: 'cancelar sequência', tentativas: 3 })
+        : await runQuery(() => supabase.from('agendamentos')
+            .update({ status: 'cancelado', motivo_cancelamento: motivo }).eq('id', item.id),
+            { ms: 6000, label: 'cancelar agendamento', tentativas: 3 });
       if (error) { toast(error.message, 'error', 5000); okBtn.disabled = false; return; }
       m.close();
-      toast('Cancelado', 'info');
+      toast(alcance === 'seguintes' ? `Cancelados: ${n || 0} agendamento(s) da sequência` : 'Cancelado', 'info');
       location.reload();
     });
   }
@@ -636,7 +676,9 @@ async function agendaGerenteView(app) {
 
     // Chip do responsável quando NÃO é do próprio user (gerente vendo de supervisor)
     const isMine = item.gerente_id === state.user.id;
-    const respChip = (!isMine && item.profiles?.nome)
+    const respChip = (item._nomesGrupo && item._nomesGrupo.length > 1)
+      ? el('span', { class: 'chip chip-purple text-[10px]' }, '👥 ' + item._nomesGrupo.map(n => n.split(' ')[0]).join(', '))
+      : (!isMine && item.profiles?.nome)
       ? el('span', { class: 'chip chip-purple text-[10px]' }, '👁️ ' + item.profiles.nome)
       : null;
 
@@ -655,7 +697,7 @@ async function agendaGerenteView(app) {
           respChip,
         ),
         el('div', { class: 'text-xs text-fg-muted mt-0.5' },
-          fmt.time(item.data_prevista), ' · ', tipo.label,
+          fmt.time(item.data_prevista), item.data_fim ? '–' + fmt.time(item.data_fim) : '', ' · ', tipo.label,
           item.imobiliaria && item.imobiliaria !== titulo ? ' · ' + item.imobiliaria : '',
         ),
         item.observacoes && el('div', { class: 'text-xs text-fg-muted mt-1 line-clamp-2 italic' },
@@ -830,7 +872,7 @@ async function agendaGestorView(app) {
       cal.appendChild(cartaoErroCarga('Não foi possível carregar a agenda.', error, () => reload()));
       return;
     }
-    allItems = (data || []).map(i => ({ ...i, gerente_nome: i.profiles?.nome }));
+    allItems = juntarCompartilhadas((data || []).map(i => ({ ...i, gerente_nome: i.profiles?.nome })), state.user.id);
     render();
   }
 
@@ -990,7 +1032,7 @@ async function agendaGestorView(app) {
               '↻ Remarcada' + (item.remarcacoes > 1 ? ` ${item.remarcacoes}x` : '')),
           ),
           el('div', { class: 'text-xs text-fg-muted mt-0.5' },
-            fmt.time(item.data_prevista), ' · ', tipo.label,
+            fmt.time(item.data_prevista), item.data_fim ? '–' + fmt.time(item.data_fim) : '', ' · ', tipo.label,
             item.gerente_nome ? ' · 👤 ' + item.gerente_nome : '',
           ),
           (item.registrado_em || item.created_at) && el('div', { class: 'text-[10px] text-fg-subtle mt-1' },

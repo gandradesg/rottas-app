@@ -1,5 +1,5 @@
 // Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
-import { el, icon, toast, loadingBtn, modal, painelSalvando } from '../ui.js';
+import { el, icon, toast, loadingBtn, modal, painelSalvando, escolherAlcanceSerie } from '../ui.js';
 import { shell, telaErroCarga } from './shell.js';
 import { state, supabase, q, getScopedImobiliarias, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
@@ -96,7 +96,7 @@ export async function agendaFormView(params, app) {
     const { data: pessoas } = await q(() => supabase.rpc('pessoas_agenda_mesma_praca'), { ms: 6000, label: 'pessoas da agenda', tentativas: 2 });
     (pessoas || []).forEach(p => {
       const isSelf = p.id === meuId;
-      const rl = p.role === 'gerente' ? 'Gerente' : 'Supervisor';
+      const rl = p.role === 'gerente' ? 'Gerente' : p.role === 'gerente_produto' ? 'Gerente de Produto' : 'Supervisor';
       responsaveis.push({ id: p.id, nome: isSelf ? ((p.nome || 'Você') + ' (você)') : `${p.nome} (${rl})` });
     });
     if (!responsaveis.some(r => r.id === meuId)) {
@@ -174,7 +174,13 @@ export async function agendaFormView(params, app) {
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  const dataInput = el('input', { class: 'input', type: 'datetime-local', name: 'data_prevista', required: true, value: defaultDate });
+  const dataInput = el('input', { class: 'input flex-1 min-w-0', type: 'datetime-local', name: 'data_prevista', required: true, value: defaultDate });
+  // Término (opcional): só a HORA — o dia é o mesmo do início.
+  const pad2 = n => String(n).padStart(2, '0');
+  const fimInicial = initial?.data_fim ? (() => { const d = new Date(initial.data_fim); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); })() : '';
+  const fimInput = el('input', { class: 'input w-[7.5rem] flex-shrink-0', type: 'time', name: 'hora_fim', value: fimInicial, title: 'Horário de término' });
+  const dataHoraRow = el('div', { class: 'flex items-center gap-2' },
+    dataInput, el('span', { class: 'text-xs text-fg-muted flex-shrink-0' }, 'até'), fimInput);
   const tituloInput = el('input', { class: 'input', name: 'titulo', placeholder: 'Ex: Treinamento de tarde', value: initial?.titulo || '' });
   const obsInput = el('textarea', { class: 'textarea', name: 'observacoes', placeholder: 'Observações livres...' }, initial?.observacoes || '');
 
@@ -316,7 +322,7 @@ export async function agendaFormView(params, app) {
 
   const form = el('form', { class: 'flex flex-col gap-4' },
     field('Tipo', el('div', { class: 'flex gap-2' }, ...tipoButtons), { required: true }),
-    field('Data e hora prevista', dataInput, { required: true }),
+    field('Data e hora prevista', dataHoraRow, { required: true, help: 'O horário de término é opcional.' }),
     recorrenciaField,
     recUntilWrap,
     responsavelField,
@@ -341,6 +347,68 @@ export async function agendaFormView(params, app) {
     return _idsFixos.get(k);
   };
 
+  // ── CONFLITO DE HORÁRIO ──────────────────────────────────────────────────
+  // Avisa (não bloqueia) quando já existe agenda aberta no mesmo horário para
+  // alguém que estará presente. Agenda sem término conta como 1h.
+  const UMA_HORA = 60 * 60 * 1000;
+  function duracaoAtual() {
+    const hf = fimInput.value; if (!hf || !dataInput.value) return null;
+    const ini = new Date(dataInput.value); const [hh, mm] = hf.split(':').map(Number);
+    const f = new Date(ini); f.setHours(hh, mm, 0, 0);
+    return f > ini ? f - ini : null;
+  }
+  async function confirmarSemConflito(inicios) {
+    try {
+      const pessoas = id ? (responsavelId ? [responsavelId] : []) : [...selecionados];
+      if (!pessoas.length || !inicios.length) return true;
+      const ts = inicios.map(x => new Date(x).getTime());
+      const de = new Date(Math.min(...ts) - 12 * UMA_HORA).toISOString();
+      const ate = new Date(Math.max(...ts) + 12 * UMA_HORA).toISOString();
+      const { data, error } = await q(() => supabase.from('agendamentos')
+        .select('id, gerente_id, data_prevista, data_fim, tipo, titulo, imobiliaria, recorrencia_id, grupo_id, profiles!agendamentos_gerente_id_fkey(nome)')
+        .in('gerente_id', pessoas).eq('status', 'pendente').gte('data_prevista', de).lte('data_prevista', ate),
+        { ms: 5000, label: 'conflito de horário', tentativas: 1 });
+      if (error || !data) return true;              // sem resposta: não trava o agendamento
+      const dur = duracaoAtual() || UMA_HORA;
+      const conflitos = [];
+      const vistos = new Set();
+      for (const ini of ts) {
+        const fimNovo = ini + dur;
+        for (const a of data) {
+          if (id && a.id === id) continue;
+          if (initial?.recorrencia_id && a.recorrencia_id === initial.recorrencia_id) continue;
+          const s0 = new Date(a.data_prevista).getTime();
+          const e0 = a.data_fim ? new Date(a.data_fim).getTime() : s0 + UMA_HORA;
+          const chave = a.grupo_id || a.id;
+          if (s0 < fimNovo && ini < e0 && !vistos.has(chave)) { vistos.add(chave); conflitos.push(a); }
+        }
+      }
+      if (!conflitos.length) return true;
+      const hm = d => new Date(d).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const dia = d => new Date(d).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      return await new Promise((resolve) => {
+        let feito = false; const fim = v => { if (!feito) { feito = true; resolve(v); } };
+        const bVoltar = el('button', { class: 'btn btn-ghost', onclick: () => { fim(false); mm.close(); } }, 'Voltar e ajustar');
+        const bOk = el('button', { class: 'btn btn-primary', onclick: () => { fim(true); mm.close(); } }, 'Agendar mesmo assim');
+        const mm = modal({
+          title: '⚠️ Conflito de horário', size: 'sm',
+          content: el('div', { class: 'flex flex-col gap-2' },
+            el('p', { class: 'text-sm text-fg-muted' }, 'Já existe agenda neste horário:'),
+            ...conflitos.slice(0, 6).map(a => el('div', { class: 'card p-2 text-sm' },
+              el('div', { class: 'font-semibold' }, (a.titulo || a.imobiliaria || a.tipo)),
+              el('div', { class: 'text-xs text-fg-muted' },
+                dia(a.data_prevista) + ' · ' + hm(a.data_prevista) + (a.data_fim ? '–' + hm(a.data_fim) : '') +
+                (a.profiles?.nome ? ' · ' + a.profiles.nome : '')),
+            )),
+            conflitos.length > 6 ? el('p', { class: 'text-xs text-fg-subtle' }, `e mais ${conflitos.length - 6}…`) : null,
+          ),
+          footer: [bVoltar, bOk],
+          onClose: () => fim(false),
+        });
+      });
+    } catch (e) { return true; }
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     // Lista de presentes (criação = multi; edição = 1)
@@ -348,6 +416,17 @@ export async function agendaFormView(params, app) {
     if (!presentes.length) { toast('Selecione quem estará presente', 'error'); return; }
     const fd = new FormData(form);
     const dataIso = new Date(fd.get('data_prevista')).toISOString();
+    // Término (opcional) no MESMO dia do início.
+    let duracaoMs = null;
+    const horaFim = (fd.get('hora_fim') || '').toString();
+    if (horaFim) {
+      const ini = new Date(fd.get('data_prevista'));
+      const [hh, mm] = horaFim.split(':').map(Number);
+      const fim = new Date(ini); fim.setHours(hh, mm, 0, 0);
+      if (fim <= ini) { toast('O horário de término precisa ser depois do início.', 'error', 5000); return; }
+      duracaoMs = fim - ini;
+    }
+    const fimDe = (isoIni) => duracaoMs ? new Date(new Date(isoIni).getTime() + duracaoMs).toISOString() : null;
 
     // Grupo quando há mais de um presente: uma agenda por gerente, mesmo grupo_id,
     // e "participantes" = todos (usado ao realizar para creditar cada um).
@@ -364,6 +443,7 @@ export async function agendaFormView(params, app) {
       registrado_em: !id ? new Date().toISOString() : undefined,
       tipo: chosenTipo,
       data_prevista: dataIso,
+      data_fim: fimDe(dataIso),
       titulo: (fd.get('titulo') || '').toString().trim() || null,
       observacoes: (fd.get('observacoes') || '').toString().trim() || null,
       imobiliaria: (fd.get('imobiliaria') || '').toString().trim() || null,       // só do campo Imobiliária
@@ -388,7 +468,28 @@ export async function agendaFormView(params, app) {
 
     loadingBtn(submitBtn, true);
     try {
+      if (id && initial?.recorrencia_id) {
+        const escolha = await escolherAlcanceSerie('Editar agendamento repetido',
+          'Este agendamento faz parte de uma sequência. O que você quer alterar?');
+        if (!escolha) { loadingBtn(submitBtn, false); return; }
+        if (escolha === 'seguintes') {
+          if (!(await confirmarSemConflito([dataIso]))) { loadingBtn(submitBtn, false); return; }
+          const campos = {};
+          ['tipo', 'titulo', 'observacoes', 'imobiliaria', 'local_visita', 'empreendimento', 'cliente', 'corretor', 'motivo_visita']
+            .forEach(k => { campos[k] = payload[k] == null ? '' : payload[k]; });
+          const deltaSeg = Math.round((new Date(dataIso) - new Date(initial.data_prevista)) / 1000);
+          const { data: n, error } = await q(() => supabase.rpc('agenda_serie_editar', {
+            p_recorrencia_id: initial.recorrencia_id, p_desde: initial.data_prevista,
+            p_delta_seg: deltaSeg, p_campos: campos, p_duracao_seg: duracaoMs ? Math.round(duracaoMs / 1000) : null,
+          }), { ms: 8000, label: 'editar sequência', tentativas: 3 });
+          if (error) throw error;
+          toast(`✓ ${n || 0} agendamento${n === 1 ? '' : 's'} da sequência atualizado${n === 1 ? '' : 's'}`, 'success', 5000);
+          navigate('/', true);
+          return;
+        }
+      }
       if (id) {
+        if (!(await confirmarSemConflito([dataIso]))) { loadingBtn(submitBtn, false); return; }
         // Edição: idempotente (mesmo id, mesmos valores) → pode repetir à vontade.
         const { data, error } = await q(() => supabase.from('agendamentos').update(payload).eq('id', id).select(),
           { ms: 6000, label: 'editar agendamento', tentativas: 3 });
@@ -437,11 +538,15 @@ export async function agendaFormView(params, app) {
       const rows = [];
       for (const pid of presentes) {
         for (const occ of datas) {
-          const row = { ...payload, gerente_id: pid, id: idFixo(pid, occ), data_prevista: occ };
+          const row = { ...payload, gerente_id: pid, id: idFixo(pid, occ), data_prevista: occ, data_fim: fimDe(occ),
+            // Cada DATA é um encontro: grupo próprio por ocorrência. Antes a série inteira
+            // dividia o mesmo grupo e realizar UMA data marcaria todas como realizadas.
+            grupo_id: ehGrupo ? idFixo('grupo', occ) : null };
           if (freq) { row.recorrencia_id = recorrenciaId; row.recorrencia_freq = freq; row.recorrencia_total = datas.length; }
           rows.push(row);
         }
       }
+      if (!(await confirmarSemConflito(datas))) { loadingBtn(submitBtn, false); return; }
       const temIds = rows.every(r => r.id);
       // Guardar no aparelho. Serve pro atalho DURANTE as tentativas e pro botão
       // do aviso de falha. Mesmo id do upsert → nunca duplica.

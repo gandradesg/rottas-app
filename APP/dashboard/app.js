@@ -6,7 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { renderLineChart, renderFunnel } from './charts.js?v=104';
 import { initAiChat, updateAiContext } from './ai-chat.js?v=104';
-import { initAgenda, recarregarAgenda } from './agenda.js?v=105';
+import { initAgenda, recarregarAgenda } from './agenda.js?v=106';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
@@ -242,14 +242,18 @@ async function computeAllowedGerenteIds() {
   let allowed = new Set();
   if (myRole === 'superintendente') {
     const estados = state.profile.estados_acesso || [];
-    profiles.forEach(p => { if (['gerente','supervisor'].includes(p.role) && estados.includes(p.estado)) allowed.add(p.id); });
+    profiles.forEach(p => { if (['gerente','supervisor','gerente_produto'].includes(p.role) && estados.includes(p.estado)) allowed.add(p.id); });
   } else if (myRole === 'gestor_regional') {
     const cidades = state.profile.cidades_acesso || [];
-    profiles.forEach(p => { if (['gerente','supervisor'].includes(p.role) && cidades.includes(p.cidade)) allowed.add(p.id); });
+    profiles.forEach(p => { if (['gerente','supervisor','gerente_produto'].includes(p.role) && cidades.includes(p.cidade)) allowed.add(p.id); });
   } else if (myRole === 'gerente') {
     allowed.add(myId);
     profiles.forEach(p => { if (p.role === 'supervisor' && p.gerente_supervisor_id === myId) allowed.add(p.id); });
-  } else if (myRole === 'supervisor') { allowed.add(myId); }
+  } else if (myRole === 'supervisor') {
+    // Igual ao gerente: ele + o gerente ao qual está ligado (agenda dos dois).
+    allowed.add(myId);
+    if (state.profile.gerente_supervisor_id) allowed.add(state.profile.gerente_supervisor_id);
+  } else if (myRole === 'gerente_produto') { allowed.add(myId); }
   state.data.allowedGerenteIds = allowed;
 }
 
