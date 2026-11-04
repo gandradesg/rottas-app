@@ -512,6 +512,19 @@ export async function loadProfile() {
   return data;
 }
 
+// Lê uma tabela INTEIRA, de 1000 em 1000 (limite do servidor por consulta).
+// Sem isso, a partir da 1001ª linha os itens simplesmente sumiam das listas.
+async function todasAsPaginas(pagina) {
+  const tudo = [];
+  for (let de = 0; de < 50000; de += 1000) {
+    const { data, error } = await pagina(de, de + 999);
+    if (error) return { data: null, error };
+    tudo.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: tudo, error: null };
+}
+
 // Helper: carrega todas as listas gerenciadas pelo master
 export async function loadLists() {
   // RESILIENTE: cada query tem tempo-limite próprio (nunca TRAVA a chamada) e,
@@ -525,7 +538,8 @@ export async function loadLists() {
     new Promise((resolve) => setTimeout(() => resolve({ data: null, error: new Error('timeout') }), 8000)),
   ]);
   const [imob, emp, mv, mo, lv, gh, cor, gim, ot] = await Promise.all([
-    q(supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome')),
+    // Em páginas de 1000: o servidor devolve no máx. 1000 por consulta e já são 900+.
+    q(todasAsPaginas((de, ate) => supabase.from('imobiliarias').select('id, nome, cidade, estado').order('nome').range(de, ate))),
     q(supabase.from('empreendimentos').select('id, nome, cidade, estado, link_url, cidades_visiveis').order('nome')),
     q(supabase.from('motivos_visita').select('id, nome').order('nome')),
     q(supabase.from('motivos_orulo').select('id, nome').order('nome')),

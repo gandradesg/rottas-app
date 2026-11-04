@@ -7,6 +7,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { renderLineChart, renderFunnel } from './charts.js?v=104';
 import { initAiChat, updateAiContext } from './ai-chat.js?v=104';
 import { initAgenda, recarregarAgenda } from './agenda.js?v=107';
+import { initImobs, recarregarImobs, atualizarImobsSeAberta } from './imobiliarias.js?v=1';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
@@ -277,7 +278,7 @@ const PERIODO_LABEL = { hoje:'Hoje', '7d':'Últimos 7 dias', '30d':'Últimos 30 
 async function fetchAtividades(start, end) {
   // SELECT só com colunas estáveis (sem visita_*) — essas são lidas em fetchVisitas separado
   let q = sb.from('atividades')
-    .select('id, tipo, valor, reserva, cancelada, created_at, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
+    .select('id, tipo, valor, reserva, cancelada, created_at, registrado_em, data_visita, gerente_id, imobiliaria, produto, empreendimento, plataforma, motivo_visita, cliente, corretor, local_treinamento, qtd_pessoas, numero_sequencial, profiles!atividades_gerente_id_fkey(nome, cidade, estado, role)')
     .eq('cancelada', false)
     .neq('tipo', 'visita') // visitas SEMPRE fora das outras seções do dashboard
     .order('created_at', { ascending: false }).limit(5000);
@@ -301,14 +302,20 @@ async function fetchAtividades(start, end) {
 
 async function loadFilterOptions() {
   const { data: gerentes } = await sb.from('profiles')
-    .select('id, nome, cidade, estado, role').in('role', ['gerente','supervisor']).eq('ativo', true).order('nome');
+    .select('id, nome, cidade, estado, role').in('role', ['gerente','supervisor','gerente_produto']).eq('ativo', true).order('nome');
   let gs = gerentes || [];
   if (state.data.allowedGerenteIds) gs = gs.filter(g => state.data.allowedGerenteIds.has(g.id));
   state.data.gerentes = gs;
   const { data: emps } = await sb.from('empreendimentos').select('id, nome, cidade, estado').order('nome');
   state.data.empreendimentos = emps || [];
-  const { data: imobs } = await sb.from('imobiliarias').select('id, nome, cidade, estado').order('nome');
-  state.data.imobiliarias = imobs || [];
+  // Em páginas de 1000 (limite do servidor) — a lista já passa de 900.
+  const imobs = [];
+  for (let de = 0; de < 20000; de += 1000) {
+    const { data: pag } = await sb.from('imobiliarias').select('id, nome, cidade, estado').order('nome').range(de, de + 999);
+    imobs.push(...(pag || []));
+    if (!pag || pag.length < 1000) break;
+  }
+  state.data.imobiliarias = imobs;
   // Carrega lista de Gerentes House (pra lookup de nome na seção Visitas)
   try {
     const { data: gh } = await sb.from('gerentes_house').select('id, nome').order('nome');
@@ -322,7 +329,7 @@ function populateFilterSelects() {
   const F = state.filters;
   const gSel = $('f-gerente'); gSel.innerHTML = '<option value="todos">Todos gerentes</option>';
   gerentes.forEach(g => { const o = document.createElement('option'); o.value = g.id; o.textContent = g.nome; if (F.gerente === g.id) o.selected = true; gSel.appendChild(o); });
-  if (state.profile.role === 'supervisor') { F.gerente = state.profile.id; gSel.value = state.profile.id; gSel.disabled = true; }
+  // Supervisor vê ele + o gerente ao qual está ligado (mesmo acesso do gerente).
   const eSel = $('f-empreend'); eSel.innerHTML = '<option value="todos">Todos empreend.</option>';
   empreendimentos.forEach(e => { const o = document.createElement('option'); o.value = e.nome; o.textContent = e.nome; if (F.empreend === e.nome) o.selected = true; eSel.appendChild(o); });
   const iSel = $('f-imob'); iSel.innerHTML = '<option value="todas">Todas imobiliárias</option>';
@@ -781,10 +788,10 @@ function renderCheckinsPage(curr) {
   // Tabela
   const tw = $('checkins-table-wrap');
   if (!filtered.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem registros.</p>'; return; }
-  let html = '<table><thead><tr><th>Data</th><th>Gerente</th><th>Imobiliária</th><th>Motivo</th><th>Local</th><th class="num">#</th></tr></thead><tbody>';
+  let html = '<table><thead><tr>' + CAB_DATAS + '<th>Gerente</th><th>Imobiliária</th><th>Motivo</th><th>Local</th><th class="num">#</th></tr></thead><tbody>';
   filtered.slice(0, 200).forEach(r => {
     html += `<tr class="clickable" data-id="${r.id}">
-      <td>${fmt.dateTime(r.created_at)}</td>
+      ${colunasData(r)}
       <td style="font-weight:600;">${escapeHtml(r.profiles?.nome || '—')}</td>
       <td>${escapeHtml(r.imobiliaria || '—')}</td>
       <td><span class="chip chip-blue">${escapeHtml(r.motivo_visita || '—')}</span></td>
@@ -796,6 +803,41 @@ function renderCheckinsPage(curr) {
   tw.innerHTML = html;
   $$('#checkins-table-wrap tr.clickable').forEach(tr => tr.addEventListener('click', () => location.href = `/#/atividade/${tr.dataset.id}`));
 }
+
+// ─── DATAS DO REGISTRO ───────────────────────────────────────────────────
+// Antes a tabela mostrava só quando o registro foi CRIADO. Agora, para o que
+// veio da agenda: quando foi AGENDADO, a DATA DA ATIVIDADE (prevista) e quando
+// foi FINALIZADO (registrado). Registro avulso: as três coincidem.
+async function carregarVinculosAgenda(curr) {
+  const mapa = new Map();
+  const ids = curr.map(r => r.id);
+  const lotes = [];
+  for (let i = 0; i < ids.length; i += 150) lotes.push(ids.slice(i, i + 150));
+  await Promise.all(lotes.map(async (lote) => {
+    try {
+      const { data } = await sb.from('agendamentos').select('atividade_id, data_prevista, created_at, registrado_em').in('atividade_id', lote);
+      (data || []).forEach(a => { if (!mapa.has(a.atividade_id)) mapa.set(a.atividade_id, a); });
+    } catch (e) { /* sem vínculo: mostra as datas do próprio registro */ }
+  }));
+  state.data.agPorAtiv = mapa;
+}
+function datasDe(r) {
+  const ag = state.data.agPorAtiv && state.data.agPorAtiv.get(r.id);
+  const fin = r.registrado_em || r.created_at;
+  return {
+    criacao: ag ? (ag.registrado_em || ag.created_at) : fin,
+    atividade: ag ? ag.data_prevista : (r.data_visita || fin),
+    fin,
+    agenda: !!ag,
+  };
+}
+function colunasData(r) {
+  const d = datasDe(r);
+  return `<td>${fmt.dateTime(d.criacao)}${d.agenda ? '<div style="font-size:10px;color:var(--fg-muted);">agendado</div>' : ''}</td>
+      <td>${fmt.dateTime(d.atividade)}</td>
+      <td>${fmt.dateTime(d.fin)}</td>`;
+}
+const CAB_DATAS = '<th>Criação</th><th>Data da atividade</th><th>Finalização</th>';
 
 // ─── ATENDIMENTOS PAGE ───────────────────────────────────────────────────
 function renderAtendimentosPage(curr) {
@@ -813,10 +855,10 @@ function renderAtendimentosPage(curr) {
   `;
   const tw = $('atendimentos-table-wrap');
   if (!ats.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem registros.</p>'; return; }
-  let html = '<table><thead><tr><th>Data</th><th>Gerente</th><th>Cliente</th><th>Corretor</th><th>Imobiliária</th><th>Empreend.</th><th class="num">#</th></tr></thead><tbody>';
+  let html = '<table><thead><tr>' + CAB_DATAS + '<th>Gerente</th><th>Cliente</th><th>Corretor</th><th>Imobiliária</th><th>Empreend.</th><th class="num">#</th></tr></thead><tbody>';
   ats.slice(0, 200).forEach(r => {
     html += `<tr class="clickable" data-id="${r.id}">
-      <td>${fmt.dateTime(r.created_at)}</td>
+      ${colunasData(r)}
       <td style="font-weight:600;">${escapeHtml(r.profiles?.nome || '—')}</td>
       <td>${escapeHtml(r.cliente || '—')}</td>
       <td>${escapeHtml(r.corretor || '—')}</td>
@@ -850,11 +892,11 @@ function renderPropostasPage(curr) {
   `;
   const tw = $('propostas-table-wrap');
   if (!filtered.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem registros.</p>'; return; }
-  let html = '<table><thead><tr><th>Data</th><th>Gerente</th><th>Cliente</th><th>Empreendimento</th><th>Imobiliária</th><th class="num">Valor</th><th>Status</th></tr></thead><tbody>';
+  let html = '<table><thead><tr>' + CAB_DATAS + '<th>Gerente</th><th>Cliente</th><th>Empreendimento</th><th>Imobiliária</th><th class="num">Valor</th><th>Status</th></tr></thead><tbody>';
   filtered.slice(0, 200).forEach(r => {
     const isVenda = r.reserva != null && r.reserva !== '';
     html += `<tr class="clickable" data-id="${r.id}">
-      <td>${fmt.dateTime(r.created_at)}</td>
+      ${colunasData(r)}
       <td style="font-weight:600;">${escapeHtml(r.profiles?.nome || '—')}</td>
       <td>${escapeHtml(r.cliente || '—')}</td>
       <td>${escapeHtml(r.empreendimento || r.produto || '—')}</td>
@@ -1034,6 +1076,7 @@ async function reload() {
       prevStart ? fetchAtividades(prevStart, prevEnd) : Promise.resolve([]),
     ]);
     state.data.atividades = curr; state.data.atividadesPrev = prev;
+    await carregarVinculosAgenda(curr);
     const k = calcKPIs(curr, prev); state.kpis = k;
 
     // Render todas as seções (cada uma só aparece quando ativa, mas o DOM é atualizado)
@@ -1048,6 +1091,7 @@ async function reload() {
     renderDrillPills();
     // Filtros do topo mudaram com a Agenda aberta: recarrega ela também
     if (state.currentSection === 'agenda') recarregarAgenda();
+    atualizarImobsSeAberta();
 
     // Badges
     $('badge-checkins').textContent     = fmt.num(curr.filter(r => r.tipo === 'checkin').length);
@@ -1105,14 +1149,14 @@ function updateLastUpdateChip() {
 function switchSection(section) {
   state.currentSection = section;
   sessionStorage.setItem('dash-section', section);
-  const all = ['overview', 'agenda', 'checkins', 'atendimentos', 'propostas', 'visitas', 'charts', 'rankings'];
+  const all = ['overview', 'agenda', 'checkins', 'atendimentos', 'propostas', 'visitas', 'imobiliarias', 'charts', 'rankings'];
   all.forEach(s => { const el = $(`sec-${s}`); if (el) el.style.display = (s === section) ? 'block' : 'none'; });
   $$('.sb-link[data-section]').forEach(l => l.classList.toggle('active', l.dataset.section === section));
   const titlesByRole = {
     recepcao_rottas: { visitas: 'Minhas Visitas Registradas' },
     master:          { visitas: 'Visitas (todas — Recepção Rottas)' },
   };
-  const titles = { overview:'Visão Geral', agenda:'Agenda', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', visitas:'Visitas (Recepção)', charts:'Curvas & Funil', rankings:'Rankings' };
+  const titles = { overview:'Visão Geral', agenda:'Agenda', checkins:'Check-ins', atendimentos:'Atendimentos', propostas:'Propostas & Vendas', visitas:'Visitas (Recepção)', imobiliarias:'Imobiliárias', charts:'Curvas & Funil', rankings:'Rankings' };
   const roleTitles = titlesByRole[state.profile?.role] || {};
   Object.assign(titles, roleTitles);
   $('section-title').textContent = titles[section] || section;
@@ -1120,6 +1164,7 @@ function switchSection(section) {
   $('ticker-wrap').style.display = (section === 'overview') ? 'block' : 'none';
   // Agenda carrega sob demanda (só quando a seção é aberta)
   if (section === 'agenda' && state.profile) recarregarAgenda();
+  if (section === 'imobiliarias' && state.profile) recarregarImobs();
   $('sidebar').classList.remove('open');
 }
 
@@ -1234,6 +1279,7 @@ async function boot() {
   renderUserChip();
   wireTheme(); wireLogout(); wireFilters(); wireRankTabs(); wirePropostasTabs(); wireSidebar(); wireHistoryModal(); wireChatToggle();
   initAgenda({ sb, state, toast });
+  initImobs({ sb, state });
 
   // Sidebar de Visitas: APARECE para Master E para Recepção Rottas
   const role = state.profile.role;

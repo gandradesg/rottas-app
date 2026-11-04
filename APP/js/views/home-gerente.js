@@ -151,18 +151,24 @@ export async function homeGerenteView(_params, app) {
     const { data } = await q;
     if (!data) return;
 
-    const lastByImob = {};
+    // Chave normalizada (maiúsculas/espaços) — "Imob Teste" e "IMOB TESTE" são a mesma.
+    const chave = (n) => String(n || '').trim().toUpperCase();
+    const ultima = {};
     data.forEach(a => {
-      if (!lastByImob[a.imobiliaria]) lastByImob[a.imobiliaria] = new Date(a.created_at);
+      const k = chave(a.imobiliaria);
+      if (!ultima[k]) ultima[k] = new Date(a.created_at);
     });
-    // Compara contra a LISTA SCOPED de imobs (não a global)
+    const lastByImob = new Proxy({}, { get: (_, nome) => ultima[chave(nome)] });
+    const diasDesde = (d) => Math.floor((Date.now() - d.getTime()) / 86400000);
+    // O ALERTA conta só as atrasadas (nunca visitadas ou 7+ dias). Mas a LISTA
+    // mostra TODAS — antes as recém-visitadas sumiam dela, e "Visitadas mais
+    // recentes" não mostrava justamente as que você acabou de visitar.
     const stale = scopedImobs.filter(im => {
       const last = lastByImob[im.nome];
-      if (!last) return true; // nunca visitou
-      const days = Math.floor((Date.now() - last.getTime()) / 86400000);
-      return days >= 7;
+      return !last || diasDesde(last) >= 7;
     });
-    if (!stale.length) return;
+    const todas = scopedImobs;
+    const recentesQtd = todas.length - stale.length;
 
     // Banner expansível: clica e mostra TODAS as imobiliárias (e dias desde última visita)
     let expanded = false;
@@ -182,7 +188,7 @@ export async function homeGerenteView(_params, app) {
     const ordenada = () => {
       const t = im => (lastByImob[im.nome] ? lastByImob[im.nome].getTime() : null);
       const az = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
-      const arr = [...stale];
+      const arr = [...todas];
       if (ordem === 'az') return arr.sort(az);
       if (ordem === 'nunca') {
         // Nunca visitadas (A–Z) e depois as visitadas há mais tempo
@@ -210,12 +216,12 @@ export async function homeGerenteView(_params, app) {
       if (!expanded) {
         summary.appendChild(el('span', {
           class: 'block text-rottas-500 font-bold cursor-pointer hover:underline',
-        }, `Ver todas as ${stale.length} →`));
+        }, `Ver a lista (${todas.length} imobiliária${todas.length === 1 ? '' : 's'}) →`));
       } else {
         summary.appendChild(el('span', { class: 'text-rottas-500 font-bold cursor-pointer hover:underline' },
           '▴ Recolher'));
         summary.appendChild(el('div', { class: 'mt-1' },
-          `${nuncaQtd} nunca visitada${nuncaQtd === 1 ? '' : 's'} · ${stale.length - nuncaQtd} visitada${stale.length - nuncaQtd === 1 ? '' : 's'} há 7+ dias`));
+          `${recentesQtd} visitada${recentesQtd === 1 ? '' : 's'} nos últimos 7 dias · ${stale.length - nuncaQtd} há 7+ dias · ${nuncaQtd} nunca visitada${nuncaQtd === 1 ? '' : 's'}`));
         // Botões de ordenação — clicar neles NÃO recolhe a lista
         fullList.appendChild(el('div', {
           class: 'flex flex-wrap gap-1.5 mb-1',
@@ -233,15 +239,17 @@ export async function homeGerenteView(_params, app) {
         }, o.label))));
         ordenada().forEach(im => {
           const last = lastByImob[im.nome];
-          const dayLabel = last
-            ? `${Math.floor((Date.now() - last.getTime()) / 86400000)} dias atrás`
-            : 'nunca visitou';
+          const dias = last ? diasDesde(last) : null;
+          const emDia = dias !== null && dias < 7;
+          const dayLabel = dias === null ? 'nunca visitou'
+            : dias === 0 ? '✓ visitada hoje' : dias === 1 ? (emDia ? '✓ ' : '') + 'ontem'
+            : (emDia ? '✓ ' : '') + `${dias} dias atrás`;
           fullList.appendChild(el('div', {
             class: 'flex justify-between items-center px-3 py-2 rounded-lg',
-            style: { background: 'rgba(245,158,11,0.08)' },
+            style: { background: emDia ? 'rgba(16,185,129,0.10)' : 'rgba(245,158,11,0.08)' },
           },
             el('span', { class: 'font-medium text-sm' }, im.nome),
-            el('span', { class: 'text-xs text-warning font-semibold' }, dayLabel),
+            el('span', { class: 'text-xs font-semibold ' + (emDia ? 'text-success' : 'text-warning') }, dayLabel),
           ));
         });
       }
@@ -256,7 +264,7 @@ export async function homeGerenteView(_params, app) {
         el('span', { class: 'text-2xl flex-shrink-0' }, '⚠️'),
         el('div', { class: 'flex-1 min-w-0' },
           el('div', { class: 'font-bold text-warning text-sm' },
-            `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais`),
+            stale.length ? `${stale.length} imobiliária${stale.length>1?'s':''} sem visita há 1 semana ou mais` : `✓ Todas as ${todas.length} imobiliárias visitadas na última semana`),
           summary,
         ),
       ),

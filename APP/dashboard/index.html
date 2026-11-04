@@ -229,6 +229,10 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>
         Curvas & Funil
       </a>
+      <a class="sb-link" data-section="imobiliarias">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+        Imobiliárias
+      </a>
       <a class="sb-link" data-section="rankings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/></svg>
         Rankings
@@ -441,6 +445,22 @@
         </div>
       </section>
 
+      <!-- ═══ IMOBILIÁRIAS ════════════════════════════════════════════ -->
+      <section id="sec-imobiliarias" class="fade-in" style="display:none;">
+        <h2 class="sec-title">🏢 Imobiliárias</h2>
+        <p class="sec-subtitle">Assiduidade da carteira: as mais visitadas no período, as que estão há mais tempo sem visita e as que nunca receberam visita (check-in ou atendimento). Respeita os filtros do topo.</p>
+        <div id="imob-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px;"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;">
+          <div id="imob-abas" style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="tab sub-tab" data-aba="mais" data-rotulo="Mais visitadas no período">Mais visitadas no período</button>
+            <button class="tab sub-tab" data-aba="paradas" data-rotulo="Sem visita há mais tempo">Sem visita há mais tempo</button>
+            <button class="tab sub-tab" data-aba="nunca" data-rotulo="Nunca visitadas">Nunca visitadas</button>
+          </div>
+          <input id="imob-busca" class="input" placeholder="Buscar imobiliária ou cidade..." style="flex:1;min-width:200px;max-width:320px;">
+        </div>
+        <div id="imob-corpo"></div>
+      </section>
+
       <!-- ═══ CHARTS (full) ═══════════════════════════════════════════ -->
       <section id="sec-charts" class="fade-in" style="display:none;">
         <h2 class="sec-title">📈 Curvas & Funil de Conversão</h2>
@@ -595,6 +615,6 @@
   }
 </style>
 
-<script type="module" src="/dashboard/app.js?v=108"></script>
+<script type="module" src="/dashboard/app.js?v=109"></script>
 </body>
 </html>
