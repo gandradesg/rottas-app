@@ -5,6 +5,7 @@ import { state, supabase, q, getScopedImobiliarias, avisarConexaoLenta, avisarCo
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
+import { sincronizarOutlook } from '../calendar-sync.js';
 import { logRegistro, cronometro, novoRegistroId, vincularAlvo } from '../diag.js';
 
 // Apenas tipos que fazem sentido planejar com antecedência
@@ -483,6 +484,7 @@ export async function agendaFormView(params, app) {
             p_delta_seg: deltaSeg, p_campos: campos, p_duracao_seg: duracaoMs ? Math.round(duracaoMs / 1000) : null,
           }), { ms: 8000, label: 'editar sequência', tentativas: 3 });
           if (error) throw error;
+          sincronizarOutlook([id]);
           toast(`✓ ${n || 0} agendamento${n === 1 ? '' : 's'} da sequência atualizado${n === 1 ? '' : 's'}`, 'success', 5000);
           navigate('/', true);
           return;
@@ -498,6 +500,7 @@ export async function agendaFormView(params, app) {
           throw error;
         }
         if (!data || !data.length) throw new Error('Sem permissão (RLS rejeitou)');
+        sincronizarOutlook([id]);
         toast('✓ Atualizado', 'success');
         navigate('/', true);
         return;
@@ -601,6 +604,7 @@ export async function agendaFormView(params, app) {
         bFila.addEventListener('click', () => { mm.close(); guardarNaFila(); });
         return;
       }
+      sincronizarOutlook(rows.map(r => r.id));
       toast(
         freq ? `✓ ${datas.length} agendamentos criados (${recorrenciaSel.options[recorrenciaSel.selectedIndex].text.toLowerCase()})!`
              : (ehGrupo ? `✓ Agendado para ${presentes.length} gerentes!` : '✓ Agendado!'),

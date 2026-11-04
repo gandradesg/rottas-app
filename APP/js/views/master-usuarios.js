@@ -105,7 +105,46 @@ async function reload() {
     gestor_regional: 3, gerente: 4, supervisor: 5, gerente_produto: 6
   };
   profiles.sort((a, b) => (order[a.role] ?? 9) - (order[b.role] ?? 9) || a.nome.localeCompare(b.nome));
-  profiles.forEach(p => listEl.appendChild(userRow(p)));
+  // Seções por cargo, que abrem/fecham (a lista inteira ficava longa demais).
+  // O que estava aberto fica lembrado neste aparelho.
+  const grupos = [];
+  profiles.forEach(p => {
+    const g = grupos[grupos.length - 1];
+    if (g && g.role === p.role) g.itens.push(p); else grupos.push({ role: p.role, itens: [p] });
+  });
+  let abertas = {};
+  try { abertas = JSON.parse(localStorage.getItem('rottas-usuarios-secoes') || '{}'); } catch (e) {}
+  grupos.forEach(g => {
+    const meta = ROLES[g.role] || { label: g.role || 'Sem cargo', icon: '·' };
+    const plural = { 'Gerente de Plataforma': 'Gerentes de Plataforma', 'Supervisor de Plataforma': 'Supervisores de Plataforma',
+      'Gerente de Produto': 'Gerentes de Produto', 'Gestor Regional': 'Gestores Regionais', 'Recepção Rottas': 'Recepção Rottas' }[meta.label]
+      || (meta.label.endsWith('r') ? meta.label + 'es' : meta.label + 's');
+    const corpo = el('div', { class: 'flex flex-col gap-2 mt-2' }, ...g.itens.map(p => userRow(p)));
+    const seta = icon('chevronDown', 18, 'text-fg-subtle flex-shrink-0');
+    seta.style.transition = 'transform .15s';
+    const pendentes = g.itens.filter(p => p.primeiro_acesso).length;
+    const inativos = g.itens.filter(p => p.ativo === false).length;
+    const cab = el('button', { type: 'button', class: 'w-full card p-3 flex items-center gap-2 text-left hover:border-fg-subtle transition' },
+      el('span', { class: 'text-lg' }, meta.icon),
+      el('span', { class: 'font-bold flex-1' }, plural),
+      inativos ? el('span', { class: 'chip chip-red text-[10px]' }, `${inativos} inativo${inativos > 1 ? 's' : ''}`) : null,
+      pendentes ? el('span', { class: 'chip chip-yellow text-[10px]' }, `${pendentes} pendente${pendentes > 1 ? 's' : ''}`) : null,
+      el('span', { class: 'text-xs font-bold px-2 py-0.5 rounded-full bg-bg-elev text-fg-muted' }, String(g.itens.length)),
+      seta,
+    );
+    const setAberta = (v) => {
+      corpo.classList.toggle('hidden', !v);
+      seta.style.transform = v ? 'rotate(180deg)' : 'rotate(0deg)';
+    };
+    let aberta = grupos.length === 1 ? true : !!abertas[g.role];
+    setAberta(aberta);
+    cab.addEventListener('click', () => {
+      aberta = !aberta; setAberta(aberta);
+      abertas[g.role] = aberta;
+      try { localStorage.setItem('rottas-usuarios-secoes', JSON.stringify(abertas)); } catch (e) {}
+    });
+    listEl.appendChild(el('section', {}, cab, corpo));
+  });
 }
 
 // ENVIO MANUAL DO LEMBRETE (só master): manda AGORA, por e-mail, o lembrete da

@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.75';
+export const APP_VERSION = '1.9.76';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,16 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.76',
+    date: '04/11/2026',
+    changes: [
+      'AGENDA NO OUTLOOK AUTOMÁTICA: no Perfil, ligue "Sincronizar minha agenda com o Outlook". Cada agendamento novo vai sozinho para a agenda do Outlook (computador e celular), e remarcar ou cancelar no app atualiza/remove o mesmo evento lá — sem clicar em nada',
+      'Agenda REPETIDA vai para o Outlook como uma SEQUÊNCIA de verdade (antes ia só a primeira data); datas remarcadas ou canceladas só nelas também são refletidas',
+      'Botão "Calendário": avisa se a sincronização automática está ligada; para agenda repetida, a opção do Outlook 365 agora adiciona a sequência completa; o horário de término vai junto',
+      'USUÁRIOS: lista organizada em seções por cargo (Masters, Superintendentes, Gerentes…) que abrem e fecham, com a quantidade e os pendentes/inativos de cada uma',
+    ],
+  },
   {
     version: '1.9.75',
     date: '03/11/2026',

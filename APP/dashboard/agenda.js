@@ -335,6 +335,11 @@ function abrirDetalhe(ag) {
 }
 
 // ─── Ações ────────────────────────────────────────────────────────────────
+// Avisa o servidor para atualizar o Outlook de quem ligou a sincronização.
+function sincronizarOutlook(ids) {
+  const lista = [...new Set((ids || []).filter(Boolean))];
+  if (lista.length) D.sb.functions.invoke('agenda-outlook', { body: { ids: lista } }).catch(() => {});
+}
 // Realizar e Agendar abrem o formulário do app numa ABA NOVA (com fotos,
 // localização etc.); o dashboard continua aberto e se atualiza ao voltar.
 function abrirNoApp(rota) { window.open('/#' + rota, '_blank'); }
@@ -385,6 +390,7 @@ async function cancelar(ag) {
     : await doCompromisso(sb.from('agendamentos').update({ status: 'cancelado', motivo_cancelamento: motivo.txt || null }), ag).select('id');
   if (r.error) { toast('Não foi possível cancelar: ' + r.error.message, 'error'); return; }
   if (alcance === 'esta' && (!r.data || !r.data.length)) { toast('Sem permissão para cancelar este agendamento.', 'error'); return; }
+  sincronizarOutlook(alcance === 'seguintes' ? [ag.id] : (r.data || []).map((x) => x.id));
   toast(alcance === 'seguintes' ? `Cancelados: ${r.data || 0} da sequência` : 'Agendamento cancelado', 'success');
   recarregarAgenda();
 }
@@ -425,6 +431,7 @@ async function remarcar(ag) {
   }
   if (r.error) { toast('Não foi possível remarcar: ' + r.error.message, 'error'); return; }
   if (alcance === 'esta' && (!r.data || !r.data.length)) { toast('Sem permissão para remarcar este agendamento.', 'error'); return; }
+  sincronizarOutlook(alcance === 'seguintes' ? [ag.id] : (r.data || []).map((x) => x.id));
   toast(alcance === 'seguintes' ? `Remarcados: ${r.data || 0} da sequência` : 'Agendamento remarcado', 'success');
   recarregarAgenda();
 }

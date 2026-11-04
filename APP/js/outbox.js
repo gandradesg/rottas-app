@@ -134,6 +134,7 @@ export async function sincronizar() {
         }
         await remover(item.id);
         enviados++;
+        if (item.tabela === 'agendamentos') import('./calendar-sync.js').then(m => m.sincronizarOutlook([row.id])).catch(() => {});
         { const rid = novoRegistroId(); vincularAlvo(rid, item.tabela, row.id);
           logRegistro({ tipo: item.tipo, registroId: rid, etapa: 'sucesso', ok: true, erro: 'enviado pela fila offline' }); }
       } catch (e) {

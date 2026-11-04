@@ -5,7 +5,7 @@ import { state, supabase, q as runQuery } from '../supabase.js';
 import { activeViewRole, isAdmin } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
-import { calendarButton } from '../calendar-sync.js';
+import { calendarButton, sincronizarOutlook } from '../calendar-sync.js';
 
 // Agenda COMPARTILHADA: cada pessoa presente tem a sua linha (mesmo grupo_id).
 // Quem enxerga a agenda de mais de uma dessas pessoas (ex.: gerente + seu
@@ -662,6 +662,7 @@ async function agendaGerenteView(app) {
             .update({ status: 'cancelado', motivo_cancelamento: motivo }).eq('id', item.id),
             { ms: 6000, label: 'cancelar agendamento', tentativas: 3 });
       if (error) { toast(error.message, 'error', 5000); okBtn.disabled = false; return; }
+      sincronizarOutlook([item.id]);
       m.close();
       toast(alcance === 'seguintes' ? `Cancelados: ${n || 0} agendamento(s) da sequência` : 'Cancelado', 'info');
       location.reload();
@@ -729,7 +730,7 @@ async function agendaGerenteView(app) {
         onclick: () => navigate(`/agenda/${item.id}/realizar`)
       }, icon('mapPin', 14), 'Realizar agora'));
       // Botão sync de calendário (Google/Outlook/.ics)
-      actions.appendChild(calendarButton(item, { el, icon, toast }));
+      actions.appendChild(calendarButton(item, { el, icon, toast, state }));
       // Editar + Cancelar agrupados: ficam SEMPRE juntos na mesma linha
       actions.appendChild(el('div', { class: 'flex gap-1.5 flex-shrink-0' },
         el('button', {
@@ -766,6 +767,7 @@ async function agendaGerenteView(app) {
           const { error } = await runQuery(() => supabase.from('agendamentos').update({ status: 'pendente' }).eq('id', item.id),
             { ms: 6000, label: 'reagendar', tentativas: 3 });
           if (error) { toast('Não foi possível reagendar: ' + (error.message || 'conexão'), 'error', 6000); bt.disabled = false; bt.textContent = '↻ Reagendar'; return; }
+          sincronizarOutlook([item.id]);
           toast('Reagendado', 'success');
           location.reload();
         }

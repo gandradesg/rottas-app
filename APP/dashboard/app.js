@@ -6,7 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { renderLineChart, renderFunnel } from './charts.js?v=104';
 import { initAiChat, updateAiContext } from './ai-chat.js?v=104';
-import { initAgenda, recarregarAgenda } from './agenda.js?v=106';
+import { initAgenda, recarregarAgenda } from './agenda.js?v=107';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';

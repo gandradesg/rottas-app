@@ -11,6 +11,63 @@ import { FIELD_LABELS } from '../activity-actions.js';
 import { lerLogsLocais, enviarPendentes, contarPendentes } from '../diag.js';
 import { cartaoNotificacoes } from '../notificacoes.js';
 
+// ─── AGENDA NO OUTLOOK ──────────────────────────────────────────────────────
+// Liga a sincronização automática: o servidor manda um convite de calendário
+// para o e-mail da pessoa a cada agendamento novo/remarcado/cancelado, e o
+// Outlook põe (e mantém atualizado) na agenda. Agenda repetida vai como série.
+function cartaoOutlook() {
+  const p = state.profile || {};
+  const cb = el('input', { type: 'checkbox', checked: !!p.agenda_outlook });
+  const status = el('p', { class: 'text-xs text-fg-muted' });
+  const btnTeste = el('button', { class: 'btn btn-secondary btn-sm' }, 'Enviar um teste');
+  const pintar = () => {
+    status.textContent = cb.checked
+      ? `Ligado. Os convites chegam em ${p.email || 'seu e-mail'} e entram na sua agenda do Outlook.`
+      : 'Desligado. Use o botão "Calendário" de cada agendamento para adicionar manualmente.';
+  };
+  pintar();
+  cb.addEventListener('change', async () => {
+    cb.disabled = true;
+    const ligar = cb.checked;
+    const { error } = await runQuery(() => supabase.from('profiles').update({ agenda_outlook: ligar }).eq('id', p.id).select('id'),
+      { ms: 6000, label: 'agenda no outlook', tentativas: 3 });
+    cb.disabled = false;
+    if (error) { cb.checked = !ligar; toast('Não foi possível salvar: ' + (error.message || 'conexão'), 'error'); return; }
+    p.agenda_outlook = ligar; pintar();
+    if (!ligar) { toast('Sincronização desligada. O que já está no Outlook continua lá.', 'info', 5000); return; }
+    // Ao ligar: manda de uma vez os compromissos que ainda vão acontecer.
+    const { data } = await runQuery(() => supabase.from('agendamentos').select('id')
+      .eq('gerente_id', p.id).eq('status', 'pendente').gte('data_prevista', new Date().toISOString()).limit(500),
+      { ms: 6000, label: 'agenda para o outlook' });
+    const ids = (data || []).map(x => x.id);
+    if (ids.length) {
+      const { sincronizarOutlook } = await import('../calendar-sync.js');
+      sincronizarOutlook(ids);
+    }
+    toast(ids.length
+      ? `✓ Ligado! Seus ${ids.length} próximos compromissos estão sendo enviados ao Outlook (repetidos vão como uma sequência só).`
+      : '✓ Ligado! Os próximos agendamentos vão sozinhos para o seu Outlook.', 'success', 7000);
+  });
+  btnTeste.addEventListener('click', async () => {
+    loadingBtn(btnTeste, true);
+    const { data, error } = await supabase.functions.invoke('agenda-outlook', { body: { teste: true } });
+    loadingBtn(btnTeste, false);
+    if (error || !data?.ok) { toast('Falha no teste: ' + ((data && data.error) || (error && error.message) || 'erro'), 'error', 6000); return; }
+    toast(`✓ Teste enviado para ${data.para}. Em instantes aparece "Teste de sincronização" na sua agenda do Outlook (daqui a 1h).`, 'success', 8000);
+  });
+  return el('div', { class: 'flex flex-col gap-3' },
+    el('label', { class: 'flex items-center gap-3 p-3 card cursor-pointer' },
+      cb,
+      el('div', {},
+        el('span', { class: 'font-semibold block text-sm' }, 'Sincronizar minha agenda com o Outlook'),
+        el('span', { class: 'text-xs text-fg-muted' }, 'Novos, remarcados e cancelados — automaticamente'),
+      ),
+    ),
+    status,
+    el('div', { class: 'flex gap-2' }, btnTeste),
+  );
+}
+
 export async function perfilView(_params, app) {
   const p = state.profile;
   if (!p) return;
@@ -672,6 +729,11 @@ export async function perfilView(_params, app) {
       titulo: '🔔 Notificações e lembretes',
       descricao: 'No celular: 8h (atividades do dia) e 15 min antes de cada uma. Por e-mail e celular: 18h (amanhã) e segunda 8h (semana).',
       conteudo: cartaoNotificacoes({ modo: 'perfil' }),
+    }),
+    state.profile?.role !== 'recepcao_rottas' && ('agenda_outlook' in (state.profile || {})) && secaoRecolhivel({
+      titulo: '📆 Agenda no Outlook',
+      descricao: 'Seus agendamentos vão sozinhos para a agenda do Outlook (computador e celular) e se atualizam quando você remarca ou cancela.',
+      conteudo: cartaoOutlook(),
     }),
     !isM && secaoRecolhivel({
       titulo: '🩺 Diagnóstico deste aparelho',
