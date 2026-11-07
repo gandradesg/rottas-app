@@ -1,7 +1,7 @@
 // Agenda - calendário dia/semana/mês com itens vinculados a atividades
 import { el, icon, fmt, toast, confirmModal, modal, dictationButton, escolherAlcanceSerie } from '../ui.js';
 import { shell, cartaoErroCarga } from './shell.js';
-import { state, supabase, q as runQuery } from '../supabase.js';
+import { state, supabase, q as runQuery, pessoasComAgenda } from '../supabase.js';
 import { activeViewRole, isAdmin } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -287,19 +287,9 @@ async function agendaGerenteView(app) {
     //  - gestor_regional: só gerentes das suas cidades
     //  - master: todos (ou, se tiver estados designados, só desses)
     //  - gestor: todos
-    const { data } = await raceTO(supabase
-      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome'));
-    let list = data || [];
-    const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
-    const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
-    if (role === 'superintendente') {
-      list = list.filter(g => es.includes(g.estado));
-    } else if (role === 'gestor_regional') {
-      list = list.filter(g => cs.includes(g.cidade));
-    } else if (role === 'master' && es.length) {
-      list = list.filter(g => es.includes(g.estado));
-    }
-    outrosGerentes = list;
+    // Gerentes, supervisores e Gerentes de Produto do escopo (mesma lista do resto do app)
+    const lista = await pessoasComAgenda();
+    outrosGerentes = (lista || []).map(g => ({ id: g.id, nome: g.rotulo }));
   } else if (role === 'gerente' || role === 'supervisor') {
     const { data: mesmos } = await raceTO(supabase.rpc('gerentes_mesma_praca'));
     outrosGerentes = mesmos || [];
@@ -840,12 +830,9 @@ async function agendaGestorView(app) {
   // Carrega gerentes para o filtro. COM tempo-limite: se travar, a agenda abre
   // mesmo assim (sem a lista de gerentes) e o reload() abaixo ainda roda — antes,
   // travando aqui, a tela inteira ficava muda pra sempre.
-  const { data: gerentes } = await runQuery(
-    () => supabase.from('profiles')
-      .select('id, nome').eq('role', 'gerente').eq('ativo', true).order('nome'),
-    { ms: 5000, label: 'gerentes' },
-  );
-  (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
+  // Todas as pessoas com agenda (gerentes, supervisores, Gerentes de Produto) do escopo
+  const gerentes = await pessoasComAgenda();
+  (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.rotulo)));
 
   async function reload() {
     cal.innerHTML = '<div class="skeleton h-32"></div>';

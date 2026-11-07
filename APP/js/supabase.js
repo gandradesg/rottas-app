@@ -641,6 +641,32 @@ export function getScopedEmpreendimentos() {
 // Gestor Regional: gerentes/supervisores nas cidades_acesso
 // Gerente: ele + supervisores subordinados (gerente_supervisor_id = self)
 // Supervisor: só ele
+// TODAS as pessoas que têm agenda/registros — gerentes, supervisores e
+// Gerentes de Produto — dentro do escopo de quem está vendo. Usada nos filtros
+// "Todos os gerentes" (antes só listava quem tinha o cargo "gerente", e
+// supervisores e GPs com agenda ficavam de fora).
+//   superintendente: estados dele · gestor regional: cidades dele (GP entra se a
+//   regional dele cruza) · master com estados marcados: esses estados.
+// Devolve [{ id, nome, role, rotulo }] — rotulo = nome + cargo quando não é gerente.
+export const PAPEIS_COM_AGENDA = ['gerente', 'supervisor', 'gerente_produto'];
+export async function pessoasComAgenda() {
+  const { data, error } = await q(() => supabase.from('profiles')
+    .select('id, nome, role, estado, cidade, cidades_acesso')
+    .in('role', PAPEIS_COM_AGENDA).eq('ativo', true).order('nome'),
+    { ms: 6000, label: 'pessoas com agenda' });
+  if (error) return null;
+  const p = state.profile || {};
+  const es = Array.isArray(p.estados_acesso) ? p.estados_acesso : [];
+  const cs = Array.isArray(p.cidades_acesso) ? p.cidades_acesso : [];
+  const cidadesDe = (x) => [x.cidade, ...(Array.isArray(x.cidades_acesso) ? x.cidades_acesso : [])].filter(Boolean);
+  let lista = data || [];
+  if (p.role === 'superintendente') lista = lista.filter(x => es.includes(x.estado));
+  else if (p.role === 'gestor_regional') lista = lista.filter(x => cidadesDe(x).some(c => cs.includes(c)));
+  else if (p.role === 'master' && es.length) lista = lista.filter(x => es.includes(x.estado));
+  const cargo = { supervisor: 'Supervisor', gerente_produto: 'Gerente de Produto' };
+  return lista.map(x => ({ ...x, rotulo: cargo[x.role] ? `${x.nome} (${cargo[x.role]})` : x.nome }));
+}
+
 export async function getScopedGerenteIds() {
   const p = state.profile;
   if (!p) return new Set();

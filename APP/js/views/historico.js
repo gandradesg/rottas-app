@@ -1,7 +1,7 @@
 // Histórico de atividades - para o Gerente vê suas próprias, Master vê todas
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase, q as runQuery } from '../supabase.js';
+import { state, supabase, q as runQuery, pessoasComAgenda } from '../supabase.js';
 import { isAdmin, activeViewRole } from '../auth.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE } from '../config.js';
@@ -138,12 +138,8 @@ export async function historicoView(_params, app) {
   // Carrega gerentes para o filtro (RLS escopa: superintendente vê os do seu
   // estado, gestor_regional os da sua cidade, gestor/master todos).
   if (isTeamView) {
-    const { data: gerentes } = await runQuery(
-      () => supabase.from('profiles').select('id, nome')
-        .in('role', ['gerente', 'supervisor']).eq('ativo', true).order('nome'),
-      { ms: 5000, label: 'gerentes' },
-    );
-    (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.nome)));
+    const gerentes = await pessoasComAgenda();
+    (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.rotulo)));
   }
 
   let allData = [];

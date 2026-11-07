@@ -1,7 +1,7 @@
 // Formulário de criar/editar agendamento - só Check-in, Atendimento e Outro
 import { el, icon, toast, loadingBtn, modal, painelSalvando, escolherAlcanceSerie } from '../ui.js';
 import { shell, telaErroCarga } from './shell.js';
-import { state, supabase, q, getScopedImobiliarias, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
+import { state, supabase, q, pessoasComAgenda, getScopedImobiliarias, avisarConexaoLenta, avisarConexaoTravada } from '../supabase.js';
 import { field, creatableSelect, addImobiliaria, addLocalVisita, addMotivoVisita, addOutroTipo } from '../components/form-fields.js';
 import { audioField } from '../components/audio-field.js';
 import { navigate } from '../router.js';
@@ -106,18 +106,9 @@ export async function agendaFormView(params, app) {
     // Eu sempre no topo
     responsaveis.sort((a, b) => (a.id === meuId ? -1 : b.id === meuId ? 1 : 0));
   } else if (['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole)) {
-    const { data: gers } = await q(() => supabase
-      .from('profiles').select('id, nome, estado, cidade').eq('role', 'gerente').eq('ativo', true).order('nome'),
-      { ms: 6000, label: 'gerentes da agenda', tentativas: 2 });
-    let list = gers || [];
-    if (myRole === 'superintendente') {
-      const es = Array.isArray(state.profile?.estados_acesso) ? state.profile.estados_acesso : [];
-      list = list.filter(g => es.includes(g.estado));
-    } else if (myRole === 'gestor_regional') {
-      const cs = Array.isArray(state.profile?.cidades_acesso) ? state.profile.cidades_acesso : [];
-      list = list.filter(g => cs.includes(g.cidade));
-    }
-    list.forEach(g => responsaveis.push({ id: g.id, nome: g.nome + ' (Gerente)' }));
+    // Gerentes, supervisores e Gerentes de Produto do escopo
+    const list = (await pessoasComAgenda()) || [];
+    list.forEach(g => responsaveis.push({ id: g.id, nome: g.role === 'gerente' ? g.nome + ' (Gerente)' : g.rotulo }));
   }
   // Default responsável: gerente → ele mesmo; admin → forçar escolha. Editando mantém o atual.
   let responsavelId = initial?.gerente_id || (['gerente','supervisor'].includes(myRole) ? meuId : '');

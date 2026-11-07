@@ -1,7 +1,7 @@
 // Painel do Gestor (Master) - visão consolidada de todos os gerentes
 import { el, icon, fmt, toast } from '../ui.js';
 import { shell } from './shell.js';
-import { state, supabase, getScopedImobiliarias, q as runQuery } from '../supabase.js';
+import { state, supabase, getScopedImobiliarias, q as runQuery, pessoasComAgenda } from '../supabase.js';
 import { addImobiliaria } from '../components/form-fields.js';
 import { navigate } from '../router.js';
 import { TIPO_ATIVIDADE, ESTADOS_BR } from '../config.js';
@@ -88,11 +88,9 @@ export async function painelGestorView(_params, app) {
   // Carrega gerentes (só quem registra atividades)
   // Com tempo-limite: se travar, o painel ainda abre (sem a lista de gerentes)
   // em vez de a tela inteira ficar em branco pra sempre.
-  const { data: gerentes } = await runQuery(
-    () => supabase.from('profiles').select('*').eq('role', 'gerente').eq('ativo', true).order('nome'),
-    { ms: 5000, label: 'gerentes' },
-  );
-  (gerentes || []).forEach(g => gerSel.appendChild(el('option', { value: g.id }, g.nome)));
+  // Gerentes, supervisores e Gerentes de Produto do escopo
+  const gerentes = await pessoasComAgenda();
+  (gerentes || []).forEach(g => gerSel.appendChild(el('option', { value: g.id }, g.rotulo)));
 
   let baseAtividades = [];
 
