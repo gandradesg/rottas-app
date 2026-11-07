@@ -12,6 +12,7 @@ export const CHANGELOG = [
     date: '07/11/2026',
     changes: [
       'FILTRO "Todos os gerentes" (Agenda da equipe, Ver agenda de, Histórico, Painel e o Responsável ao agendar) agora lista TODAS as pessoas com agenda: gerentes, supervisores e Gerentes de Produto — com o cargo ao lado do nome, sempre dentro do seu escopo (estado/cidades)',
+      'DASHBOARD → Imobiliárias: clique no título de qualquer coluna para ORDENAR (imobiliária, cidade, check-ins, atendimentos, visitas, propostas, vendas, última visita, dias sem visita…); clicar de novo inverte',
     ],
   },
   {

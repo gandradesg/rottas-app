@@ -12,7 +12,8 @@
 // ═════════════════════════════════════════════════════════════════════════
 
 let D = null;   // { sb, state }
-const I = { aba: sessionStorage.getItem('dash-imob-aba') || 'mais', busca: '', resumo: null, carregando: false };
+const I = { aba: sessionStorage.getItem('dash-imob-aba') || 'mais', busca: '', resumo: null, carregando: false,
+  ordem: (() => { try { return JSON.parse(sessionStorage.getItem('dash-imob-ordem') || '{}'); } catch (e) { return {}; } })() };
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -112,37 +113,70 @@ function pintar() {
 
   const busca = chave(I.busca);
   const filtra = (arr) => busca ? arr.filter((l) => chave(l.nome).includes(busca) || chave(l.cidade).includes(busca)) : arr;
-  let html = '';
-  if (I.aba === 'mais') {
-    const arr = filtra(linhas.filter((l) => l.visitas > 0 || l.proposta > 0))
-      .sort((a, b) => b.visitas - a.visitas || b.proposta - a.proposta || b.vgv - a.vgv || a.nome.localeCompare(b.nome));
-    html = tabela(['#', 'Imobiliária', 'Cidade', 'Check-ins', 'Atendimentos', 'Visitas', 'Propostas', 'Vendas', 'Última visita', 'Gerentes'],
-      arr.map((l, i) => `<tr><td class="num" style="color:var(--fg-muted);">${i + 1}</td><td style="font-weight:700;">${esc(l.nome)}</td><td>${esc(l.cidade || '—')}</td>
-        <td class="num">${num(l.checkin)}</td><td class="num">${num(l.atendimento)}</td><td class="num" style="font-weight:800;">${num(l.visitas)}</td>
-        <td class="num">${num(l.proposta)}</td><td class="num" style="color:var(--green);">${num(l.vendas)}</td>
-        <td>${dataCurta(l.ultima || l.ultimaGeral)}</td><td style="font-size:11.5px;color:var(--fg-muted);">${esc([...l.gerentes].join(', ') || '—')}</td></tr>`),
-      'Nenhuma imobiliária visitada no período com estes filtros.');
-  } else if (I.aba === 'paradas') {
-    const arr = filtra(linhas.filter((l) => l.ultimaGeral)).sort((a, b) => new Date(a.ultimaGeral) - new Date(b.ultimaGeral));
-    html = tabela(['Imobiliária', 'Cidade', 'Última visita', 'Sem visita há', 'Visitas (histórico)'],
-      arr.map((l) => { const d = diasDesde(l.ultimaGeral); const cor = d >= 30 ? 'var(--red)' : d >= 7 ? 'var(--yellow)' : 'var(--green)';
-        return `<tr><td style="font-weight:700;">${esc(l.nome)}</td><td>${esc(l.cidade || '—')}</td><td>${dataCurta(l.ultimaGeral)}</td>
-          <td style="font-weight:800;color:${cor};">${d === 0 ? 'hoje' : d === 1 ? '1 dia' : d + ' dias'}</td><td class="num">${num(l.totalGeral)}</td></tr>`; }),
-      'Nenhuma imobiliária com visita registrada.');
-  } else {
-    const arr = filtra(nunca).sort((a, b) => (a.cidade || '').localeCompare(b.cidade || '') || a.nome.localeCompare(b.nome));
-    html = tabela(['Imobiliária', 'Cidade', 'UF'],
-      arr.map((l) => `<tr><td style="font-weight:700;">${esc(l.nome)}</td><td>${esc(l.cidade || '—')}</td><td>${esc(l.estado || '—')}</td></tr>`),
-      'Todas as imobiliárias já receberam visita. 🎉');
+  // Colunas de cada aba: rótulo, valor para ORDENAR e célula. Clicar no título
+  // ordena; clicar de novo inverte. A escolha fica lembrada por aba.
+  const txt = (v) => String(v || '');
+  const tempo = (d) => d ? new Date(d).getTime() : null;
+  const COLS = {
+    mais: [
+      { k: 'nome', label: 'Imobiliária', v: (l) => txt(l.nome), td: (l) => `<td style="font-weight:700;">${esc(l.nome)}</td>` },
+      { k: 'cidade', label: 'Cidade', v: (l) => txt(l.cidade), td: (l) => `<td>${esc(l.cidade || '—')}</td>` },
+      { k: 'checkin', label: 'Check-ins', n: 1, v: (l) => l.checkin, td: (l) => `<td class="num">${num(l.checkin)}</td>` },
+      { k: 'atendimento', label: 'Atendimentos', n: 1, v: (l) => l.atendimento, td: (l) => `<td class="num">${num(l.atendimento)}</td>` },
+      { k: 'visitas', label: 'Visitas', n: 1, v: (l) => l.visitas, td: (l) => `<td class="num" style="font-weight:800;">${num(l.visitas)}</td>` },
+      { k: 'proposta', label: 'Propostas', n: 1, v: (l) => l.proposta, td: (l) => `<td class="num">${num(l.proposta)}</td>` },
+      { k: 'vendas', label: 'Vendas', n: 1, v: (l) => l.vendas, td: (l) => `<td class="num" style="color:var(--green);">${num(l.vendas)}</td>` },
+      { k: 'ultima', label: 'Última visita', v: (l) => tempo(l.ultima || l.ultimaGeral), td: (l) => `<td>${dataCurta(l.ultima || l.ultimaGeral)}</td>` },
+      { k: 'gerentes', label: 'Gerentes', v: (l) => [...l.gerentes].join(', '), td: (l) => `<td style="font-size:11.5px;color:var(--fg-muted);">${esc([...l.gerentes].join(', ') || '—')}</td>` },
+    ],
+    paradas: [
+      { k: 'nome', label: 'Imobiliária', v: (l) => txt(l.nome), td: (l) => `<td style="font-weight:700;">${esc(l.nome)}</td>` },
+      { k: 'cidade', label: 'Cidade', v: (l) => txt(l.cidade), td: (l) => `<td>${esc(l.cidade || '—')}</td>` },
+      { k: 'ultima', label: 'Última visita', v: (l) => tempo(l.ultimaGeral), td: (l) => `<td>${dataCurta(l.ultimaGeral)}</td>` },
+      { k: 'dias', label: 'Sem visita há', n: 1, v: (l) => diasDesde(l.ultimaGeral), td: (l) => { const d = diasDesde(l.ultimaGeral); const cor = d >= 30 ? 'var(--red)' : d >= 7 ? 'var(--yellow)' : 'var(--green)';
+        return `<td class="num" style="font-weight:800;color:${cor};">${d === 0 ? 'hoje' : d === 1 ? '1 dia' : d + ' dias'}</td>`; } },
+      { k: 'totalGeral', label: 'Visitas (histórico)', n: 1, v: (l) => l.totalGeral, td: (l) => `<td class="num">${num(l.totalGeral)}</td>` },
+    ],
+    nunca: [
+      { k: 'nome', label: 'Imobiliária', v: (l) => txt(l.nome), td: (l) => `<td style="font-weight:700;">${esc(l.nome)}</td>` },
+      { k: 'cidade', label: 'Cidade', v: (l) => txt(l.cidade), td: (l) => `<td>${esc(l.cidade || '—')}</td>` },
+      { k: 'estado', label: 'UF', v: (l) => txt(l.estado), td: (l) => `<td>${esc(l.estado || '—')}</td>` },
+    ],
+  };
+  const PADRAO = { mais: { k: 'visitas', dir: -1 }, paradas: { k: 'dias', dir: -1 }, nunca: { k: 'cidade', dir: 1 } };
+  const ord = I.ordem[I.aba] || PADRAO[I.aba];
+  const cols = COLS[I.aba];
+  const base = I.aba === 'mais' ? linhas.filter((l) => l.visitas > 0 || l.proposta > 0)
+    : I.aba === 'paradas' ? linhas.filter((l) => l.ultimaGeral) : nunca;
+  const col = cols.find((c) => c.k === ord.k) || cols[0];
+  const arr = filtra(base).sort((a, b) => {
+    const va = col.v(a), vb = col.v(b);
+    if (va === null || va === undefined) return 1;            // vazios sempre no fim
+    if (vb === null || vb === undefined) return -1;
+    const r = typeof va === 'string' ? va.localeCompare(vb, 'pt-BR') : va - vb;
+    return (r * ord.dir) || a.nome.localeCompare(b.nome, 'pt-BR');
+  });
+  const vazio = { mais: 'Nenhuma imobiliária visitada no período com estes filtros.', paradas: 'Nenhuma imobiliária com visita registrada.', nunca: 'Todas as imobiliárias já receberam visita. 🎉' }[I.aba];
+  let html;
+  if (!arr.length) html = `<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">${vazio}</p>`;
+  else {
+    const seta = (c) => c.k === ord.k ? (ord.dir > 0 ? ' ▲' : ' ▼') : '';
+    const cab = '<th class="num" style="width:36px;">#</th>' + cols.map((c) =>
+      `<th data-ord="${c.k}" class="${c.n ? 'num' : ''}" style="cursor:pointer;user-select:none;white-space:nowrap;${c.k === ord.k ? 'color:var(--accent);' : ''}" title="Ordenar por ${c.label}">${c.label}${seta(c)}</th>`).join('');
+    const corpo = arr.slice(0, 500).map((l, i) => `<tr><td class="num" style="color:var(--fg-muted);">${i + 1}</td>${cols.map((c) => c.td(l)).join('')}</tr>`).join('');
+    const mais = arr.length > 500 ? `<p style="font-size:11.5px;color:var(--fg-muted);padding:8px 0;">Mostrando 500 de ${num(arr.length)} — use a busca para encontrar uma específica.</p>` : '';
+    html = `<table><thead><tr>${cab}</tr></thead><tbody>${corpo}</tbody></table>${mais}`;
   }
-  $('imob-corpo').innerHTML = `<div class="card" style="padding:14px;"><div style="overflow:auto;max-height:620px;" class="scroll-thin">${html}</div></div>`;
-}
-
-function tabela(cab, linhas, vazio) {
-  if (!linhas.length) return `<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">${vazio}</p>`;
-  const mais = linhas.length > 500 ? `<p style="font-size:11.5px;color:var(--fg-muted);padding:8px 0;">Mostrando 500 de ${num(linhas.length)} — use a busca para encontrar uma específica.</p>` : '';
-  return `<table><thead><tr>${cab.map((c) => `<th${/Check|Atend|Visitas|Propostas|Vendas|#/.test(c) ? ' class="num"' : ''}>${c}</th>`).join('')}</tr></thead>
-    <tbody>${linhas.slice(0, 500).join('')}</tbody></table>${mais}`;
+  $('imob-corpo').innerHTML = `<div class="card" style="padding:14px;"><div style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;">Clique no título de uma coluna para ordenar.</div><div style="overflow:auto;max-height:620px;" class="scroll-thin">${html}</div></div>`;
+  $('imob-corpo').querySelectorAll('th[data-ord]').forEach((th) => th.addEventListener('click', () => {
+    const k = th.dataset.ord;
+    const c = cols.find((x) => x.k === k);
+    const atual = I.ordem[I.aba] || PADRAO[I.aba];
+    // Mesma coluna: inverte. Outra: números/datas começam do maior, textos de A–Z.
+    I.ordem[I.aba] = atual.k === k ? { k, dir: -atual.dir } : { k, dir: (c.n || k === 'ultima') ? -1 : 1 };
+    try { sessionStorage.setItem('dash-imob-ordem', JSON.stringify(I.ordem)); } catch (e) {}
+    pintar();
+  }));
 }
 
 // Chamado pelo app.js quando as atividades do período mudam (filtros/atualizar)
