@@ -134,8 +134,9 @@ function filtrados() {
     (A.tipo === 'todos' || (TIPOS[ag.tipo] ? ag.tipo : 'outro') === A.tipo));
 }
 
-function kpi(label, valor, sub, cor) {
-  return `<div class="kpi" style="${cor ? `border-left:3px solid ${cor};` : ''}">
+function kpi(label, valor, sub, cor, status) {
+  const clic = status ? ` clicavel${A.status === status ? ' ativo' : ''}" data-status-kpi="${status}" title="Mostrar só estes` : '';
+  return `<div class="kpi${clic}" style="${cor ? `border-left:3px solid ${cor};` : ''}">
     <div class="kpi-label">${label}</div>
     <div class="kpi-value" ${cor ? `style="color:${cor}"` : ''}>${valor}</div>
     <div class="kpi-sub">${sub}</div></div>`;
@@ -148,13 +149,17 @@ function pintarKpis() {
   const base = realizados + atrasados;
   const taxa = base ? Math.round((realizados / base) * 100) : null;
   $('agenda-kpis').innerHTML = [
-    kpi('Agendados', t.length, `${new Set(t.flatMap((a) => a._ids || [a.gerente_id])).size} gerente(s)`),
-    kpi('Realizados', realizados, 'já viraram registro', 'var(--green)'),
-    kpi('A fazer', pendentes, 'ainda vão acontecer', 'var(--yellow)'),
-    kpi('Atrasados', atrasados, 'passou do horário e não registrou', 'var(--red)'),
-    kpi('Cancelados', cancelados, 'no período', 'var(--fg-muted)'),
+    kpi('Agendados', t.length, `${new Set(t.flatMap((a) => a._ids || [a.gerente_id])).size} gerente(s)`, null, 'todos'),
+    kpi('Realizados', realizados, 'já viraram registro', 'var(--green)', 'realizado'),
+    kpi('A fazer', pendentes, 'ainda vão acontecer', 'var(--yellow)', 'pendente'),
+    kpi('Atrasados', atrasados, 'passou do horário e não registrou', 'var(--red)', 'atrasado'),
+    kpi('Cancelados', cancelados, 'no período', 'var(--fg-muted)', 'cancelado'),
     kpi('Taxa de realização', taxa === null ? 'N/D' : `${taxa}%`, 'realizados ÷ (realizados + atrasados)', taxa === null ? null : (taxa >= 80 ? 'var(--green)' : taxa >= 50 ? 'var(--yellow)' : 'var(--red)')),
   ].join('');
+  // Cartões = atalhos do filtro de status (mesmo efeito dos botões abaixo)
+  $('agenda-kpis').querySelectorAll('[data-status-kpi]').forEach((c) => c.addEventListener('click', () => {
+    A.status = c.dataset.statusKpi; pintar();
+  }));
 }
 
 function cartao(ag, compacto) {
@@ -243,7 +248,7 @@ function tabelaGerentes() {
   const mapa = new Map();
   for (const a of A.itens) {
     const k = a.gerente_id;
-    if (!mapa.has(k)) mapa.set(k, { nome: a.profiles?.nome || '—', total: 0, realizado: 0, pendente: 0, atrasado: 0, cancelado: 0 });
+    if (!mapa.has(k)) mapa.set(k, { id: k, nome: a.profiles?.nome || '—', total: 0, realizado: 0, pendente: 0, atrasado: 0, cancelado: 0 });
     const g = mapa.get(k); g.total++; g[statusDe(a)]++;
   }
   const linhas = [...mapa.values()].sort((a, b) => b.total - a.total);
@@ -256,7 +261,7 @@ function tabelaGerentes() {
         const base = g.realizado + g.atrasado;
         const tx = base ? Math.round((g.realizado / base) * 100) : null;
         const cor = tx === null ? 'var(--fg-muted)' : tx >= 80 ? 'var(--green)' : tx >= 50 ? 'var(--yellow)' : 'var(--red)';
-        return `<tr><td style="font-weight:600;">${esc(g.nome)}</td><td class="num">${g.total}</td><td class="num" style="color:var(--green);">${g.realizado}</td>
+        return `<tr class="linha-clicavel" data-ger="${esc(g.id)}" title="Filtrar por ${esc(g.nome)}"><td style="font-weight:600;">${esc(g.nome)}</td><td class="num">${g.total}</td><td class="num" style="color:var(--green);">${g.realizado}</td>
           <td class="num">${g.pendente}</td><td class="num" style="color:${g.atrasado ? 'var(--red)' : 'inherit'};">${g.atrasado}</td><td class="num">${g.cancelado}</td>
           <td class="num" style="font-weight:800;color:${cor};">${tx === null ? 'N/D' : tx + '%'}</td></tr>`;
       }).join('')}</tbody></table></div></div>`;
@@ -275,6 +280,10 @@ function pintar() {
   corpo.querySelectorAll('.ag-card').forEach((c) => c.addEventListener('click', (ev) => {
     ev.stopPropagation();
     const ag = A.itens.find((x) => x.id === c.dataset.id); if (ag) abrirDetalhe(ag);
+  }));
+  corpo.querySelectorAll('tr[data-ger]').forEach((tr) => tr.addEventListener('click', () => {
+    const sel = document.getElementById('f-gerente');
+    if (sel && [...sel.options].some((o) => o.value === tr.dataset.ger)) { sel.value = tr.dataset.ger; sel.dispatchEvent(new Event('change')); }
   }));
   corpo.querySelectorAll('.ag-novo').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation(); novaAtividade(new Date(b.dataset.dia));

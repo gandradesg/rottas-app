@@ -53,6 +53,12 @@
     /* KPI Cards */
     .kpi { padding: 16px 18px; border-radius: 14px; background: var(--bg-card); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden; transition: transform .15s; }
     .kpi:hover { transform: translateY(-2px); border-color: rgba(242,107,34,0.3); }
+    .kpi.clicavel { cursor: pointer; }
+    .kpi.clicavel::after { content: '›'; position: absolute; right: 12px; top: 10px; font-size: 16px; color: var(--fg-muted); opacity: .5; }
+    .kpi.clicavel:hover::after { opacity: 1; color: var(--accent); }
+    .kpi.ativo { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+    tr.linha-clicavel { cursor: pointer; }
+    tr.linha-clicavel:hover td { background: rgba(242,107,34,0.06); }
     .kpi-label { font-size: 11px; color: var(--fg-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
     .kpi-value { font-size: 24px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
     .kpi-sub { font-size: 11.5px; color: var(--fg-muted); }
@@ -452,7 +458,9 @@
         <div id="imob-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:12px;"></div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px;">
           <div id="imob-abas" style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="tab sub-tab" data-aba="todas" data-rotulo="Todas">Todas</button>
             <button class="tab sub-tab" data-aba="mais" data-rotulo="Mais visitadas no período">Mais visitadas no período</button>
+            <button class="tab sub-tab" data-aba="p30" data-rotulo="Sem visita há 30+ dias">Sem visita há 30+ dias</button>
             <button class="tab sub-tab" data-aba="paradas" data-rotulo="Sem visita há mais tempo">Sem visita há mais tempo</button>
             <button class="tab sub-tab" data-aba="nunca" data-rotulo="Nunca visitadas">Nunca visitadas</button>
           </div>
@@ -615,6 +623,6 @@
   }
 </style>
 
-<script type="module" src="/dashboard/app.js?v=110"></script>
+<script type="module" src="/dashboard/app.js?v=111"></script>
 </body>
 </html>

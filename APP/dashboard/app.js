@@ -6,8 +6,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { renderLineChart, renderFunnel } from './charts.js?v=104';
 import { initAiChat, updateAiContext } from './ai-chat.js?v=104';
-import { initAgenda, recarregarAgenda } from './agenda.js?v=107';
-import { initImobs, recarregarImobs, atualizarImobsSeAberta } from './imobiliarias.js?v=2';
+import { initAgenda, recarregarAgenda } from './agenda.js?v=108';
+import { initImobs, recarregarImobs, atualizarImobsSeAberta } from './imobiliarias.js?v=3';
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────
 const SUPABASE_URL  = 'https://lmzjlirzexyopnjxohez.supabase.co';
@@ -626,17 +626,18 @@ function paceColor(p) {
 function renderKPIs(k) {
   const paceV = paceColor(k.paceVisitas); const paceP = paceColor(k.pacePropostas);
   const cards = [
-    { label:'💰 VGV Vendas',       value: fmt.vgv(k.vgvVendas),    sub:`${k.vendas} venda${k.vendas!==1?'s':''}`, cls:'kpi-accent', valueCls:'text-rottas-500' },
-    { label:'📄 VGV Propostas',    value: fmt.vgv(k.vgvPropostas), sub:`${fmt.num(k.propostas)} proposta${k.propostas!==1?'s':''}`, cls:'', valueCls:'' },
-    { label:'🔄 Atend→Prop',       value: fmt.pct(k.convAtendProp), sub:`${fmt.num(k.propostas)} / ${fmt.num(k.atendimentos)}`, cls:'', valueCls:'' },
-    { label:'🏆 Prop→Venda',       value: fmt.pct(k.convPropVenda), sub:`${fmt.num(k.vendas)} / ${fmt.num(k.propostas)}`, cls:'', valueCls:'' },
-    { label:'📍 Pace Visitas',     value: k.paceVisitas !== null ? `${k.paceVisitas.toFixed(0)}% ${paceV.icon}` : 'N/D', sub:`${fmt.num(k.visitas)} vs ${fmt.num(k.prevVisitas)}`, cls:paceV.cls, valueCls:paceV.text },
-    { label:'📊 Pace Propostas',   value: k.pacePropostas !== null ? `${k.pacePropostas.toFixed(0)}% ${paceP.icon}` : 'N/D', sub:`${fmt.num(k.propostas)} vs ${fmt.num(k.prevPropostas)}`, cls:paceP.cls, valueCls:paceP.text },
+    { label:'💰 VGV Vendas',       value: fmt.vgv(k.vgvVendas),    sub:`${k.vendas} venda${k.vendas!==1?'s':''}`, cls:'kpi-accent', valueCls:'text-rottas-500', ir: ['propostas', 'vendas'] },
+    { label:'📄 VGV Propostas',    value: fmt.vgv(k.vgvPropostas), sub:`${fmt.num(k.propostas)} proposta${k.propostas!==1?'s':''}`, cls:'', valueCls:'', ir: ['propostas', 'todas'] },
+    { label:'🔄 Atend→Prop',       value: fmt.pct(k.convAtendProp), sub:`${fmt.num(k.propostas)} / ${fmt.num(k.atendimentos)}`, cls:'', valueCls:'', ir: ['atendimentos'] },
+    { label:'🏆 Prop→Venda',       value: fmt.pct(k.convPropVenda), sub:`${fmt.num(k.vendas)} / ${fmt.num(k.propostas)}`, cls:'', valueCls:'', ir: ['propostas', 'vendas'] },
+    { label:'📍 Pace Visitas',     value: k.paceVisitas !== null ? `${k.paceVisitas.toFixed(0)}% ${paceV.icon}` : 'N/D', sub:`${fmt.num(k.visitas)} vs ${fmt.num(k.prevVisitas)}`, cls:paceV.cls, valueCls:paceV.text, ir: ['checkins'] },
+    { label:'📊 Pace Propostas',   value: k.pacePropostas !== null ? `${k.pacePropostas.toFixed(0)}% ${paceP.icon}` : 'N/D', sub:`${fmt.num(k.propostas)} vs ${fmt.num(k.prevPropostas)}`, cls:paceP.cls, valueCls:paceP.text, ir: ['propostas', 'todas'] },
   ];
   const grid = $('kpi-grid'); grid.innerHTML = '';
   cards.forEach(c => {
-    const el = document.createElement('div'); el.className = `kpi ${c.cls}`;
+    const el = document.createElement('div'); el.className = `kpi clicavel ${c.cls}`; el.title = 'Ver detalhes';
     el.innerHTML = `<div class="kpi-label">${c.label}</div><div class="kpi-value ${c.valueCls}">${c.value}</div><div class="kpi-sub">${c.sub}</div>`;
+    el.addEventListener('click', () => irPara(c.ir[0], c.ir[1]));
     grid.appendChild(el);
   });
 }
@@ -779,12 +780,19 @@ function renderCheckinsPage(curr) {
   const uniqueImobs = new Set(filtered.map(r => r.imobiliaria).filter(Boolean)).size;
   const treinamentos = filtered.filter(r => (r.motivo_visita || '').toLowerCase().includes('treinamento')).length;
   kpisWrap.innerHTML = `
-    <div class="kpi"><div class="kpi-label">Total Check-ins</div><div class="kpi-value">${fmt.num(filtered.length)}</div><div class="kpi-sub">${state.checkinsMotivo === 'todos' ? 'todos motivos' : escapeHtml(state.checkinsMotivo)}</div></div>
-    <div class="kpi"><div class="kpi-label">Gerentes ativos</div><div class="kpi-value">${fmt.num(uniqueGerentes)}</div><div class="kpi-sub">com registros</div></div>
-    <div class="kpi"><div class="kpi-label">Imobiliárias</div><div class="kpi-value">${fmt.num(uniqueImobs)}</div><div class="kpi-sub">visitadas</div></div>
-    <div class="kpi"><div class="kpi-label">Treinamentos</div><div class="kpi-value">${fmt.num(treinamentos)}</div><div class="kpi-sub">registrados</div></div>
+    <div class="kpi clicavel" data-ck="todos"><div class="kpi-label">Total Check-ins</div><div class="kpi-value">${fmt.num(filtered.length)}</div><div class="kpi-sub">${state.checkinsMotivo === 'todos' ? 'todos motivos' : escapeHtml(state.checkinsMotivo)}</div></div>
+    <div class="kpi clicavel" data-ck="gerentes"><div class="kpi-label">Gerentes ativos</div><div class="kpi-value">${fmt.num(uniqueGerentes)}</div><div class="kpi-sub">com registros</div></div>
+    <div class="kpi clicavel" data-ck="imobs"><div class="kpi-label">Imobiliárias</div><div class="kpi-value">${fmt.num(uniqueImobs)}</div><div class="kpi-sub">visitadas</div></div>
+    <div class="kpi clicavel" data-ck="treino"><div class="kpi-label">Treinamentos</div><div class="kpi-value">${fmt.num(treinamentos)}</div><div class="kpi-sub">registrados</div></div>
   `;
 
+  kpisWrap.querySelectorAll('[data-ck]').forEach(c => c.addEventListener('click', () => {
+    const v = c.dataset.ck;
+    if (v === 'todos') { state.checkinsMotivo = 'todos'; renderCheckinsPage(curr); }
+    else if (v === 'treino') { const m = motivosList.find(([n]) => n.toLowerCase().includes('treinamento')); if (m) { state.checkinsMotivo = m[0]; renderCheckinsPage(curr); } }
+    else if (v === 'imobs') switchSection('imobiliarias');
+    else if (v === 'gerentes') { switchSection('rankings'); document.querySelector('#rank-tabs .tab[data-rank=gerente]')?.click(); }
+  }));
   // Tabela
   const tw = $('checkins-table-wrap');
   if (!filtered.length) { tw.innerHTML = '<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">Sem registros.</p>'; return; }
@@ -838,6 +846,17 @@ function colunasData(r) {
       <td>${fmt.dateTime(d.fin)}</td>`;
 }
 const CAB_DATAS = '<th>Criação</th><th>Data da atividade</th><th>Finalização</th>';
+
+// Atalho dos cartões: abre a seção (e a aba, nas propostas)
+function irPara(secao, aba) {
+  if (secao === 'propostas' && aba) {
+    state.propostasTab = aba;
+    $('#propostas-tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.propTab === aba));
+    renderPropostasPage(state.data.atividades);
+  }
+  switchSection(secao);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 // ─── ATENDIMENTOS PAGE ───────────────────────────────────────────────────
 function renderAtendimentosPage(curr) {
@@ -1186,7 +1205,6 @@ function wireFilters() {
   });
   $('btn-reset').addEventListener('click', () => {
     state.filters = { periodo: '30d', estado: 'todos', cidade: 'todas', empreend: 'todos', imob: 'todas', gerente: 'todos' };
-    if (state.profile.role === 'supervisor') state.filters.gerente = state.profile.id;
     saveFilters(); populateFilterSelects(); reload();
   });
   $('btn-refresh').addEventListener('click', () => {

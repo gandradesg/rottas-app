@@ -85,8 +85,8 @@ function montar() {
   });
 }
 
-function kpi(label, valor, sub, cor) {
-  return `<div class="kpi" style="${cor ? `border-left:3px solid ${cor};` : ''}"><div class="kpi-label">${label}</div>
+function kpi(label, valor, sub, cor, aba) {
+  return `<div class="kpi clicavel${aba === I.aba ? ' ativo' : ''}" data-ir="${aba}" title="Ver na lista" style="${cor ? `border-left:3px solid ${cor};` : ''}"><div class="kpi-label">${label}</div>
     <div class="kpi-value" ${cor ? `style="color:${cor}"` : ''}>${valor}</div><div class="kpi-sub">${sub}</div></div>`;
 }
 
@@ -99,15 +99,24 @@ function pintar() {
   const visitasPeriodo = linhas.reduce((s, l) => s + l.visitas, 0);
   const cobertura = total ? Math.round(visitadasPeriodo / total * 100) : 0;
   $('imob-kpis').innerHTML = [
-    kpi('Imobiliárias', num(total), 'na carteira (escopo + filtros)'),
-    kpi('Visitadas no período', num(visitadasPeriodo), `${cobertura}% de cobertura`, cobertura >= 60 ? 'var(--green)' : cobertura >= 30 ? 'var(--yellow)' : 'var(--red)'),
-    kpi('Visitas no período', num(visitasPeriodo), 'check-ins + atendimentos'),
-    kpi('Sem visita há 30+ dias', num(sem30.length), 'já visitadas, mas paradas', 'var(--yellow)'),
-    kpi('Nunca visitadas', num(nunca.length), 'nenhuma visita no histórico', 'var(--red)'),
+    kpi('Imobiliárias', num(total), 'na carteira (escopo + filtros)', null, 'todas'),
+    kpi('Visitadas no período', num(visitadasPeriodo), `${cobertura}% de cobertura`, cobertura >= 60 ? 'var(--green)' : cobertura >= 30 ? 'var(--yellow)' : 'var(--red)', 'mais'),
+    kpi('Visitas no período', num(visitasPeriodo), 'check-ins + atendimentos', null, 'visitas'),
+    kpi('Sem visita há 30+ dias', num(sem30.length), 'já visitadas, mas paradas', 'var(--yellow)', 'p30'),
+    kpi('Nunca visitadas', num(nunca.length), 'nenhuma visita no histórico', 'var(--red)', 'nunca'),
   ].join('');
+  // Cartões são atalhos: abrem a lista já filtrada (e ordenada) no que mostram.
+  $('imob-kpis').querySelectorAll('[data-ir]').forEach((c) => c.addEventListener('click', () => {
+    const ir = c.dataset.ir;
+    if (ir === 'visitas') { I.aba = 'mais'; I.ordem.mais = { k: 'visitas', dir: -1 }; }
+    else I.aba = ir;
+    sessionStorage.setItem('dash-imob-aba', I.aba);
+    pintar();
+    $('imob-abas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
   document.querySelectorAll('#imob-abas .tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.aba === I.aba);
-    const n = { mais: visitadasPeriodo, paradas: linhas.filter((l) => l.ultimaGeral).length, nunca: nunca.length }[b.dataset.aba];
+    const n = { todas: total, mais: visitadasPeriodo, p30: sem30.length, paradas: linhas.filter((l) => l.ultimaGeral).length, nunca: nunca.length }[b.dataset.aba];
     b.textContent = `${b.dataset.rotulo} (${num(n)})`;
   });
 
@@ -133,8 +142,16 @@ function pintar() {
       { k: 'nome', label: 'Imobiliária', v: (l) => txt(l.nome), td: (l) => `<td style="font-weight:700;">${esc(l.nome)}</td>` },
       { k: 'cidade', label: 'Cidade', v: (l) => txt(l.cidade), td: (l) => `<td>${esc(l.cidade || '—')}</td>` },
       { k: 'ultima', label: 'Última visita', v: (l) => tempo(l.ultimaGeral), td: (l) => `<td>${dataCurta(l.ultimaGeral)}</td>` },
-      { k: 'dias', label: 'Sem visita há', n: 1, v: (l) => diasDesde(l.ultimaGeral), td: (l) => { const d = diasDesde(l.ultimaGeral); const cor = d >= 30 ? 'var(--red)' : d >= 7 ? 'var(--yellow)' : 'var(--green)';
-        return `<td class="num" style="font-weight:800;color:${cor};">${d === 0 ? 'hoje' : d === 1 ? '1 dia' : d + ' dias'}</td>`; } },
+      { k: 'dias', label: 'Sem visita há', n: 1, v: (l) => diasDesde(l.ultimaGeral), td: (l) => celulaDias(l) },
+      { k: 'totalGeral', label: 'Visitas (histórico)', n: 1, v: (l) => l.totalGeral, td: (l) => `<td class="num">${num(l.totalGeral)}</td>` },
+    ],
+    todas: [
+      { k: 'nome', label: 'Imobiliária', v: (l) => txt(l.nome), td: (l) => `<td style="font-weight:700;">${esc(l.nome)}</td>` },
+      { k: 'cidade', label: 'Cidade', v: (l) => txt(l.cidade), td: (l) => `<td>${esc(l.cidade || '—')}</td>` },
+      { k: 'visitas', label: 'Visitas no período', n: 1, v: (l) => l.visitas, td: (l) => `<td class="num" style="font-weight:800;">${num(l.visitas)}</td>` },
+      { k: 'proposta', label: 'Propostas', n: 1, v: (l) => l.proposta, td: (l) => `<td class="num">${num(l.proposta)}</td>` },
+      { k: 'ultima', label: 'Última visita', v: (l) => tempo(l.ultimaGeral), td: (l) => `<td>${l.ultimaGeral ? dataCurta(l.ultimaGeral) : '<span style="color:var(--red);font-weight:700;">nunca</span>'}</td>` },
+      { k: 'dias', label: 'Sem visita há', n: 1, v: (l) => l.ultimaGeral ? diasDesde(l.ultimaGeral) : null, td: (l) => celulaDias(l) },
       { k: 'totalGeral', label: 'Visitas (histórico)', n: 1, v: (l) => l.totalGeral, td: (l) => `<td class="num">${num(l.totalGeral)}</td>` },
     ],
     nunca: [
@@ -143,10 +160,13 @@ function pintar() {
       { k: 'estado', label: 'UF', v: (l) => txt(l.estado), td: (l) => `<td>${esc(l.estado || '—')}</td>` },
     ],
   };
-  const PADRAO = { mais: { k: 'visitas', dir: -1 }, paradas: { k: 'dias', dir: -1 }, nunca: { k: 'cidade', dir: 1 } };
+  COLS.p30 = COLS.paradas;
+  const PADRAO = { todas: { k: 'nome', dir: 1 }, mais: { k: 'visitas', dir: -1 }, p30: { k: 'dias', dir: -1 }, paradas: { k: 'dias', dir: -1 }, nunca: { k: 'cidade', dir: 1 } };
   const ord = I.ordem[I.aba] || PADRAO[I.aba];
   const cols = COLS[I.aba];
-  const base = I.aba === 'mais' ? linhas.filter((l) => l.visitas > 0 || l.proposta > 0)
+  const base = I.aba === 'todas' ? linhas
+    : I.aba === 'mais' ? linhas.filter((l) => l.visitas > 0 || l.proposta > 0)
+    : I.aba === 'p30' ? sem30
     : I.aba === 'paradas' ? linhas.filter((l) => l.ultimaGeral) : nunca;
   const col = cols.find((c) => c.k === ord.k) || cols[0];
   const arr = filtra(base).sort((a, b) => {
@@ -156,18 +176,21 @@ function pintar() {
     const r = typeof va === 'string' ? va.localeCompare(vb, 'pt-BR') : va - vb;
     return (r * ord.dir) || a.nome.localeCompare(b.nome, 'pt-BR');
   });
-  const vazio = { mais: 'Nenhuma imobiliária visitada no período com estes filtros.', paradas: 'Nenhuma imobiliária com visita registrada.', nunca: 'Todas as imobiliárias já receberam visita. 🎉' }[I.aba];
+  const vazio = { todas: 'Nenhuma imobiliária com estes filtros.', p30: 'Nenhuma imobiliária parada há 30+ dias. 🎉', mais: 'Nenhuma imobiliária visitada no período com estes filtros.', paradas: 'Nenhuma imobiliária com visita registrada.', nunca: 'Todas as imobiliárias já receberam visita. 🎉' }[I.aba];
   let html;
   if (!arr.length) html = `<p style="text-align:center;padding:30px;color:var(--fg-muted);font-size:12.5px;">${vazio}</p>`;
   else {
     const seta = (c) => c.k === ord.k ? (ord.dir > 0 ? ' ▲' : ' ▼') : '';
     const cab = '<th class="num" style="width:36px;">#</th>' + cols.map((c) =>
       `<th data-ord="${c.k}" class="${c.n ? 'num' : ''}" style="cursor:pointer;user-select:none;white-space:nowrap;${c.k === ord.k ? 'color:var(--accent);' : ''}" title="Ordenar por ${c.label}">${c.label}${seta(c)}</th>`).join('');
-    const corpo = arr.slice(0, 500).map((l, i) => `<tr><td class="num" style="color:var(--fg-muted);">${i + 1}</td>${cols.map((c) => c.td(l)).join('')}</tr>`).join('');
+    const corpo = arr.slice(0, 500).map((l, i) => `<tr class="linha-clicavel" data-imob="${esc(l.nome)}" title="Ver detalhes"><td class="num" style="color:var(--fg-muted);">${i + 1}</td>${cols.map((c) => c.td(l)).join('')}</tr>`).join('');
     const mais = arr.length > 500 ? `<p style="font-size:11.5px;color:var(--fg-muted);padding:8px 0;">Mostrando 500 de ${num(arr.length)} — use a busca para encontrar uma específica.</p>` : '';
     html = `<table><thead><tr>${cab}</tr></thead><tbody>${corpo}</tbody></table>${mais}`;
   }
   $('imob-corpo').innerHTML = `<div class="card" style="padding:14px;"><div style="font-size:11px;color:var(--fg-muted);margin-bottom:6px;">Clique no título de uma coluna para ordenar.</div><div style="overflow:auto;max-height:620px;" class="scroll-thin">${html}</div></div>`;
+  $('imob-corpo').querySelectorAll('tr[data-imob]').forEach((tr) => tr.addEventListener('click', () => {
+    const l = linhas.find((x) => x.nome === tr.dataset.imob); if (l) detalhe(l);
+  }));
   $('imob-corpo').querySelectorAll('th[data-ord]').forEach((th) => th.addEventListener('click', () => {
     const k = th.dataset.ord;
     const c = cols.find((x) => x.k === k);
@@ -177,6 +200,51 @@ function pintar() {
     try { sessionStorage.setItem('dash-imob-ordem', JSON.stringify(I.ordem)); } catch (e) {}
     pintar();
   }));
+}
+
+function celulaDias(l) {
+  if (!l.ultimaGeral) return '<td class="num" style="color:var(--fg-muted);">—</td>';
+  const d = diasDesde(l.ultimaGeral); const cor = d >= 30 ? 'var(--red)' : d >= 7 ? 'var(--yellow)' : 'var(--green)';
+  return `<td class="num" style="font-weight:800;color:${cor};">${d === 0 ? 'hoje' : d === 1 ? '1 dia' : d + ' dias'}</td>`;
+}
+
+// Detalhe de UMA imobiliária: números do período + cada registro (clicável) e
+// atalho para filtrar o dashboard inteiro por ela.
+const TIPO_ROT = { checkin: '📍 Check-in', atendimento: '👥 Atendimento', proposta: '📄 Proposta', orulo: '🌐 Órulo', outro: '📅 Outro' };
+function detalhe(l) {
+  const k = chave(l.nome);
+  const regs = (D.state.data.atividades || []).filter((a) => chave(a.imobiliaria) === k)
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px;';
+  const info = (r, v) => `<div class="kpi" style="padding:10px 12px;"><div class="kpi-label">${r}</div><div class="kpi-value" style="font-size:20px;">${v}</div></div>`;
+  ov.innerHTML = `<div class="card" style="width:100%;max-width:640px;max-height:86vh;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div style="flex:1;"><div style="font-weight:800;font-size:16px;">🏢 ${esc(l.nome)}</div>
+        <div style="font-size:12px;color:var(--fg-muted);">${esc([l.cidade, l.estado].filter(Boolean).join(' · ') || '—')} · última visita: ${l.ultimaGeral ? dataCurta(l.ultimaGeral) + ` (${diasDesde(l.ultimaGeral) === 0 ? "hoje" : diasDesde(l.ultimaGeral) === 1 ? "1 dia" : diasDesde(l.ultimaGeral) + " dias"})` : '<b style="color:var(--red);">nunca visitada</b>'}</div></div>
+      <button class="btn btn-secondary" data-x>Fechar</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;">
+      ${info('Check-ins', num(l.checkin))}${info('Atendimentos', num(l.atendimento))}${info('Propostas', num(l.proposta))}${info('Vendas', num(l.vendas))}${info('Visitas (histórico)', num(l.totalGeral))}
+    </div>
+    <div style="font-size:12px;font-weight:700;">Registros no período (${regs.length}) <span style="font-weight:400;color:var(--fg-muted);">— clique para abrir</span></div>
+    <div style="display:flex;flex-direction:column;gap:6px;">${regs.length ? regs.slice(0, 100).map((a) => `
+      <a href="/#/atividade/${a.id}" target="_blank" class="card" style="padding:8px 10px;display:flex;gap:10px;align-items:center;text-decoration:none;color:inherit;font-size:12.5px;">
+        <span style="min-width:110px;font-weight:700;">${TIPO_ROT[a.tipo] || a.tipo}</span>
+        <span style="flex:1;color:var(--fg-muted);">${esc(a.profiles?.nome || '—')}${a.cliente ? ' · ' + esc(a.cliente) : ''}${a.motivo_visita ? ' · ' + esc(a.motivo_visita) : ''}</span>
+        <span style="white-space:nowrap;">${new Date(a.created_at).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></a>`).join('')
+      : '<div style="font-size:12.5px;color:var(--fg-muted);padding:8px 0;">Nenhum registro no período selecionado.</div>'}</div>
+    <div style="display:flex;justify-content:flex-end;"><button class="btn btn-primary" data-filtrar>Filtrar o dashboard por esta imobiliária</button></div>
+  </div>`;
+  const fechar = () => ov.remove();
+  ov.addEventListener('click', (e) => { if (e.target === ov) fechar(); });
+  ov.querySelector('[data-x]').addEventListener('click', fechar);
+  ov.querySelector('[data-filtrar]').addEventListener('click', () => {
+    fechar();
+    const sel = document.getElementById('f-imob');
+    if (sel) { sel.value = l.nome; sel.dispatchEvent(new Event('change')); }
+  });
+  document.body.appendChild(ov);
 }
 
 // Chamado pelo app.js quando as atividades do período mudam (filtros/atualizar)

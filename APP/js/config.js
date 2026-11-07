@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.78';
+export const APP_VERSION = '1.9.79';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,15 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.79',
+    date: '07/11/2026',
+    changes: [
+      'DASHBOARD INTERATIVO — Imobiliárias: os cartões viraram atalhos (clicar em "Sem visita há 30+ dias" mostra só essas, "Nunca visitadas" só essas, "Imobiliárias" todas etc.), com novas abas "Todas" e "Sem visita há 30+ dias". Clicar numa imobiliária abre o detalhe (números, registros do período clicáveis e botão para filtrar o dashboard inteiro por ela)',
+      'Agenda do dashboard: os cartões (Realizados, A fazer, Atrasados, Cancelados) filtram a agenda; clicar num gerente na tabela "Cumprimento da agenda" filtra o dashboard por ele',
+      'Visão geral: cada cartão (VGV, conversões, pace) leva à seção correspondente; Check-ins: os cartões filtram treinamentos, abrem Imobiliárias ou o ranking de gerentes',
+    ],
+  },
   {
     version: '1.9.78',
     date: '07/11/2026',
