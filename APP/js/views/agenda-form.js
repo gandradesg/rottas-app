@@ -102,7 +102,7 @@ export async function agendaFormView(params, app) {
       // Liderança (superintendente / gestor regional da praça): convidada para
       // ESTA agenda — recebe o convite no e-mail e entra no Outlook dela.
       const lider = ['superintendente', 'gestor_regional'].includes(p.role);
-      responsaveis.push({ id: p.id, lider, nome: isSelf ? ((p.nome || 'Você') + ' (você)') : `${lider ? '⭐ ' : ''}${p.nome} (${rl})` });
+      responsaveis.push({ id: p.id, lider, nome: isSelf ? ((p.nome || 'Você') + ' (você)') : `${p.nome} (${rl})` });
     });
     if (!responsaveis.some(r => r.id === meuId)) {
       responsaveis.unshift({ id: meuId, nome: (state.profile?.nome || 'Você') + ' (você)' });
@@ -284,10 +284,7 @@ export async function agendaFormView(params, app) {
     });
     dd.append(display, popup);
     refreshLabel();
-    responsavelField = field(isAdminRole ? 'Gerentes presentes' : 'Quem estará presente', dd, {
-      required: true,
-      help: 'Selecione todos os presentes. Cria uma agenda para cada um; ao realizar, gera um único check-in que conta no contador de todos. ⭐ Liderança (superintendente / gestor regional): recebe o convite no e-mail e o compromisso entra na agenda do Outlook dela.',
-    });
+    responsavelField = field(isAdminRole ? 'Gerentes presentes' : 'Quem estará presente', dd, { required: true });
   } else if (isAdminRole && responsaveis.length === 0) {
     responsavelField = el('div', { class: 'card p-3 text-sm text-warning' },
       '⚠ Nenhum gerente no seu escopo para agendar. Verifique os cadastros.');

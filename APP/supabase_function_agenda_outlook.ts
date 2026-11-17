@@ -70,7 +70,14 @@ const RRULE: Record<string, string> = {
 
 // Monta o calendário (REQUEST = criar/atualizar; CANCEL = remover) de UMA unidade:
 // um agendamento avulso, ou a série inteira de uma pessoa.
-function montarIcs(unidade: { uid: string; linhas: any[]; serie: boolean }, para: { email: string; nome: string }, remetente: string) {
+// organizador: quem MARCOU a agenda (quando convida outra pessoa). As respostas
+// automáticas do calendário ("Aceito") vão para o organizador — antes iam para o
+// remetente do sistema (o e-mail do Master), que não tinha marcado nada.
+function montarIcs(unidade: { uid: string; linhas: any[]; serie: boolean }, para: { email: string; nome: string }, remetente: string,
+  organizador?: { email: string; nome: string } | null) {
+  const org = organizador && organizador.email && organizador.email.toLowerCase() !== para.email.toLowerCase()
+    ? `ORGANIZER;CN=${esc(organizador.nome)}:mailto:${organizador.email}`
+    : `ORGANIZER;CN=Imob Rottas:mailto:${remetente}`;
   const seq = Math.floor(Date.now() / 1000) - 1_790_000_000;   // sempre maior que o anterior
   const ativos = unidade.linhas.filter((l) => l.status !== 'cancelado');
   const metodo = ativos.length ? 'REQUEST' : 'CANCEL';
@@ -79,7 +86,7 @@ function montarIcs(unidade: { uid: string; linhas: any[]; serie: boolean }, para
     `UID:${unidade.uid}`,
     `SEQUENCE:${seq}`,
     `DTSTAMP:${icsData(new Date())}`,
-    `ORGANIZER;CN=Imob Rottas:mailto:${remetente}`,
+    org,
     `ATTENDEE;CN=${esc(para.nome)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${para.email}`,
     `SUMMARY:${esc(tituloDe(a))}`,
     localDe(a) ? `LOCATION:${esc(localDe(a))}` : '',
@@ -133,9 +140,10 @@ function transporte() {
   return _transp;
 }
 
-async function enviar(para: { email: string; nome: string }, unidade: { uid: string; linhas: any[]; serie: boolean }) {
+async function enviar(para: { email: string; nome: string }, unidade: { uid: string; linhas: any[]; serie: boolean },
+  organizador?: { email: string; nome: string } | null) {
   const remetente = Deno.env.get('SENDER_EMAIL')!;
-  const { metodo, ics } = montarIcs(unidade, para, remetente);
+  const { metodo, ics } = montarIcs(unidade, para, remetente, organizador);
   const a = unidade.linhas.find((l) => l.status !== 'cancelado') || unidade.linhas[0];
   const quando = new Date(a.data_prevista).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   const assunto = metodo === 'CANCEL'
@@ -216,11 +224,12 @@ Deno.serve(async (req) => {
         u.linhas = data || [];
       }
     }
+    const { data: quemMarcou } = await admin.from('profiles').select('nome, email').eq('id', user.id).maybeSingle();
     const resultado: unknown[] = [];
     for (const u of unidades.values()) {
       if (!u.linhas.length) continue;
       const p = recebe.get(u.pessoa)!;
-      try { resultado.push({ para: p.nome, acao: await enviar({ email: p.email, nome: p.nome }, u) }); }
+      try { resultado.push({ para: p.nome, acao: await enviar({ email: p.email, nome: p.nome }, u, quemMarcou) }); }
       catch (e) { resultado.push({ para: p.nome, erro: (e as Error).message }); }
     }
     return resp({ ok: true, enviados: resultado.length, resultado });
