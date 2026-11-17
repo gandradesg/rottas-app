@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.79';
+export const APP_VERSION = '1.9.80';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,13 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.80',
+    date: '17/11/2026',
+    changes: [
+      'AGENDA: dá para marcar a LIDERANÇA da praça numa agenda específica — o superintendente do seu estado e o gestor regional da sua cidade aparecem com ⭐ no fim da lista de presentes (ex.: o Saulo marca a Crislaine). Ela recebe o convite no e-mail e o compromisso entra direto na agenda do Outlook dela; remarcar ou cancelar atualiza lá também',
+    ],
+  },
   {
     version: '1.9.79',
     date: '07/11/2026',

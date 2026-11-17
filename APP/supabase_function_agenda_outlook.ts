@@ -10,7 +10,8 @@
 //   • data remarcada só nela → ocorrência alterada (RECURRENCE-ID);
 //   • data cancelada → excluída da série (EXDATE).
 //
-// Só envia para quem LIGOU a sincronização no Perfil (profiles.agenda_outlook).
+// Envia para quem LIGOU a sincronização no Perfil (profiles.agenda_outlook) e,
+// sempre, para a liderança (superintendente / gestor regional) convidada.
 //
 // POST { ids: uuid[] }            → sincroniza os agendamentos (e a série de cada um)
 // POST { teste: true }            → manda um evento de teste para quem chamou
@@ -186,8 +187,12 @@ Deno.serve(async (req) => {
 
     // Quem recebe: só quem ligou a sincronização com o Outlook.
     const pessoasIds = [...new Set(vistos.map((v) => v.gerente_id))];
-    const { data: pessoas } = await admin.from('profiles').select('id, nome, email, agenda_outlook, ativo').in('id', pessoasIds);
-    const recebe = new Map((pessoas || []).filter((p) => p.agenda_outlook && p.ativo !== false && p.email).map((p) => [p.id, p]));
+    const { data: pessoas } = await admin.from('profiles').select('id, nome, email, agenda_outlook, ativo, role').in('id', pessoasIds);
+    // Recebe: quem ligou a sincronização no Perfil OU a LIDERANÇA convidada para
+    // a agenda (superintendente / gestor regional): foi marcada justamente para
+    // receber o convite e colocar no Outlook dela.
+    const LIDERANCA = ['superintendente', 'gestor_regional'];
+    const recebe = new Map((pessoas || []).filter((p) => (p.agenda_outlook || LIDERANCA.includes(p.role)) && p.ativo !== false && p.email).map((p) => [p.id, p]));
     if (!recebe.size) return resp({ ok: true, enviados: 0, motivo: 'ninguém com a sincronização ligada' });
 
     const colunas = 'id, gerente_id, tipo, data_prevista, data_fim, data_prevista_original, imobiliaria, empreendimento, cliente, corretor, titulo, observacoes, status, motivo_visita, local_visita, recorrencia_id, recorrencia_freq';

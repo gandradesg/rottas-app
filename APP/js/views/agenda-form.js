@@ -97,14 +97,18 @@ export async function agendaFormView(params, app) {
     const { data: pessoas } = await q(() => supabase.rpc('pessoas_agenda_mesma_praca'), { ms: 6000, label: 'pessoas da agenda', tentativas: 2 });
     (pessoas || []).forEach(p => {
       const isSelf = p.id === meuId;
-      const rl = p.role === 'gerente' ? 'Gerente' : p.role === 'gerente_produto' ? 'Gerente de Produto' : 'Supervisor';
-      responsaveis.push({ id: p.id, nome: isSelf ? ((p.nome || 'Você') + ' (você)') : `${p.nome} (${rl})` });
+      const rl = { gerente: 'Gerente', gerente_produto: 'Gerente de Produto', supervisor: 'Supervisor',
+        superintendente: 'Superintendente', gestor_regional: 'Gestor Regional' }[p.role] || p.role;
+      // Liderança (superintendente / gestor regional da praça): convidada para
+      // ESTA agenda — recebe o convite no e-mail e entra no Outlook dela.
+      const lider = ['superintendente', 'gestor_regional'].includes(p.role);
+      responsaveis.push({ id: p.id, lider, nome: isSelf ? ((p.nome || 'Você') + ' (você)') : `${lider ? '⭐ ' : ''}${p.nome} (${rl})` });
     });
     if (!responsaveis.some(r => r.id === meuId)) {
       responsaveis.unshift({ id: meuId, nome: (state.profile?.nome || 'Você') + ' (você)' });
     }
-    // Eu sempre no topo
-    responsaveis.sort((a, b) => (a.id === meuId ? -1 : b.id === meuId ? 1 : 0));
+    // Eu sempre no topo; a liderança no fim da lista
+    responsaveis.sort((a, b) => (a.id === meuId ? -1 : b.id === meuId ? 1 : 0) || ((a.lider ? 1 : 0) - (b.lider ? 1 : 0)));
   } else if (['superintendente', 'gestor', 'gestor_regional', 'master'].includes(myRole)) {
     // Gerentes, supervisores e Gerentes de Produto do escopo
     const list = (await pessoasComAgenda()) || [];
@@ -282,7 +286,7 @@ export async function agendaFormView(params, app) {
     refreshLabel();
     responsavelField = field(isAdminRole ? 'Gerentes presentes' : 'Quem estará presente', dd, {
       required: true,
-      help: 'Selecione todos os gerentes presentes. Cria uma agenda para cada um; ao realizar, gera um único check-in que conta no contador de todos.',
+      help: 'Selecione todos os presentes. Cria uma agenda para cada um; ao realizar, gera um único check-in que conta no contador de todos. ⭐ Liderança (superintendente / gestor regional): recebe o convite no e-mail e o compromisso entra na agenda do Outlook dela.',
     });
   } else if (isAdminRole && responsaveis.length === 0) {
     responsavelField = el('div', { class: 'card p-3 text-sm text-warning' },
@@ -406,6 +410,10 @@ export async function agendaFormView(params, app) {
     // Lista de presentes (criação = multi; edição = 1)
     const presentes = id ? (responsavelId ? [responsavelId] : []) : [...selecionados];
     if (!presentes.length) { toast('Selecione quem estará presente', 'error'); return; }
+    // A liderança é CONVIDADA para a agenda de alguém da equipe — sozinha, ninguém
+    // da equipe acompanha nem realiza o compromisso.
+    const ehLider = (pid) => !!responsaveis.find(r => r.id === pid && r.lider);
+    if (!id && presentes.every(ehLider)) { toast('Marque também quem da equipe estará com a liderança (ex.: você).', 'error', 6000); return; }
     const fd = new FormData(form);
     const dataIso = new Date(fd.get('data_prevista')).toISOString();
     // Término (opcional) no MESMO dia do início.
