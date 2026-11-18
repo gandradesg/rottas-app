@@ -6,7 +6,7 @@
 // que DERAM CERTO — 104 sucessos do Saulo e 0 falhas — justamente o contrário
 // do que precisávamos. Agora o log é SEMPRE gravado no aparelho primeiro, fica
 // numa fila, e sobe depois, quando a conexão voltar. Nenhuma falha se perde.
-import { supabase, state, redeInfo } from './supabase.js';
+import { supabase, state, redeInfo, modoVerComo } from './supabase.js';
 import { APP_VERSION } from './config.js';
 
 const KEY = 'rottas-diag-logs';
@@ -101,6 +101,7 @@ export function vincularAlvo(registroId, tabela, ids) {
 
 // Registra uma etapa. Nunca lança, nunca espera — é "dispare e esqueça".
 export function logRegistro({ tipo, etapa, ok = null, duracao_ms = null, erro = null, tentativa = null, registroId = null }) {
+  if (modoVerComo()) return;   // visualização: não gera log em nome da pessoa
   // Erros do Supabase/Postgres trazem code/details/hint — é o que explica a
   // causa técnica real (ex.: 23505 duplicado, 42501 bloqueado por permissão).
   const cod = erro && (erro.code || erro.status) ? String(erro.code || erro.status) : null;

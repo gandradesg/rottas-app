@@ -1,5 +1,5 @@
 // Auth helpers: login, primeiro acesso, logout, permissões
-import { supabase, state, loadProfile, loadLists, emitStateChange, lerSessaoLocal } from './supabase.js';
+import { supabase, state, loadProfile, loadLists, emitStateChange, lerSessaoLocal, modoVerComo, lerSessaoVerComo } from './supabase.js';
 import { MASTER_EMAIL } from './config.js';
 
 // Flag global: quando true, listener de auth ignora eventos
@@ -140,6 +140,14 @@ export async function initAuth() {
   } catch (e) {
     session = local && local.user ? local : null;
   }
+  // Visualizar como (master): o app passa a ser o da pessoa visualizada.
+  // Só vale se houver sessão do master por baixo; senão, descarta.
+  if (session && modoVerComo()) {
+    const v = lerSessaoVerComo();
+    if (v && v.user) session = v;
+  } else if (!session && modoVerComo()) {
+    try { localStorage.removeItem('rottas-ver-como-alvo'); localStorage.removeItem('rottas-ver-como'); } catch (e) {}
+  }
   if (session) {
     state.user = session.user;
     // Carrega profile e listas em paralelo
@@ -184,6 +192,12 @@ export async function initAuth() {
 
 async function tratarEventoAuth(event, session) {
     console.log('[auth] evento:', event);
+    // Na visualização, os eventos são da sessão do MASTER (renovação etc.) —
+    // não podem trocar o usuário da tela. Se o master sair, sai da visualização.
+    if (modoVerComo()) {
+      if (event === 'SIGNED_OUT') { try { localStorage.removeItem('rottas-ver-como-alvo'); localStorage.removeItem('rottas-ver-como'); } catch (e) {} }
+      else return;
+    }
     const anterior = state.user && state.user.id;
     state.user = session?.user || null;
 

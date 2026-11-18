@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.82';
+export const APP_VERSION = '1.9.83';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,13 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.83',
+    date: '18/11/2026',
+    changes: [
+      'VISUALIZAR COMO (só Master): em Usuários, o botão 👁 abre o app exatamente como a pessoa vê — menus, agenda, dados e Dashboard, com as permissões reais dela — em SOMENTE LEITURA (nada pode ser registrado ou alterado em nome dela). Faixa roxa no topo com "Sair" para voltar; cada uso fica registrado nos logs',
+    ],
+  },
   {
     version: '1.9.82',
     date: '18/11/2026',

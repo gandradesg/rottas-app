@@ -1,7 +1,7 @@
 // Master: gerenciamento de usuários (gestores e gerentes)
 import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
-import { supabase, loadAllProfiles, state, q, lerSessaoLocal, renovarToken } from '../supabase.js';
+import { supabase, loadAllProfiles, state, q, lerSessaoLocal, renovarToken, iniciarVerComo } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES, ROLES, SUPABASE_URL } from '../config.js';
 import { phoneInput, emailInput, cidadeEstadoField } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
@@ -225,6 +225,30 @@ function userRow(p) {
       ),
       // computador: ao lado do editar
       botoesLembrete(p, 'hidden sm:flex'),
+      // VISUALIZAR COMO (só master): abre o app com a sessão real da pessoa,
+      // em somente leitura — para ver exatamente o que ela vê.
+      (isMaster() && p.role !== 'master' && p.ativo !== false && p.id !== state.user?.id) && el('button', {
+        class: 'p-2 rounded-lg hover:bg-bg-elev transition flex-shrink-0 text-fg-muted',
+        title: `Visualizar como ${p.nome}`,
+        onclick: async (ev) => {
+          const bt = ev.currentTarget;
+          const ok = await confirmModal({
+            title: `Visualizar como ${p.nome}?`,
+            message: 'O app vai abrir exatamente como esta pessoa vê (menus, agenda, dados), em SOMENTE LEITURA — nada pode ser registrado ou alterado. Para voltar, toque em "Sair" na faixa roxa do topo.',
+            confirmLabel: 'Visualizar',
+          });
+          if (!ok) return;
+          bt.disabled = true;
+          try {
+            await iniciarVerComo(p.id);
+            location.hash = '#/';
+            location.reload();
+          } catch (e) {
+            bt.disabled = false;
+            toast(e.message || 'Não foi possível visualizar', 'error', 6000);
+          }
+        },
+      }, el('span', { class: 'text-base leading-none' }, '👁')),
       // Botao editar: respeita HIERARQUIA RIGIDA
       // Master > {Gestor, Superintendente, Gestor Regional} > Gerente > Supervisor
       // Cada nivel so edita quem esta ABAIXO + a si mesmo

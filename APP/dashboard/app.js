@@ -17,7 +17,23 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 //  • toda consulta tem tempo-limite (antes podia ficar parada pra sempre);
 //  • as consultas pegam o token direto do aparelho, SEM esperar na fila do
 //    login — a renovação do token não congela mais o painel inteiro.
+// VISUALIZAR COMO (iniciado pelo master no app): o Dashboard também abre com a
+// sessão da pessoa visualizada, em SOMENTE LEITURA.
+const VER_COMO_KEY = 'rottas-ver-como', VER_COMO_META = 'rottas-ver-como-alvo';
+function modoVerComo() { try { return !!(localStorage.getItem(VER_COMO_META) && localStorage.getItem(VER_COMO_KEY)); } catch (e) { return false; } }
+const RPCS_DE_LEITURA = ['pessoas_agenda_mesma_praca', 'gerentes_mesma_praca', 'imob_resumo_visitas', 'cliente_por_contato', 'cliente_tem_contato'];
+function gravacaoBloqueada(url, metodo) {
+  const m = String(metodo || 'GET').toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS' || url.includes('/auth/v1/')) return false;
+  const rpc = url.match(/\/rest\/v1\/rpc\/([a-z_]+)/);
+  if (rpc) return !RPCS_DE_LEITURA.includes(rpc[1]);
+  return url.includes('/rest/v1/') || url.includes('/storage/v1/') || url.includes('/functions/v1/');
+}
 function fetchComLimite(input, init = {}) {
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  if (modoVerComo() && gravacaoBloqueada(url, init.method || (input && input.method))) {
+    return Promise.reject(new Error('Modo visualização: somente leitura.'));
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => { try { ctrl.abort(new DOMException('Tempo esgotado', 'AbortError')); } catch (e) { ctrl.abort(); } }, 20000);
   if (init.signal) {
@@ -31,7 +47,7 @@ const authSb = createClient(SUPABASE_URL, SUPABASE_ANON, {
           storage: window.localStorage, storageKey: 'rottas-app-auth' },
   global: { fetch: fetchComLimite },
 });
-function sessaoLocal() { try { return JSON.parse(localStorage.getItem('rottas-app-auth') || 'null'); } catch (e) { return null; } }
+function sessaoLocal() { try { return JSON.parse(localStorage.getItem(modoVerComo() ? VER_COMO_KEY : 'rottas-app-auth') || 'null'); } catch (e) { return null; } }
 async function tokenDoAparelho() {
   const s = sessaoLocal();
   if (!s || !s.access_token) return null;
@@ -214,7 +230,19 @@ const ALL_ROLES = ['master', 'gestor', 'superintendente', 'gestor_regional', 'ge
 async function authBoot() {
   const setMsg = (m) => { const e = $('auth-msg'); if (e) e.textContent = m; };
   setMsg('Verificando sessão...');
-  const { data: { session } } = await sb.auth.getSession();
+  let { data: { session } } = await sb.auth.getSession();
+  // Visualizar como: com a sessão do master por baixo, o Dashboard vira o da pessoa.
+  if (session && modoVerComo()) {
+    const v = sessaoLocal();
+    if (v && v.user) {
+      session = v;
+      let alvo = {}; try { alvo = JSON.parse(localStorage.getItem(VER_COMO_META) || '{}'); } catch (e) {}
+      const faixa = document.createElement('div');
+      faixa.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:300;background:#7C3AED;color:#fff;font-size:12.5px;padding:7px 14px;display:flex;gap:10px;align-items:center;justify-content:center;';
+      faixa.innerHTML = '👁 <b>Visualizando como ' + String(alvo.nome || '').replace(/[<>&]/g, '') + '</b> · somente leitura · para sair, volte ao app e toque em "Sair"';
+      document.body.appendChild(faixa);
+    }
+  }
   if (!session) {
     setMsg('Sessão não encontrada. Redirecionando...');
     setTimeout(() => location.replace('/#/login'), 600); return false;

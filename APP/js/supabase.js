@@ -95,6 +95,11 @@ function fetchWithTimeout(input, init = {}) {
   // uma conexão nova. Upload de foto continua com folga (45s), porque é pesado.
   const url = typeof input === 'string' ? input : (input && input.url) || '';
   const ehUpload = url.includes('/storage/v1/');
+  // VISUALIZAR COMO (master): somente leitura — nenhuma gravação sai do aparelho
+  // em nome da pessoa visualizada. Só leituras (GET) e as RPCs de consulta.
+  if (modoVerComo() && gravacaoBloqueada(url, (init.method || (input && input.method) || 'GET'))) {
+    return Promise.reject(Object.assign(new Error('Modo visualização: somente leitura. Saia do "Visualizar como" para registrar ou alterar.'), { code: 'VER_COMO' }));
+  }
   // MODO DE TESTE: finge que a conexão morreu (requisição fica pendurada até
   // estourar). Serve pra testar a fila offline, os avisos e os logs sem precisar
   // de rede ruim de verdade. Não afeta o login (/auth/v1/), pra não deslogar.
@@ -192,7 +197,71 @@ function renovarTokenSemTravar(limiteMs) {
 }
 // Para gravações que recebem "token vencido": renova (no máx. limiteMs) e repete.
 export function renovarToken(limiteMs = 4000) { return renovarTokenSemTravar(limiteMs); }
+// ─── VISUALIZAR COMO ─────────────────────────────────────────────────────────
+// O master abre o app com a sessão REAL de outra pessoa (função ver-como), para
+// ver exatamente o que as regras do banco mostram para ela. Essa sessão fica
+// numa chave SEPARADA — a do master continua intacta — e o app trava tudo em
+// somente leitura (fetchWithTimeout). "Sair" volta para o master na hora.
+const VER_COMO_KEY = 'rottas-ver-como';
+const VER_COMO_META = 'rottas-ver-como-alvo';
+const RPCS_DE_LEITURA = ['pessoas_agenda_mesma_praca', 'gerentes_mesma_praca', 'imob_resumo_visitas', 'cliente_por_contato', 'cliente_tem_contato'];
+function gravacaoBloqueada(url, metodo) {
+  const m = String(metodo || 'GET').toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return false;
+  if (url.includes('/auth/v1/')) return false;                 // sessões (master e visualização)
+  const rpc = url.match(/\/rest\/v1\/rpc\/([a-z_]+)/);
+  if (rpc) return !RPCS_DE_LEITURA.includes(rpc[1]);
+  return url.includes('/rest/v1/') || url.includes('/storage/v1/') || url.includes('/functions/v1/');
+}
+export function modoVerComo() {
+  try { return !!(localStorage.getItem(VER_COMO_META) && localStorage.getItem(VER_COMO_KEY)); } catch (e) { return false; }
+}
+export function alvoVerComo() {
+  try { return JSON.parse(localStorage.getItem(VER_COMO_META) || 'null'); } catch (e) { return null; }
+}
+let _clienteVerComo = null;
+function clienteVerComo() {
+  if (!_clienteVerComo) {
+    let fila = Promise.resolve();
+    _clienteVerComo = createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false,
+        storage: window.localStorage, storageKey: VER_COMO_KEY,
+        lock: (_n, _t, fn) => { const r = fila.then(() => fn(), () => fn()); fila = r.then(() => {}, () => {}); return r; } },
+      global: { fetch: fetchWithTimeout },
+    });
+  }
+  return _clienteVerComo;
+}
+export function lerSessaoVerComo() {
+  try { return JSON.parse(localStorage.getItem(VER_COMO_KEY) || 'null'); } catch (e) { return null; }
+}
+// Começa: pede ao servidor (só master) o acesso e abre a sessão da pessoa.
+export async function iniciarVerComo(alvoId) {
+  const { data, error } = await dataClient.functions.invoke('ver-como', { body: { user_id: alvoId } });
+  if (error || !data || !data.ok) {
+    let msg = (data && data.error) || (error && error.message) || 'Falha ao visualizar';
+    try { const ctx = error && error.context && await error.context.json(); if (ctx && ctx.error) msg = ctx.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  const { error: e2 } = await clienteVerComo().auth.verifyOtp({ token_hash: data.token_hash, type: 'magiclink' });
+  if (e2) throw new Error('Não foi possível abrir a sessão: ' + e2.message);
+  localStorage.setItem(VER_COMO_META, JSON.stringify({ ...data.alvo, desde: new Date().toISOString() }));
+}
+// Sai: descarta a sessão da visualização e volta para o master.
+export function sairVerComo() {
+  try { localStorage.removeItem(VER_COMO_META); localStorage.removeItem(VER_COMO_KEY); localStorage.removeItem('rottas-perfil-cache'); } catch (e) {}
+  location.hash = '#/';
+  location.reload();
+}
+
 async function tokenParaDados() {
+  if (modoVerComo()) {
+    const v = lerSessaoVerComo();
+    if (v && v.access_token && msRestantes(v) > 60 * 1000) return v.access_token;
+    await Promise.race([clienteVerComo().auth.getSession().catch(() => null), new Promise((r) => setTimeout(r, 3000))]);
+    const v2 = lerSessaoVerComo();
+    return (v2 && v2.access_token) || (v && v.access_token) || null;
+  }
   const s = lerSessaoLocal();
   if (!s || !s.access_token) return null;                 // sem login: chave pública
   if (msRestantes(s) > 60 * 1000) return s.access_token;  // válido: zero espera

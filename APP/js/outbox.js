@@ -7,7 +7,7 @@
 // Usamos IndexedDB (e não localStorage) porque ele guarda as FOTOS (Blob) e tem
 // espaço de sobra. Tudo é idempotente: cada registro leva um id gerado no
 // aparelho, então reenviar NUNCA duplica.
-import { supabase, state, ehErroDeToken, renovarToken } from './supabase.js';
+import { supabase, state, ehErroDeToken, renovarToken, modoVerComo } from './supabase.js';
 import { uploadPhotos } from './storage.js';
 import { logRegistro, vincularAlvo, novoRegistroId } from './diag.js';
 
@@ -85,6 +85,7 @@ export async function guardarMarcacaoAgenda(posSync, atividadeId) {
 // ── Envio ─────────────────────────────────────────────────────────────────
 let _enviando = false;
 export async function sincronizar() {
+  if (modoVerComo()) return { enviados: 0 };   // visualização: a fila do aparelho é do master
   if (_enviando) return { enviados: 0, emAndamento: true };
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return { enviados: 0 };
   if (!state.user?.id) return { enviados: 0 };

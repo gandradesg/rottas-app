@@ -1,10 +1,22 @@
 // Shell: header + main + bottom nav. Usado por todas as telas autenticadas.
 import { el, icon, avatar } from '../ui.js';
-import { state } from '../supabase.js';
+import { state, modoVerComo, alvoVerComo, sairVerComo } from '../supabase.js';
 import { signOut, isMaster, isGestor, isAdmin, isRecepcao, activeViewRole, can, canManageAgenda, canToggleView } from '../auth.js';
 import { ROLES } from '../config.js';
 import { toggleTheme, getTheme } from '../theme.js';
 import { navigate, currentPath } from '../router.js';
+
+// Faixa do "Visualizar como": sempre visível, com o botão de sair.
+function faixaVerComo() {
+  if (!modoVerComo()) return null;
+  const a = alvoVerComo() || {};
+  const cargo = (ROLES[a.role] || {}).label || a.role || '';
+  const sair = el('button', { class: 'px-3 py-1 rounded-full bg-white text-purple-700 font-bold text-xs flex-shrink-0', onclick: () => sairVerComo() }, 'Sair');
+  return el('div', { class: 'sticky top-0 z-50 flex items-center gap-2 px-4 py-2 text-white text-xs', style: { background: '#7C3AED' } },
+    el('span', { class: 'text-base' }, '👁'),
+    el('span', { class: 'flex-1 min-w-0' }, el('b', {}, 'Visualizando como ' + (a.nome || '…')), cargo ? ' (' + cargo + ')' : '', ' · somente leitura'),
+    sair);
+}
 
 export function shell(content, opts = {}) {
   const { title, subtitle, back, headerActions, hideBottomNav } = opts;
@@ -169,7 +181,9 @@ export function shell(content, opts = {}) {
     );
   }
 
-  const wrapper = el('div', { class: 'min-h-screen' }, header, main, bottom);
+  // Com a faixa do Visualizar como (fixa no topo), o cabeçalho gruda logo abaixo dela.
+  if (modoVerComo()) header.style.top = '36px';
+  const wrapper = el('div', { class: 'min-h-screen' }, faixaVerComo(), header, main, bottom);
   return wrapper;
 }
 
