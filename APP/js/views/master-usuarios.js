@@ -509,6 +509,8 @@ function userFormFields(p) {
 
   const initialRole = p.role || 'gerente';
   let chosenRole = availableRoles.includes(initialRole) ? initialRole : 'gerente';
+  // Editando sem ser Master: o cargo fica exatamente o atual (só o Master altera).
+  if (p.id && !isMaster()) chosenRole = initialRole;
 
   // Pílulas em grid - se tiver mais de 3, quebra em 2 linhas
   const roleButtons = availableRoles.map(r => el('button', {
@@ -716,11 +718,19 @@ function userFormFields(p) {
 
   // Master principal (gabriel.galvao) READ-ONLY
   const isPrincipal = isPrincipalMaster(p);
+  // Só o Master muda o cargo de quem já existe (regra também imposta no banco —
+  // migration v66). Os demais veem o cargo atual, sem poder trocar.
+  const cargoTravado = !!p.id && !isMaster();
   const roleField = isPrincipal
     ? el('div', { class: 'card p-3 flex items-center gap-2 bg-rottas-50 dark:bg-rottas-500/10' },
         '👑 ', el('span', { class: 'font-semibold' }, 'Master Principal'),
         el('span', { class: 'text-xs text-fg-muted ml-auto' }, 'Não editável'))
-    : el('div', { class: 'grid grid-cols-2 sm:grid-cols-3 gap-2' }, ...roleButtons);
+    : cargoTravado
+      ? el('div', { class: 'card p-3 flex items-center gap-2' },
+          el('span', {}, (ROLES[initialRole] || {}).icon || '·'),
+          el('span', { class: 'font-semibold' }, (ROLES[initialRole] || {}).label || initialRole),
+          el('span', { class: 'text-xs text-fg-muted ml-auto' }, 'Só o Master altera cargos'))
+      : el('div', { class: 'grid grid-cols-2 sm:grid-cols-3 gap-2' }, ...roleButtons);
 
   form.append(
     el('div', {}, el('label', { class: 'label label-required' }, 'Nome'), nome),
