@@ -778,7 +778,7 @@ async function agendaGestorView(app) {
   const today = new Date(); today.setHours(0,0,0,0);
   let mode = localStorage.getItem('agenda-mode-gestor') || 'mes';
   let cursor = new Date(today);
-  const filters = { gerente: 'todos', tipo: 'todos', status: 'todos' };
+  const filters = { gerentes: new Set(), tipo: 'todos', status: 'todos' };   // gerentes vazio = todos
   let allItems = [];
 
   const content = el('div', { class: 'flex flex-col gap-3' });
@@ -807,10 +807,51 @@ async function agendaGestorView(app) {
     el('option', { value: 'orulo' }, 'Órulo/DWV'),
     el('option', { value: 'outro' }, 'Outro'),
   );
-  const gerenteSel = el('select', { class: 'select' },
-    el('option', { value: 'todos' }, 'Todos os gerentes')
-  );
-  filterBar.append(statusSel, tipoSel, gerenteSel);
+  // Filtro de pessoas com SELEÇÃO MÚLTIPLA (ex.: Saulo + Ricardo + Márcio).
+  // Nada marcado = todos.
+  const gerDD = el('div', { class: 'relative min-w-0' });
+  const gerBtn = el('button', { type: 'button', class: 'select text-left flex items-center justify-between w-full min-w-0' });
+  let gerLabel = el('span', { class: 'truncate' }, 'Todos os gerentes');
+  gerBtn.append(gerLabel, icon('chevronDown', 16, 'text-fg-subtle flex-shrink-0'));
+  const gerBusca = el('input', { class: 'input', type: 'search', placeholder: 'Buscar pessoa...', autocomplete: 'off' });
+  const gerLista = el('div', { class: 'flex flex-col max-h-72 overflow-y-auto' });
+  const gerLimpar = el('button', { type: 'button', class: 'text-xs font-semibold text-rottas-500 px-2 py-1' }, 'Limpar (todos)');
+  const gerAplicar = el('button', { type: 'button', class: 'btn btn-primary btn-sm' }, 'Aplicar');
+  const gerPopup = el('div', { class: 'absolute z-40 right-0 mt-1 card p-2 hidden flex-col gap-2 shadow-lg', style: { top: '100%', minWidth: '270px', width: 'max-content', maxWidth: '92vw' } },
+    gerBusca, gerLista, el('div', { class: 'flex items-center justify-between gap-2 pt-1 border-t border-border' }, gerLimpar, gerAplicar));
+  gerDD.append(gerBtn, gerPopup);
+  let pessoasFiltro = [];
+  let marcados = new Set();                         // seleção em edição (aplica no "Aplicar")
+  function pintarRotuloGer() {
+    const sel = pessoasFiltro.filter(g => filters.gerentes.has(g.id));
+    const txt = !sel.length ? 'Todos os gerentes' : sel.length === 1 ? sel[0].nome : `${sel.length} pessoas selecionadas`;
+    const novo = el('span', { class: 'truncate' + (sel.length ? ' font-semibold' : '') }, txt);
+    gerLabel.replaceWith(novo); gerLabel = novo;
+  }
+  function pintarListaGer() {
+    const termo = (gerBusca.value || '').trim().toLowerCase();
+    gerLista.innerHTML = '';
+    pessoasFiltro.filter(g => !termo || g.rotulo.toLowerCase().includes(termo)).forEach(g => {
+      const cb = el('input', { type: 'checkbox', checked: marcados.has(g.id) });
+      cb.addEventListener('change', () => { cb.checked ? marcados.add(g.id) : marcados.delete(g.id); });
+      gerLista.appendChild(el('label', { class: 'flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-elev cursor-pointer text-sm whitespace-nowrap' }, cb, el('span', {}, g.rotulo)));
+    });
+    if (!gerLista.children.length) gerLista.appendChild(el('div', { class: 'text-xs text-fg-muted px-2 py-2' }, 'Ninguém encontrado.'));
+  }
+  const fecharGer = () => { gerPopup.classList.add('hidden'); gerPopup.classList.remove('flex'); document.removeEventListener('click', foraGer); };
+  const foraGer = (e) => { if (!gerDD.contains(e.target)) fecharGer(); };
+  gerBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!gerPopup.classList.contains('hidden')) { fecharGer(); return; }
+    marcados = new Set(filters.gerentes); gerBusca.value = ''; pintarListaGer();
+    gerPopup.classList.remove('hidden'); gerPopup.classList.add('flex');
+    document.addEventListener('click', foraGer);
+    setTimeout(() => gerBusca.focus(), 30);
+  });
+  gerBusca.addEventListener('input', pintarListaGer);
+  gerLimpar.addEventListener('click', () => { marcados.clear(); pintarListaGer(); });
+  gerAplicar.addEventListener('click', () => { filters.gerentes = new Set(marcados); fecharGer(); pintarRotuloGer(); reload(); });
+  filterBar.append(statusSel, tipoSel, gerDD);
   content.appendChild(filterBar);
 
   // Toolbar de modo + nav
@@ -832,7 +873,7 @@ async function agendaGestorView(app) {
   // travando aqui, a tela inteira ficava muda pra sempre.
   // Todas as pessoas com agenda (gerentes, supervisores, Gerentes de Produto) do escopo
   const gerentes = await pessoasComAgenda();
-  (gerentes || []).forEach(g => gerenteSel.appendChild(el('option', { value: g.id }, g.rotulo)));
+  pessoasFiltro = gerentes || [];
 
   async function reload() {
     cal.innerHTML = '<div class="skeleton h-32"></div>';
@@ -847,7 +888,7 @@ async function agendaGestorView(app) {
     if (!state.profile?.conta_teste) q = q.or('teste.is.null,teste.eq.false'); // esconde só teste (null-safe)
     if (filters.status !== 'todos') q = q.eq('status', filters.status);
     if (filters.tipo !== 'todos')   q = q.eq('tipo', filters.tipo);
-    if (filters.gerente !== 'todos') q = q.eq('gerente_id', filters.gerente);
+    if (filters.gerentes.size) q = q.in('gerente_id', [...filters.gerentes]);
 
     // Via q(): tempo-limite + repetição automática + aviso de conexão + LOG.
     let data, error;
@@ -1045,7 +1086,7 @@ async function agendaGestorView(app) {
 
   statusSel.addEventListener('change', () => { filters.status = statusSel.value; reload(); });
   tipoSel.addEventListener('change',   () => { filters.tipo   = tipoSel.value;   reload(); });
-  gerenteSel.addEventListener('change',() => { filters.gerente= gerenteSel.value;reload(); });
+  // (filtro de pessoas: ver "Aplicar" no seletor múltiplo acima)
 
   await reload();
 }
