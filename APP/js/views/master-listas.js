@@ -64,6 +64,8 @@ const TABS = [
 
 export async function masterListasView(_params, app) {
   let activeId = 'imobiliarias';
+  // Dentro de Imobiliárias: 'imobiliarias' | 'corretores' | 'gerentes'
+  let subVista = 'imobiliarias';
 
   const content = el('div', { class: 'flex flex-col gap-4' });
 
@@ -111,7 +113,27 @@ export async function masterListasView(_params, app) {
       class: 'btn btn-secondary flex-1',
       onclick: () => openImport(tab)
     }, icon('download', 16), 'Importar lista');
-    dash.appendChild(el('div', { class: 'flex gap-2' }, addBtn, importBtn));
+    const linhaBotoes = el('div', { class: 'flex gap-2' }, addBtn, importBtn);
+    dash.appendChild(linhaBotoes);
+
+    // Aba Imobiliárias: ver também as PESSOAS cadastradas (corretores e gerentes
+    // das imobiliárias) com o vínculo de cada uma.
+    if (tab.id === 'imobiliarias') {
+      const corretores = state.corretores || [];
+      const gerentes = state.gerentesImob || [];
+      const opc = [
+        ['imobiliarias', `🏢 Imobiliárias (${items.length})`],
+        ['corretores', `👤 Corretores (${corretores.length})`],
+        ['gerentes', `👔 Gerentes de imobiliária (${gerentes.length})`],
+      ];
+      dash.appendChild(el('div', { class: 'grid grid-cols-3 gap-1 p-1 rounded-xl bg-bg-elev' },
+        ...opc.map(([k, rot]) => el('button', {
+          type: 'button',
+          class: 'px-2 py-2 rounded-lg text-xs sm:text-sm font-semibold transition ' + (subVista === k ? 'bg-bg-card shadow text-rottas-600' : 'text-fg-muted'),
+          onclick: () => { subVista = k; renderActive(); },
+        }, rot))));
+      if (subVista !== 'imobiliarias') { linhaBotoes.remove(); renderPessoas(subVista === 'corretores' ? corretores : gerentes, subVista); return; }
+    }
 
     if (!items.length) {
       dash.appendChild(el('div', { class: 'card p-8 text-center text-fg-muted' }, 'Nenhum item ainda. Adicione o primeiro.'));
@@ -390,6 +412,62 @@ export async function masterListasView(_params, app) {
 
   // Importa lista em massa: aceita texto colado (1 nome por linha) ou arquivo .txt/.csv
   // Modal: corretores vinculados a uma imobiliária (ver / adicionar / excluir)
+  // Lista de corretores OU gerentes de imobiliária, com a imobiliária vinculada.
+  function renderPessoas(lista, tipo) {
+    const rotulo = tipo === 'corretores' ? 'corretores' : 'gerentes de imobiliária';
+    const imobPorId = new Map((state.imobiliarias || []).map(i => [i.id, i]));
+    const imobPorNome = new Map((state.imobiliarias || []).map(i => [String(i.nome || '').toUpperCase(), i]));
+    const imobDe = (p) => imobPorId.get(p.imobiliaria_id) || imobPorNome.get(String(p.imobiliaria_nome || '').toUpperCase()) || null;
+    const semVinculo = lista.filter(p => !imobDe(p) && !p.imobiliaria_nome).length;
+
+    const busca = el('input', { class: 'input', type: 'search', placeholder: `Buscar ${rotulo} ou imobiliária...` });
+    const soSemVinculo = el('input', { type: 'checkbox' });
+    const resumo = el('div', { class: 'text-xs text-fg-muted' });
+    const wrap = el('div', { class: 'flex flex-col gap-2' });
+    dash.append(
+      busca,
+      el('div', { class: 'flex items-center justify-between gap-2 flex-wrap' },
+        resumo,
+        semVinculo ? el('label', { class: 'flex items-center gap-2 text-xs cursor-pointer' }, soSemVinculo, `Só sem imobiliária (${semVinculo})`) : null),
+      wrap,
+    );
+
+    function pintar() {
+      const t = (busca.value || '').trim().toLowerCase();
+      wrap.innerHTML = '';
+      const arr = lista
+        .filter(p => !soSemVinculo.checked || (!imobDe(p) && !p.imobiliaria_nome))
+        .filter(p => !t || [p.nome, p.telefone, p.email, p.imobiliaria_nome, imobDe(p)?.cidade].some(v => String(v || '').toLowerCase().includes(t)))
+        .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+      resumo.textContent = `${arr.length} de ${lista.length} ${rotulo}`;
+      if (!arr.length) { wrap.appendChild(el('div', { class: 'card p-6 text-center text-sm text-fg-muted' }, 'Ninguém encontrado.')); return; }
+      arr.slice(0, 500).forEach(p => {
+        const im = imobDe(p);
+        const nomeImob = im ? im.nome : (p.imobiliaria_nome || '');
+        const contato = [p.telefone, p.email].filter(Boolean).join(' · ');
+        wrap.appendChild(el('div', { class: 'card p-3 flex items-center gap-3' },
+          el('div', { class: 'flex-1 min-w-0' },
+            el('div', { class: 'font-medium truncate' }, p.nome || '—'),
+            contato ? el('div', { class: 'text-xs text-fg-muted truncate' }, '📞 ' + contato) : null),
+          nomeImob
+            ? el('button', {
+                class: 'text-right min-w-0 max-w-[55%] px-2 py-1 rounded-lg hover:bg-bg-elev transition',
+                title: im ? 'Abrir os corretores desta imobiliária' : 'Imobiliária não encontrada no cadastro',
+                onclick: () => { if (im) openCorretoresModal(im); },
+              },
+                el('div', { class: 'text-sm font-semibold text-rottas-600 truncate' }, '🏢 ' + nomeImob),
+                im && (im.cidade || im.estado) ? el('div', { class: 'text-[11px] text-fg-muted truncate' }, [im.cidade, im.estado].filter(Boolean).join(' · ')) : null)
+            : el('span', { class: 'chip chip-yellow text-[10px] flex-shrink-0' }, 'Sem imobiliária'),
+        ));
+      });
+      if (arr.length > 500) wrap.appendChild(el('div', { class: 'text-xs text-fg-muted text-center' }, `Mostrando 500 de ${arr.length} — use a busca.`));
+    }
+    let tmr;
+    busca.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(pintar, 150); });
+    soSemVinculo.addEventListener('change', pintar);
+    pintar();
+  }
+
   function openCorretoresModal(imob) {
     const listWrap = el('div', { class: 'flex flex-col gap-2 max-h-72 overflow-y-auto' });
     const nomeInp = el('input', { class: 'input', placeholder: 'Nome do corretor' });
