@@ -204,7 +204,7 @@ export function renovarToken(limiteMs = 4000) { return renovarTokenSemTravar(lim
 // somente leitura (fetchWithTimeout). "Sair" volta para o master na hora.
 const VER_COMO_KEY = 'rottas-ver-como';
 const VER_COMO_META = 'rottas-ver-como-alvo';
-const RPCS_DE_LEITURA = ['pessoas_agenda_mesma_praca', 'gerentes_mesma_praca', 'imob_resumo_visitas', 'cliente_por_contato', 'cliente_tem_contato'];
+const RPCS_DE_LEITURA = ['pessoas_agenda_mesma_praca', 'gerentes_mesma_praca', 'imob_resumo_visitas', 'cliente_por_contato', 'cliente_tem_contato', 'meus_grupos_agenda'];
 function gravacaoBloqueada(url, metodo) {
   const m = String(metodo || 'GET').toUpperCase();
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return false;

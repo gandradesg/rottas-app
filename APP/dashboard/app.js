@@ -21,7 +21,7 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 // sessão da pessoa visualizada, em SOMENTE LEITURA.
 const VER_COMO_KEY = 'rottas-ver-como', VER_COMO_META = 'rottas-ver-como-alvo';
 function modoVerComo() { try { return !!(localStorage.getItem(VER_COMO_META) && localStorage.getItem(VER_COMO_KEY)); } catch (e) { return false; } }
-const RPCS_DE_LEITURA = ['pessoas_agenda_mesma_praca', 'gerentes_mesma_praca', 'imob_resumo_visitas', 'cliente_por_contato', 'cliente_tem_contato'];
+const RPCS_DE_LEITURA = ['pessoas_agenda_mesma_praca', 'gerentes_mesma_praca', 'imob_resumo_visitas', 'cliente_por_contato', 'cliente_tem_contato', 'meus_grupos_agenda'];
 function gravacaoBloqueada(url, metodo) {
   const m = String(metodo || 'GET').toUpperCase();
   if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS' || url.includes('/auth/v1/')) return false;

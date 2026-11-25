@@ -296,15 +296,32 @@ async function agendaGerenteView(app) {
   }
   } catch (e) { /* rede: segue sem o filtro "ver agenda de" */ outrosGerentes = []; }
 
-  let viewFilter = 'minha'; // 'minha' (eu + equipe) | <id de gerente da praça>
+  // GRUPOS DE AGENDA (montados pelo Master em Usuários): quem faz parte de um
+  // grupo pode ver a agenda de todos os integrantes JUNTOS.
+  let grupos = [];   // [{ id, nome, membros: [{ id, nome }] }]
+  try {
+    const { data: linhas } = await raceTO(supabase.rpc('meus_grupos_agenda'));
+    const porGrupo = new Map();
+    (linhas || []).forEach(l => {
+      if (!porGrupo.has(l.grupo_id)) porGrupo.set(l.grupo_id, { id: l.grupo_id, nome: l.grupo_nome, membros: [] });
+      porGrupo.get(l.grupo_id).membros.push({ id: l.membro_id, nome: l.membro_nome });
+    });
+    grupos = [...porGrupo.values()];
+  } catch (e) { grupos = []; }
+
+  let viewFilter = 'minha'; // 'minha' (eu + equipe) | 'grupo:<id>' | <id de gerente da praça>
 
   function renderPracaBar() {
     pracaBar.innerHTML = '';
-    if (!outrosGerentes.length) return;
+    if (!outrosGerentes.length && !grupos.length) return;
     const sel = el('select', { class: 'select' },
       el('option', { value: 'minha', selected: viewFilter === 'minha' },
         isAdmin() ? 'Todos os gerentes' : (teamIds.length > 1 ? 'Minha agenda (e equipe)' : 'Minha agenda')),
-      ...outrosGerentes.map(g => el('option', { value: g.id, selected: viewFilter === g.id }, '👤 ' + g.nome)),
+      grupos.length ? el('optgroup', { label: 'Grupos' },
+        ...grupos.map(g => el('option', { value: 'grupo:' + g.id, selected: viewFilter === 'grupo:' + g.id },
+          `👥 Grupo ${g.nome} (${g.membros.length})`))) : null,
+      outrosGerentes.length ? el('optgroup', { label: 'Pessoas' },
+        ...outrosGerentes.map(g => el('option', { value: g.id, selected: viewFilter === g.id }, '👤 ' + g.nome))) : null,
     );
     sel.addEventListener('change', () => { viewFilter = sel.value; loadItems(); });
     pracaBar.appendChild(el('div', { class: 'card p-2' },
@@ -326,7 +343,10 @@ async function agendaGerenteView(app) {
     // (o .neq('teste',true) sozinho descarta linhas NULL no Postgres — bug que
     // sumia com os agendamentos recém-criados do gerente).
     if (!state.profile?.conta_teste) q = q.or('teste.is.null,teste.eq.false');
-    if (viewFilter !== 'minha') {
+    if (viewFilter.startsWith('grupo:')) {
+      const g = grupos.find(x => 'grupo:' + x.id === viewFilter);
+      q = q.in('gerente_id', g ? g.membros.map(m => m.id) : [meuId]);
+    } else if (viewFilter !== 'minha') {
       q = q.eq('gerente_id', viewFilter);
     } else if (!isAdmin()) {
       // Gerente/supervisor: só a própria equipe. Admin (master/gestor/etc.) na visão
@@ -713,7 +733,7 @@ async function agendaGerenteView(app) {
     }
     // Ações na própria agenda/equipe. Admin (ex.: Master na visão Gerente) age em
     // qualquer agenda (inspeção/teste). Gerente comum só lê a agenda de colega.
-    if (viewFilter === 'minha' || isAdmin()) {
+    if (viewFilter === 'minha' || isAdmin() || item.gerente_id === meuId) {
     if (item.status === 'pendente') {
       actions.appendChild(el('button', {
         class: 'btn btn-primary btn-sm flex items-center gap-1.5',
@@ -817,8 +837,9 @@ async function agendaGestorView(app) {
   const gerLista = el('div', { class: 'flex flex-col max-h-72 overflow-y-auto' });
   const gerLimpar = el('button', { type: 'button', class: 'text-xs font-semibold text-rottas-500 px-2 py-1' }, 'Limpar (todos)');
   const gerAplicar = el('button', { type: 'button', class: 'btn btn-primary btn-sm' }, 'Aplicar');
+  const gerGrupos = el('div', { class: 'flex flex-wrap gap-1.5' });
   const gerPopup = el('div', { class: 'absolute z-40 right-0 mt-1 card p-2 hidden flex-col gap-2 shadow-lg', style: { top: '100%', minWidth: '270px', width: 'max-content', maxWidth: '92vw' } },
-    gerBusca, gerLista, el('div', { class: 'flex items-center justify-between gap-2 pt-1 border-t border-border' }, gerLimpar, gerAplicar));
+    gerGrupos, gerBusca, gerLista, el('div', { class: 'flex items-center justify-between gap-2 pt-1 border-t border-border' }, gerLimpar, gerAplicar));
   gerDD.append(gerBtn, gerPopup);
   let pessoasFiltro = [];
   let marcados = new Set();                         // seleção em edição (aplica no "Aplicar")
@@ -827,6 +848,20 @@ async function agendaGestorView(app) {
     const txt = !sel.length ? 'Todos os gerentes' : sel.length === 1 ? sel[0].nome : `${sel.length} pessoas selecionadas`;
     const novo = el('span', { class: 'truncate' + (sel.length ? ' font-semibold' : '') }, txt);
     gerLabel.replaceWith(novo); gerLabel = novo;
+  }
+  // Grupos de agenda: um toque marca todos os integrantes do grupo.
+  let gruposAgenda = [];
+  function pintarGruposGer() {
+    gerGrupos.innerHTML = '';
+    gruposAgenda.forEach(g => {
+      const ids = g.membros.filter(id => pessoasFiltro.some(p => p.id === id));
+      if (!ids.length) return;
+      gerGrupos.appendChild(el('button', {
+        type: 'button', class: 'px-2.5 py-1 rounded-full text-xs font-semibold border border-border bg-bg-elev hover:border-rottas-500',
+        title: 'Marcar os integrantes do grupo',
+        onclick: (e) => { e.stopPropagation(); ids.forEach(id => marcados.add(id)); pintarListaGer(); },
+      }, `👥 ${g.nome} (${ids.length})`));
+    });
   }
   function pintarListaGer() {
     const termo = (gerBusca.value || '').trim().toLowerCase();
@@ -843,7 +878,7 @@ async function agendaGestorView(app) {
   gerBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!gerPopup.classList.contains('hidden')) { fecharGer(); return; }
-    marcados = new Set(filters.gerentes); gerBusca.value = ''; pintarListaGer();
+    marcados = new Set(filters.gerentes); gerBusca.value = ''; pintarGruposGer(); pintarListaGer();
     gerPopup.classList.remove('hidden'); gerPopup.classList.add('flex');
     document.addEventListener('click', foraGer);
     setTimeout(() => gerBusca.focus(), 30);
@@ -874,6 +909,11 @@ async function agendaGestorView(app) {
   // Todas as pessoas com agenda (gerentes, supervisores, Gerentes de Produto) do escopo
   const gerentes = await pessoasComAgenda();
   pessoasFiltro = gerentes || [];
+  try {
+    const { data: gs } = await runQuery(() => supabase.from('agenda_grupos').select('id, nome, agenda_grupo_membros(user_id)').order('nome'),
+      { ms: 6000, label: 'grupos de agenda' });
+    gruposAgenda = (gs || []).map(g => ({ id: g.id, nome: g.nome, membros: (g.agenda_grupo_membros || []).map(m => m.user_id) }));
+  } catch (e) { gruposAgenda = []; }
 
   async function reload() {
     cal.innerHTML = '<div class="skeleton h-32"></div>';

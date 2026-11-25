@@ -1,7 +1,7 @@
 // Master: gerenciamento de usuários (gestores e gerentes)
 import { el, icon, toast, modal, confirmModal, loadingBtn, fmt } from '../ui.js';
 import { shell } from './shell.js';
-import { supabase, loadAllProfiles, state, q, lerSessaoLocal, renovarToken, iniciarVerComo } from '../supabase.js';
+import { supabase, loadAllProfiles, state, q, lerSessaoLocal, renovarToken, iniciarVerComo, pessoasComAgenda } from '../supabase.js';
 import { ESTADOS_BR, PERMISSOES, ROLES, SUPABASE_URL } from '../config.js';
 import { phoneInput, emailInput, cidadeEstadoField } from '../components/form-fields.js';
 import { authGuards, isMaster, isPrincipalMaster, roleLevel } from '../auth.js';
@@ -32,6 +32,11 @@ export async function masterUsuariosView(_params, app) {
           toast(`✓ Limpo: ${data?.atividades || 0} atividades e ${data?.agendamentos || 0} agendamentos de teste`, 'success', 5000);
         }
       }, '🧹 Limpar teste') : null,
+      isMaster() ? el('button', {
+        class: 'btn btn-secondary btn-sm',
+        title: 'Grupos que veem a agenda uns dos outros juntos',
+        onclick: () => abrirGruposAgenda(),
+      }, '👥 Grupos de agenda') : null,
       el('button', {
         class: 'btn btn-primary',
         onclick: () => openCreateModal()
@@ -75,6 +80,93 @@ export function canManageProfile(target) {
   }
   if (myRole === 'gerente') return target.role === 'supervisor';
   return false;
+}
+
+// ─── GRUPOS DE AGENDA (só Master) ──────────────────────────────────────────
+// Cada integrante de um grupo vê, na Agenda ("Ver agenda de" → 👥 Grupo), a
+// agenda de todos do grupo juntos. Regra de acesso no banco: migration v67.
+async function abrirGruposAgenda() {
+  const corpo = el('div', { class: 'flex flex-col gap-2' }, el('div', { class: 'skeleton h-16' }));
+  const btnNovo = el('button', { class: 'btn btn-primary' }, '+ Novo grupo');
+  const btnFechar = el('button', { class: 'btn btn-ghost' }, 'Fechar');
+  const m = modal({ title: '👥 Grupos de agenda', size: 'md', content: corpo, footer: [btnFechar, btnNovo] });
+  btnFechar.addEventListener('click', () => m.close());
+  const pessoas = (await pessoasComAgenda()) || [];
+  async function carregar() {
+    const { data, error } = await q(() => supabase.from('agenda_grupos').select('id, nome, agenda_grupo_membros(user_id)').order('nome'),
+      { ms: 6000, label: 'grupos de agenda' });
+    corpo.innerHTML = '';
+    if (error) { corpo.appendChild(el('p', { class: 'text-sm text-danger' }, 'Não foi possível carregar: ' + error.message)); return; }
+    corpo.appendChild(el('p', { class: 'text-xs text-fg-muted' },
+      'Quem está num grupo vê, na Agenda, a agenda de todos os integrantes juntos (opção "👥 Grupo" em "Ver agenda de").'));
+    if (!data || !data.length) { corpo.appendChild(el('div', { class: 'card p-4 text-sm text-fg-muted text-center' }, 'Nenhum grupo criado.')); return; }
+    data.forEach(g => {
+      const nomes = (g.agenda_grupo_membros || []).map(x => (pessoas.find(p => p.id === x.user_id) || {}).nome).filter(Boolean);
+      corpo.appendChild(el('div', { class: 'card p-3 flex items-start gap-3' },
+        el('div', { class: 'flex-1 min-w-0' },
+          el('div', { class: 'font-bold' }, g.nome),
+          el('div', { class: 'text-xs text-fg-muted' }, nomes.length ? nomes.join(', ') : 'Sem integrantes')),
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => editar(g) }, 'Editar'),
+      ));
+    });
+  }
+  function editar(g) {
+    const nomeIn = el('input', { class: 'input', placeholder: 'Ex.: Curitiba', value: g ? g.nome : '' });
+    const marcados = new Set(g ? (g.agenda_grupo_membros || []).map(x => x.user_id) : []);
+    const busca = el('input', { class: 'input', type: 'search', placeholder: 'Buscar pessoa...' });
+    const lista = el('div', { class: 'flex flex-col max-h-64 overflow-y-auto' });
+    const pintar = () => {
+      const t = (busca.value || '').toLowerCase(); lista.innerHTML = '';
+      pessoas.filter(p => !t || p.rotulo.toLowerCase().includes(t)).forEach(p => {
+        const cb = el('input', { type: 'checkbox', checked: marcados.has(p.id) });
+        cb.addEventListener('change', () => { cb.checked ? marcados.add(p.id) : marcados.delete(p.id); });
+        lista.appendChild(el('label', { class: 'flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-bg-elev cursor-pointer text-sm' }, cb, el('span', {}, p.rotulo)));
+      });
+    };
+    busca.addEventListener('input', pintar); pintar();
+    const salvar = el('button', { class: 'btn btn-primary' }, 'Salvar');
+    const voltar = el('button', { class: 'btn btn-ghost' }, 'Voltar');
+    const excluir = g ? el('button', { class: 'btn btn-ghost text-danger mr-auto' }, 'Excluir grupo') : null;
+    const me = modal({ title: g ? 'Editar grupo' : 'Novo grupo', size: 'md',
+      content: el('div', { class: 'flex flex-col gap-3' },
+        el('div', {}, el('label', { class: 'label label-required' }, 'Nome do grupo'), nomeIn),
+        el('div', {}, el('label', { class: 'label' }, 'Integrantes'), busca, lista)),
+      footer: [excluir, voltar, salvar].filter(Boolean) });
+    voltar.addEventListener('click', () => me.close());
+    if (excluir) excluir.addEventListener('click', async () => {
+      const ok = await confirmModal({ title: 'Excluir grupo?', message: `O grupo "${g.nome}" deixa de existir (as agendas das pessoas não são afetadas).`, confirmLabel: 'Excluir', danger: true });
+      if (!ok) return;
+      const { error } = await q(() => supabase.from('agenda_grupos').delete().eq('id', g.id), { ms: 6000, label: 'excluir grupo', tentativas: 2 });
+      if (error) { toast('Erro: ' + error.message, 'error'); return; }
+      me.close(); toast('Grupo excluído', 'success'); carregar();
+    });
+    salvar.addEventListener('click', async () => {
+      const nome = (nomeIn.value || '').trim();
+      if (!nome) { toast('Dê um nome ao grupo', 'error'); return; }
+      if (marcados.size < 2) { toast('Escolha pelo menos 2 integrantes', 'error'); return; }
+      loadingBtn(salvar, true);
+      try {
+        let id = g && g.id;
+        if (id) {
+          const { error } = await q(() => supabase.from('agenda_grupos').update({ nome }).eq('id', id), { ms: 6000, label: 'grupo', tentativas: 2 });
+          if (error) throw error;
+          const { error: e2 } = await q(() => supabase.from('agenda_grupo_membros').delete().eq('grupo_id', id), { ms: 6000, label: 'grupo', tentativas: 2 });
+          if (e2) throw e2;
+        } else {
+          id = crypto.randomUUID();
+          const { error } = await q(() => supabase.from('agenda_grupos').upsert({ id, nome, criado_por: state.user.id }, { onConflict: 'id' }), { ms: 6000, label: 'grupo', tentativas: 3 });
+          if (error) throw error;
+        }
+        const linhas = [...marcados].map(uid => ({ grupo_id: id, user_id: uid }));
+        const { error: e3 } = await q(() => supabase.from('agenda_grupo_membros').upsert(linhas, { onConflict: 'grupo_id,user_id' }), { ms: 6000, label: 'grupo', tentativas: 3 });
+        if (e3) throw e3;
+        me.close(); toast('✓ Grupo salvo', 'success'); carregar();
+      } catch (e) { toast('Erro ao salvar: ' + (e.message || e), 'error', 6000); }
+      finally { loadingBtn(salvar, false); }
+    });
+  }
+  btnNovo.addEventListener('click', () => editar(null));
+  carregar();
 }
 
 async function reload() {

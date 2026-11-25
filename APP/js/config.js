@@ -1,5 +1,5 @@
 // Configuração da aplicação
-export const APP_VERSION = '1.9.84';
+export const APP_VERSION = '1.9.85';
 // Chave PÚBLICA das notificações (Web Push / VAPID). A privada fica só no servidor.
 export const VAPID_PUBLIC_KEY = 'BO22zL2uJeDKP1HlBVb3lC6rWpwNGz2clZyG6KlYZUqyRxP0IoyYh1gkgKnL9QQrFqkwkacvlUOCM7rFxeD93k4';
 export const APP_BUILD_DATE = '2026-07-10';
@@ -7,6 +7,14 @@ export const APP_BUILD_DATE = '2026-07-10';
 // Histórico curado: uma entrada por dia, só com as mudanças relevantes.
 // (O detalhe técnico de cada micro-versão fica no Git; aqui é a visão de produto.)
 export const CHANGELOG = [
+  {
+    version: '1.9.85',
+    date: '25/11/2026',
+    changes: [
+      'GRUPOS DE AGENDA: o Master cria grupos em Usuários → "👥 Grupos de agenda" (ex.: Curitiba = Ricardo, Márcio e Saulo; Londrina = Marjorie e Bruno). Cada integrante passa a ter, na Agenda, "Ver agenda de → 👥 Grupo …" para ver a agenda de todos juntos',
+      'Agenda da equipe: no filtro de várias pessoas, atalhos de grupo marcam todos os integrantes com um toque',
+    ],
+  },
   {
     version: '1.9.84',
     date: '23/11/2026',
